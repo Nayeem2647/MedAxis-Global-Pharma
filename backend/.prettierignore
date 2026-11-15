@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+package-lock.json
+public/fonts/files/
+public/fonts/noto-sans-sc.css
+public/fonts/OFL-NotoSansSC.txt

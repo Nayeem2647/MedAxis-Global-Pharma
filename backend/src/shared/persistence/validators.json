@@ -1,0 +1,2429 @@
+{
+  "manufacturers": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "translations", "country", "is_active", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "translations": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["en"],
+        "properties": {
+          "en": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["name", "slug"],
+            "properties": {
+              "name": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "seo_title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "meta_description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          },
+          "zhCN": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["name", "slug"],
+            "properties": {
+              "name": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "seo_title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "meta_description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          }
+        }
+      },
+      "country": {
+        "bsonType": "string",
+        "pattern": "^[A-Z]{2}$",
+        "minLength": 1,
+        "maxLength": 2
+      },
+      "certifications": {
+        "bsonType": "array",
+        "minItems": 0,
+        "maxItems": 100,
+        "items": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "is_active": {
+        "bsonType": "bool"
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "generics": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "translations", "is_active", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "translations": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["en"],
+        "properties": {
+          "en": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["name", "slug"],
+            "properties": {
+              "name": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "seo_title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "meta_description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          },
+          "zhCN": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["name", "slug"],
+            "properties": {
+              "name": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "seo_title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "meta_description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          }
+        }
+      },
+      "therapeutic_indications": {
+        "bsonType": "array",
+        "minItems": 0,
+        "maxItems": 100,
+        "items": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "is_active": {
+        "bsonType": "bool"
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "categories": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "translations", "sort_order", "is_active", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "translations": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["en"],
+        "properties": {
+          "en": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["name", "slug"],
+            "properties": {
+              "name": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "seo_title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "meta_description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          },
+          "zhCN": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["name", "slug"],
+            "properties": {
+              "name": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "seo_title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "meta_description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          }
+        }
+      },
+      "sort_order": {
+        "bsonType": ["int", "long"],
+        "minimum": 0
+      },
+      "is_active": {
+        "bsonType": "bool"
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "products": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "sku",
+      "manufacturer_id",
+      "generic_id",
+      "category_ids",
+      "translations",
+      "strength",
+      "dosage_form",
+      "pack_size",
+      "packaging_unit",
+      "cold_chain_required",
+      "status",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "sku": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "manufacturer_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "generic_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "category_ids": {
+        "bsonType": "array",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+          "bsonType": "string",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "translations": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["en"],
+        "properties": {
+          "en": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["brand_name", "slug"],
+            "properties": {
+              "brand_name": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "seo_title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "meta_description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "indication_summary": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "usage_notes": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "storage_condition": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "image_alt_text": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          },
+          "zhCN": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["brand_name", "slug"],
+            "properties": {
+              "brand_name": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "seo_title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "meta_description": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "indication_summary": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "usage_notes": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "storage_condition": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "image_alt_text": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      },
+      "strength": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "dosage_form": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "pack_size": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "packaging_unit": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 40
+      },
+      "cold_chain_required": {
+        "bsonType": "bool"
+      },
+      "storage_condition": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "image_keys": {
+        "bsonType": "array",
+        "minItems": 0,
+        "maxItems": 20,
+        "items": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "status": {
+        "bsonType": "string",
+        "enum": ["DRAFT", "PUBLISHED", "ARCHIVED"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "brand_name": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "generic_name": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "manufacturer": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "customers": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "full_name", "customer_type", "preferred_locale", "country", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "full_name": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "customer_type": {
+        "bsonType": "string",
+        "enum": ["B2B_WHOLESALE", "B2C_PATIENT"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "company_name": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "email": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "whatsapp_number": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 50
+      },
+      "wechat_id": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "preferred_locale": {
+        "bsonType": "string",
+        "enum": ["en", "zh-CN"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "country": {
+        "bsonType": "string",
+        "pattern": "^[A-Z]{2}$",
+        "minLength": 1,
+        "maxLength": 2
+      },
+      "city": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    },
+    "allOf": [
+      {
+        "anyOf": [
+          {
+            "required": ["email"]
+          },
+          {
+            "required": ["whatsapp_number"]
+          },
+          {
+            "required": ["wechat_id"]
+          }
+        ]
+      },
+      {
+        "oneOf": [
+          {
+            "properties": {
+              "customer_type": {
+                "enum": ["B2C_PATIENT"]
+              }
+            }
+          },
+          {
+            "required": ["company_name"],
+            "properties": {
+              "customer_type": {
+                "enum": ["B2B_WHOLESALE"]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "rfqs": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "rfq_number",
+      "customer_id",
+      "inquiry_type",
+      "contact_snapshot",
+      "destination_country",
+      "preferred_currency",
+      "status",
+      "has_prescription",
+      "items",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "rfq_number": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "customer_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "inquiry_type": {
+        "bsonType": "string",
+        "enum": ["QUICK_QUOTE", "CART_RFQ"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "contact_snapshot": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["full_name", "customer_type", "preferred_locale"],
+        "properties": {
+          "full_name": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "customer_type": {
+            "bsonType": "string",
+            "enum": ["B2B_WHOLESALE", "B2C_PATIENT"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "company_name": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "email": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "whatsapp_number": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "wechat_id": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "preferred_locale": {
+            "bsonType": "string",
+            "enum": ["en", "zh-CN"],
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "allOf": [
+          {
+            "anyOf": [
+              {
+                "required": ["email"]
+              },
+              {
+                "required": ["whatsapp_number"]
+              },
+              {
+                "required": ["wechat_id"]
+              }
+            ]
+          },
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "customer_type": {
+                    "enum": ["B2C_PATIENT"]
+                  }
+                }
+              },
+              {
+                "required": ["company_name"],
+                "properties": {
+                  "customer_type": {
+                    "enum": ["B2B_WHOLESALE"]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "destination_country": {
+        "bsonType": "string",
+        "pattern": "^[A-Z]{2}$",
+        "minLength": 1,
+        "maxLength": 2
+      },
+      "destination_city_port": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "preferred_currency": {
+        "bsonType": "string",
+        "enum": ["USD", "CNY", "EUR", "BDT"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "status": {
+        "bsonType": "string",
+        "enum": ["SUBMITTED", "UNDER_REVIEW", "NEED_CLARIFICATION", "QUOTED", "CONVERTED", "CLOSED", "CANCELLED"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "has_prescription": {
+        "bsonType": "bool"
+      },
+      "close_reason": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "unable_to_supply_reason": { "bsonType": "string", "minLength": 1, "maxLength": 2000 },
+      "closed_at": {
+        "bsonType": "date"
+      },
+      "terminal_at": {
+        "bsonType": "date"
+      },
+      "items": {
+        "bsonType": "array",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+          "bsonType": "object",
+          "additionalProperties": false,
+          "required": ["_id", "is_uncatalogued", "quantity", "packaging_unit", "item_availability_status"],
+          "properties": {
+            "_id": {
+              "bsonType": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "product_id": {
+              "bsonType": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "is_uncatalogued": {
+              "bsonType": "bool"
+            },
+            "product_snapshot": {
+              "bsonType": "object",
+              "additionalProperties": false,
+              "properties": {
+                "brand_name": {
+                  "bsonType": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "pack_size": {
+                  "bsonType": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              }
+            },
+            "custom_medicine_name": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "custom_strength": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "quantity": {
+              "bsonType": ["int", "long"],
+              "minimum": 1
+            },
+            "packaging_unit": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "item_availability_status": {
+              "bsonType": "string",
+              "enum": ["AVAILABLE", "UNAVAILABLE", "SOURCING"],
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "customer_facing_note": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "internal_note": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "line_notes": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "oneOf": [
+            {
+              "required": ["product_id"],
+              "properties": {
+                "is_uncatalogued": {
+                  "enum": [false]
+                }
+              }
+            },
+            {
+              "required": ["custom_medicine_name"],
+              "properties": {
+                "is_uncatalogued": {
+                  "enum": [true]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "rfq_idempotency_keys": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "key", "request_hash", "rfq_id", "response_snapshot", "expires_at", "created_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "key": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "request_hash": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "rfq_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "response_snapshot": {
+        "bsonType": "object"
+      },
+      "expires_at": {
+        "bsonType": "date"
+      },
+      "created_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "prescriptions": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "oneOf": [
+      { "required": ["rfq_id", "customer_id"] },
+      {
+        "required": ["upload_token_hash"],
+        "not": { "anyOf": [{ "required": ["rfq_id"] }, { "required": ["customer_id"] }] }
+      }
+    ],
+    "required": [
+      "_id",
+      "mime_type",
+      "file_size_bytes",
+      "uploaded_at",
+      "purge_scheduled_at",
+      "purge_status",
+      "retry_count",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "upload_token_hash": { "bsonType": "string", "pattern": "^[a-f0-9]{64}$" },
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "rfq_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "customer_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "r2_storage_key": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 500,
+        "pattern": "^(?![a-zA-Z][a-zA-Z0-9+.-]*://).+$"
+      },
+      "mime_type": {
+        "bsonType": "string",
+        "enum": ["image/jpeg", "image/png", "application/pdf"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "file_size_bytes": {
+        "bsonType": ["int", "long"],
+        "minimum": 1,
+        "maximum": 5242880
+      },
+      "encryption": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["algorithm", "key_id", "iv", "auth_tag"],
+        "properties": {
+          "algorithm": {
+            "bsonType": "string",
+            "enum": ["aes-256-gcm"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "key_id": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "iv": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "auth_tag": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "uploaded_at": {
+        "bsonType": "date"
+      },
+      "purge_scheduled_at": {
+        "bsonType": "date"
+      },
+      "purge_status": {
+        "bsonType": "string",
+        "enum": ["ACTIVE", "PENDING", "DELETING", "PURGED"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "purged_at": {
+        "bsonType": "date"
+      },
+      "retry_count": {
+        "bsonType": ["int", "long"],
+        "minimum": 0
+      },
+      "next_retry_at": {
+        "bsonType": "date"
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "quotations": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "quotation_number",
+      "rfq_id",
+      "customer_id",
+      "current_version",
+      "current_version_id",
+      "overall_status",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "quotation_number": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "rfq_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "customer_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "current_version": {
+        "bsonType": ["int", "long"],
+        "minimum": 1
+      },
+      "current_version_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "overall_status": {
+        "bsonType": "string",
+        "enum": ["ACTIVE", "COMPLETED", "DECLINED", "EXPIRED"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "quotation_versions": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "quotation_id",
+      "version_number",
+      "status",
+      "contact_snapshot",
+      "items",
+      "billing_currency",
+      "subtotal_amount",
+      "freight_cost",
+      "insurance_cost",
+      "total_amount",
+      "shipping_terms",
+      "payment_terms",
+      "reservation_status",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "quotation_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "version_number": {
+        "bsonType": ["int", "long"],
+        "minimum": 1
+      },
+      "status": {
+        "bsonType": "string",
+        "enum": [
+          "DRAFT",
+          "SENT",
+          "ACCEPTED",
+          "PAYMENT_RECEIVED",
+          "DISPATCHED",
+          "DELIVERED",
+          "DECLINED",
+          "VALIDITY_EXPIRED",
+          "SUPERSEDED",
+          "PAYMENT_EXPIRED"
+        ],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "contact_snapshot": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["full_name", "customer_type", "preferred_locale"],
+        "properties": {
+          "full_name": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "customer_type": {
+            "bsonType": "string",
+            "enum": ["B2B_WHOLESALE", "B2C_PATIENT"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "company_name": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "email": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "whatsapp_number": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "wechat_id": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "preferred_locale": {
+            "bsonType": "string",
+            "enum": ["en", "zh-CN"],
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "allOf": [
+          {
+            "anyOf": [
+              {
+                "required": ["email"]
+              },
+              {
+                "required": ["whatsapp_number"]
+              },
+              {
+                "required": ["wechat_id"]
+              }
+            ]
+          },
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "customer_type": {
+                    "enum": ["B2C_PATIENT"]
+                  }
+                }
+              },
+              {
+                "required": ["company_name"],
+                "properties": {
+                  "customer_type": {
+                    "enum": ["B2B_WHOLESALE"]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "items": {
+        "bsonType": "array",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+          "bsonType": "object",
+          "additionalProperties": false,
+          "required": [
+            "_id",
+            "rfq_item_id",
+            "manufacturer_id",
+            "brand_name_snapshot",
+            "generic_name_snapshot",
+            "strength_snapshot",
+            "dosage_form_snapshot",
+            "pack_size_snapshot",
+            "packaging_unit",
+            "quantity",
+            "availability_status"
+          ],
+          "properties": {
+            "_id": {
+              "bsonType": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "rfq_item_id": {
+              "bsonType": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "product_id": {
+              "bsonType": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "manufacturer_id": {
+              "bsonType": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "brand_name_snapshot": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "generic_name_snapshot": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "strength_snapshot": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "dosage_form_snapshot": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "pack_size_snapshot": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "packaging_unit": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "quantity": {
+              "bsonType": ["int", "long"],
+              "minimum": 1
+            },
+            "availability_status": {
+              "bsonType": "string",
+              "enum": ["AVAILABLE", "UNAVAILABLE", "SOURCING"],
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "customer_facing_note": {
+              "bsonType": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "unit_quoted_price": {
+              "bsonType": "decimal"
+            },
+            "total_line_price": {
+              "bsonType": "decimal"
+            }
+          },
+          "oneOf": [
+            {
+              "required": ["unit_quoted_price", "total_line_price"],
+              "properties": {
+                "availability_status": {
+                  "enum": ["AVAILABLE"]
+                }
+              }
+            },
+            {
+              "required": ["customer_facing_note"],
+              "properties": {
+                "availability_status": {
+                  "enum": ["UNAVAILABLE"]
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": ["unit_quoted_price"]
+                  },
+                  {
+                    "required": ["total_line_price"]
+                  }
+                ]
+              }
+            },
+            {
+              "properties": {
+                "availability_status": {
+                  "enum": ["SOURCING"]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "billing_currency": {
+        "bsonType": "string",
+        "enum": ["USD", "CNY", "EUR", "BDT"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "subtotal_amount": {
+        "bsonType": "decimal"
+      },
+      "freight_cost": {
+        "bsonType": "decimal"
+      },
+      "insurance_cost": {
+        "bsonType": "decimal"
+      },
+      "total_amount": {
+        "bsonType": "decimal"
+      },
+      "shipping_terms": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["method", "named_place", "cold_chain_required"],
+        "properties": {
+          "method": {
+            "bsonType": "string",
+            "enum": ["INCOTERM", "EXPRESS_COURIER"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "incoterm": {
+            "bsonType": "string",
+            "enum": ["FCA", "CIP", "DAP", "CPT", "FOB", "CIF"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "named_place": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "cold_chain_required": {
+            "bsonType": "bool"
+          },
+          "temperature_range": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "oneOf": [
+          {
+            "required": ["incoterm"],
+            "properties": {
+              "method": {
+                "enum": ["INCOTERM"]
+              }
+            }
+          },
+          {
+            "properties": {
+              "method": {
+                "enum": ["EXPRESS_COURIER"]
+              }
+            }
+          }
+        ]
+      },
+      "payment_terms": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "bank_details_snapshot": {
+        "bsonType": "object"
+      },
+      "fx_snapshot": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["mode", "captured_at", "rates_to_bdt"],
+        "properties": {
+          "modes": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["USD", "CNY", "EUR"],
+            "properties": {
+              "USD": { "enum": ["LIVE", "MANUAL_FIXED"] },
+              "CNY": { "enum": ["LIVE", "MANUAL_FIXED"] },
+              "EUR": { "enum": ["LIVE", "MANUAL_FIXED"] }
+            }
+          },
+          "fetched_at": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["USD", "CNY", "EUR"],
+            "properties": {
+              "USD": { "bsonType": "date" },
+              "CNY": { "bsonType": "date" },
+              "EUR": { "bsonType": "date" }
+            }
+          },
+          "stale_rates_used": { "bsonType": "bool" },
+          "mode": {
+            "bsonType": "string",
+            "enum": ["LIVE", "MANUAL_FIXED"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "captured_at": {
+            "bsonType": "date"
+          },
+          "rates_to_bdt": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["USD", "CNY", "EUR"],
+            "properties": {
+              "USD": {
+                "bsonType": "decimal"
+              },
+              "CNY": {
+                "bsonType": "decimal"
+              },
+              "EUR": {
+                "bsonType": "decimal"
+              }
+            }
+          }
+        }
+      },
+      "issued_at": {
+        "bsonType": "date"
+      },
+      "valid_until": {
+        "bsonType": "date"
+      },
+      "magic_link_token_hash": {
+        "bsonType": "string",
+        "pattern": "^[a-fA-F0-9]{64}$",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "accepted_at": {
+        "bsonType": "date"
+      },
+      "acceptance_evidence": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["accepted_at", "client_ip", "user_agent", "terms_accepted"],
+        "properties": {
+          "accepted_at": {
+            "bsonType": "date"
+          },
+          "client_ip": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "user_agent": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "terms_accepted": {
+            "bsonType": "bool"
+          }
+        }
+      },
+      "reservation_expires_at": {
+        "bsonType": "date"
+      },
+      "reservation_status": {
+        "bsonType": "string",
+        "enum": ["NONE", "ACTIVE", "CONSUMED", "RELEASED"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "payment": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["reference", "amount", "currency", "received_at", "recorded_by"],
+        "properties": {
+          "reference": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "amount": {
+            "bsonType": "decimal"
+          },
+          "currency": {
+            "bsonType": "string",
+            "enum": ["USD", "CNY", "EUR", "BDT"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "received_at": {
+            "bsonType": "date"
+          },
+          "recorded_by": {
+            "bsonType": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "shipment": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["courier_name", "awb_number", "dispatched_at"],
+        "properties": {
+          "courier_name": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "awb_number": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "dispatched_at": {
+            "bsonType": "date"
+          },
+          "estimated_delivery": {
+            "bsonType": "date"
+          }
+        }
+      },
+      "delivered_at": {
+        "bsonType": "date"
+      },
+      "decline_reason": {
+        "bsonType": "string",
+        "enum": ["PRICE", "LEAD_TIME", "SPECIFICATION", "OTHER"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "decline_notes": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "revision_request": {
+        "bsonType": "object"
+      },
+      "pdf": {
+        "bsonType": "object"
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "quotation_internal_costs": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "quotation_version_id",
+      "items",
+      "procurement_cost_bdt",
+      "target_markup_percent",
+      "calculated_base_bdt",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "quotation_version_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "items": {
+        "bsonType": "array",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+          "bsonType": "object",
+          "additionalProperties": false,
+          "required": ["rfq_item_id", "manufacturer_id", "procurement_unit_cost_bdt", "quantity", "markup_percent"],
+          "properties": {
+            "rfq_item_id": {
+              "bsonType": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "manufacturer_id": {
+              "bsonType": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "procurement_unit_cost_bdt": {
+              "bsonType": "decimal"
+            },
+            "quantity": {
+              "bsonType": ["int", "long"],
+              "minimum": 1
+            },
+            "markup_percent": {
+              "bsonType": "decimal"
+            }
+          }
+        }
+      },
+      "procurement_cost_bdt": {
+        "bsonType": "decimal"
+      },
+      "target_markup_percent": {
+        "bsonType": "decimal"
+      },
+      "calculated_base_bdt": {
+        "bsonType": "decimal"
+      },
+      "gross_margin_bdt": { "bsonType": "decimal" },
+      "effective_gross_margin_percent": {
+        "bsonType": "decimal"
+      },
+      "internal_procurement_notes": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 5000
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "exchange_rates": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "currency_code", "live_rate_to_bdt", "live_fetched_at", "mode", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "enum": ["USD", "CNY", "EUR"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "currency_code": {
+        "bsonType": "string",
+        "enum": ["USD", "CNY", "EUR"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "live_rate_to_bdt": {
+        "bsonType": "decimal",
+        "minimum": 0,
+        "exclusiveMinimum": true
+      },
+      "live_fetched_at": {
+        "bsonType": "date"
+      },
+      "manual_rate_to_bdt": {
+        "bsonType": "decimal",
+        "minimum": 0,
+        "exclusiveMinimum": true
+      },
+      "mode": {
+        "bsonType": "string",
+        "enum": ["LIVE", "MANUAL_FIXED"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "updated_by": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    },
+    "oneOf": [
+      {
+        "properties": {
+          "_id": {
+            "enum": ["USD"]
+          },
+          "currency_code": {
+            "enum": ["USD"]
+          }
+        }
+      },
+      {
+        "properties": {
+          "_id": {
+            "enum": ["CNY"]
+          },
+          "currency_code": {
+            "enum": ["CNY"]
+          }
+        }
+      },
+      {
+        "properties": {
+          "_id": {
+            "enum": ["EUR"]
+          },
+          "currency_code": {
+            "enum": ["EUR"]
+          }
+        }
+      }
+    ],
+    "allOf": [
+      {
+        "oneOf": [
+          {
+            "properties": {
+              "mode": {
+                "enum": ["LIVE"]
+              }
+            }
+          },
+          {
+            "required": ["manual_rate_to_bdt"],
+            "properties": {
+              "mode": {
+                "enum": ["MANUAL_FIXED"]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "audit_logs": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "actor_type", "action_type", "entity_type", "entity_id", "created_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "actor_type": {
+        "bsonType": "string",
+        "enum": ["SUPER_ADMIN", "BUYER", "SYSTEM"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "actor_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "action_type": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "entity_type": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "entity_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "old_status": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "new_status": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "change_reason": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "safe_changes": {
+        "bsonType": "object"
+      },
+      "request_id": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "ip_address": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "user_agent": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "created_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "notification_logs": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "dedupe_key",
+      "entity_type",
+      "entity_id",
+      "kind",
+      "safe_payload",
+      "status",
+      "attempt_count",
+      "next_retry_at",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "dedupe_key": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "entity_type": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "entity_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "kind": {
+        "bsonType": "string",
+        "enum": ["EMAIL", "PDF_RENDER", "ADMIN_EVENT"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "recipient": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "template_id": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "safe_payload": {
+        "bsonType": "object"
+      },
+      "delivery_provider": { "enum": ["RESEND", "BREVO"] },
+      "first_attempt_at": { "bsonType": "date" },
+      "status": {
+        "bsonType": "string",
+        "enum": ["PENDING", "PROCESSING", "SENT", "DELIVERED", "FAILED", "FAILED_RETRY", "BOUNCED", "DEAD"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "attempt_count": {
+        "bsonType": ["int", "long"],
+        "minimum": 0
+      },
+      "next_retry_at": {
+        "bsonType": "date"
+      },
+      "lease_until": {
+        "bsonType": "date"
+      },
+      "provider_message_id": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "last_error_code": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "sent_at": {
+        "bsonType": "date"
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "clarification_messages": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "rfq_id",
+      "customer_id",
+      "thread_id",
+      "direction",
+      "channel",
+      "body",
+      "status",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "rfq_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "customer_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "thread_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "direction": {
+        "bsonType": "string",
+        "enum": ["ADMIN_TO_BUYER", "BUYER_TO_ADMIN", "INTERNAL_NOTE"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "channel": {
+        "bsonType": "string",
+        "enum": ["EMAIL", "WHATSAPP", "WECHAT", "ADMIN"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "body": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 5000
+      },
+      "status": {
+        "bsonType": "string",
+        "enum": ["PENDING_BUYER", "REPLIED", "RESOLVED"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "provider_event_id": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "reply_to_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "actor_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "cms_banners": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "translations", "is_active", "sort_order", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "translations": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["en"],
+        "properties": {
+          "en": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["title", "body"],
+            "properties": {
+              "title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "body": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              }
+            }
+          },
+          "zhCN": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["title", "body"],
+            "properties": {
+              "title": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "body": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              }
+            }
+          }
+        }
+      },
+      "is_active": {
+        "bsonType": "bool"
+      },
+      "sort_order": {
+        "bsonType": ["int", "long"],
+        "minimum": 0
+      },
+      "starts_at": {
+        "bsonType": "date"
+      },
+      "ends_at": {
+        "bsonType": "date"
+      },
+      "link_path": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "url_redirects": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "source_path", "target_path", "http_status_code", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "source_path": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "target_path": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "http_status_code": {
+        "bsonType": ["int", "long"],
+        "enum": [301],
+        "minimum": 301
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "admins": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "singleton_key",
+      "email",
+      "password_hash",
+      "totp_secret_encrypted",
+      "backup_code_hashes",
+      "is_active",
+      "session_generation",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "singleton_key": {
+        "bsonType": "string",
+        "enum": ["SUPER_ADMIN"],
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "email": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "password_hash": {
+        "bsonType": "string",
+        "pattern": "^\\$argon2id\\$",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "totp_secret_encrypted": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "last_totp_step": {
+        "bsonType": ["int", "long"],
+        "minimum": 0
+      },
+      "backup_code_hashes": {
+        "bsonType": "array",
+        "minItems": 0,
+        "maxItems": 20,
+        "items": {
+          "bsonType": "string",
+          "pattern": "^\\$2[aby]\\$\\d{2}\\$[./A-Za-z0-9]{53}$",
+          "minLength": 1,
+          "maxLength": 60
+        }
+      },
+      "is_active": {
+        "bsonType": "bool"
+      },
+      "session_generation": {
+        "bsonType": ["int", "long"],
+        "minimum": 0
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "admin_sessions": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": [
+      "_id",
+      "admin_id",
+      "token_hash",
+      "session_generation",
+      "last_seen_at",
+      "expires_at",
+      "created_at",
+      "updated_at"
+    ],
+    "properties": {
+      "purpose": { "bsonType": "string", "enum": ["PRE_AUTH", "ADMIN"] },
+      "user_agent": { "bsonType": "string", "maxLength": 2000 },
+      "geo": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "properties": {
+          "country": { "bsonType": "string", "maxLength": 2 },
+          "city": { "bsonType": "string", "maxLength": 200 }
+        }
+      },
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "admin_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "token_hash": {
+        "bsonType": "string",
+        "pattern": "^[a-fA-F0-9]{64}$",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "session_generation": {
+        "bsonType": ["int", "long"],
+        "minimum": 0
+      },
+      "last_seen_at": {
+        "bsonType": "date"
+      },
+      "expires_at": {
+        "bsonType": "date"
+      },
+      "revoked_at": {
+        "bsonType": "date"
+      },
+      "device_label": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "ip_address": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "auth_attempts": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "scope_key", "failed_count", "window_started_at", "expires_at", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "scope_key": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "failed_count": {
+        "bsonType": ["int", "long"],
+        "minimum": 0
+      },
+      "window_started_at": {
+        "bsonType": "date"
+      },
+      "locked_until": {
+        "bsonType": "date"
+      },
+      "expires_at": {
+        "bsonType": "date"
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  },
+  "platform_settings": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "key", "value", "updated_by", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "key": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "value": {
+        "bsonType": "object"
+      },
+      "updated_by": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  }
+}

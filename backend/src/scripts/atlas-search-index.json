@@ -1,0 +1,52 @@
+{
+  "name": "products_public_catalog",
+  "definition": {
+    "mappings": {
+      "dynamic": false,
+      "fields": {
+        "sku": { "type": "string", "analyzer": "lucene.keyword" },
+        "brand_name": { "type": "string", "analyzer": "lucene.standard" },
+        "generic_name": { "type": "string", "analyzer": "lucene.standard" },
+        "manufacturer": { "type": "string", "analyzer": "lucene.standard" },
+        "strength": { "type": "string", "analyzer": "lucene.standard" },
+        "status": { "type": "token" },
+        "translations": {
+          "type": "document",
+          "dynamic": false,
+          "fields": {
+            "en": {
+              "type": "document",
+              "dynamic": false,
+              "fields": {
+                "brand_name": { "type": "string", "analyzer": "lucene.english" },
+                "description": { "type": "string", "analyzer": "lucene.english" },
+                "indication_summary": { "type": "string", "analyzer": "lucene.english" },
+                "usage_notes": { "type": "string", "analyzer": "lucene.english" },
+                "storage_condition": { "type": "string", "analyzer": "lucene.english" },
+                "slug": { "type": "string", "analyzer": "lucene.keyword" },
+                "seo_title": { "type": "string", "analyzer": "lucene.english" },
+                "meta_description": { "type": "string", "analyzer": "lucene.english" },
+                "image_alt_text": { "type": "string", "analyzer": "lucene.english" }
+              }
+            },
+            "zhCN": {
+              "type": "document",
+              "dynamic": false,
+              "fields": {
+                "brand_name": { "type": "string", "analyzer": "lucene.smartcn" },
+                "description": { "type": "string", "analyzer": "lucene.smartcn" },
+                "indication_summary": { "type": "string", "analyzer": "lucene.smartcn" },
+                "usage_notes": { "type": "string", "analyzer": "lucene.smartcn" },
+                "storage_condition": { "type": "string", "analyzer": "lucene.smartcn" },
+                "slug": { "type": "string", "analyzer": "lucene.keyword" },
+                "seo_title": { "type": "string", "analyzer": "lucene.smartcn" },
+                "meta_description": { "type": "string", "analyzer": "lucene.smartcn" },
+                "image_alt_text": { "type": "string", "analyzer": "lucene.smartcn" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

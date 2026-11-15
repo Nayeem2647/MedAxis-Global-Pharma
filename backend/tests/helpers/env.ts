@@ -1,0 +1,33 @@
+export const validEnv = Object.freeze({
+  NODE_ENV: 'test',
+  PORT: '4000',
+  MONGODB_URI: 'mongodb://127.0.0.1:27017/medaxis_test',
+  PUBLIC_ORIGIN: 'http://localhost:3000',
+  API_ORIGIN: 'http://localhost:4000',
+  ADMIN_SESSION_SECRET: 'x'.repeat(48),
+});
+
+export const productionEnv = Object.freeze({
+  NODE_ENV: 'production',
+  MONGODB_URI: 'mongodb+srv://user:pass@cluster0.example.mongodb.net/medaxis',
+  PUBLIC_ORIGIN: 'https://www.medaxisglobalpharma.com',
+  API_ORIGIN: 'https://api.medaxisglobalpharma.com',
+  ADMIN_SESSION_SECRET: 'p'.repeat(48),
+  TOTP_ENCRYPTION_KEY_BASE64: Buffer.alloc(32, 1).toString('base64'),
+  TOTP_KEY_ID: 'test-totp-v1',
+  PRESCRIPTION_ENCRYPTION_KEY: 'a'.repeat(64),
+  PRESCRIPTION_KEY_ID: 'key-2026-01',
+  R2_ACCOUNT_ID: 'acct',
+  R2_ACCESS_KEY_ID: 'akid',
+  R2_SECRET_ACCESS_KEY: 'secret',
+  R2_BUCKET_PRODUCTS: 'products',
+  R2_BUCKET_QUOTES: 'quotes',
+  R2_BUCKET_PRESCRIPTIONS: 'prescriptions',
+  CLOUDFLARE_TURNSTILE_SECRET: 'ts-secret',
+  RESEND_API_KEY: 're_123',
+  EMAIL_FROM: 'MedAxis Global Pharma <quotes@medaxisglobalpharma.com>',
+  EXCHANGE_RATE_API_KEY: 'fx-key',
+  REVALIDATE_WEBHOOK_SECRET: 'reval-secret',
+  WEBHOOK_HMAC_SECRET: 'hmac-secret',
+  ADMIN_ALERT_EMAIL: 'owner@medaxisglobalpharma.com',
+});
