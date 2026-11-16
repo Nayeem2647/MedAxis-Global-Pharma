@@ -86,6 +86,43 @@ describe('RFQ validation and privacy', () => {
 
 describe('Turnstile, HMAC, and intake HTTP protections', () => {
   const env = loadEnv({ ...validEnv, CLOUDFLARE_TURNSTILE_SECRET: 'test-secret' });
+  it('keeps RFQ contact, medical, challenge and session values out of public request/error logs', async () => {
+    const captureLogger = createLogger({ silent: true });
+    const logs = [vi.spyOn(captureLogger, 'log'), vi.spyOn(captureLogger, 'warn'), vi.spyOn(captureLogger, 'error')];
+    const app = createApp({ env, logger: captureLogger });
+    const response = await request(app)
+      .post('/v1/public/rfq/cart?email=PRIVATE_CONTACT_SENTINEL&prescription=PRIVATE_MEDICAL_SENTINEL')
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', 'prescription_upload_session=PRIVATE_SESSION_SENTINEL')
+      .send({
+        idempotency_key: randomUUID(),
+        turnstile_token: 'PRIVATE_CHALLENGE_SENTINEL',
+        contact: {
+          full_name: 'PRIVATE_CONTACT_SENTINEL',
+          email: 'private@example.test',
+          customer_type: 'B2C_PATIENT',
+          preferred_locale: 'en',
+        },
+        destination_country: 'BD',
+        locale: 'en',
+        prescription_ids: [],
+        items: [
+          {
+            is_uncatalogued: true,
+            custom_medicine_name: 'PRIVATE_MEDICAL_SENTINEL',
+            quantity: 0,
+            packaging_unit: 'BOX',
+            line_notes: 'PRIVATE_MEDICAL_SENTINEL',
+          },
+        ],
+      });
+    expect(response.status).toBe(422); // Rejected before database access.
+    expect(logs[0]).toHaveBeenCalled();
+    expect(logs.map((spy) => JSON.stringify(spy.mock.calls)).join('\n')).not.toMatch(
+      /PRIVATE_(?:CONTACT|MEDICAL|CHALLENGE|SESSION)_SENTINEL|private@example\.test/,
+    );
+    logs.forEach((spy) => spy.mockRestore());
+  });
   it('verifies Turnstile server-side and rejects missing, failed or wrong-host tokens', async () => {
     const fetcher = vi
       .fn<typeof fetch>()

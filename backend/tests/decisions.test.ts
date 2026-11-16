@@ -13,12 +13,48 @@ import {
   revisionRequestSchema,
 } from '../src/shared/validators/decision.validator.js';
 import { renderQuotationHtml } from '../src/modules/pdf/pdf.template.js';
+import { commercialQuotation } from '../src/modules/quotation/quotation.dto.js';
 import { createPdfService, loadEmbeddedFonts, PDF_TIMEOUT_MS } from '../src/modules/pdf/pdf.service.js';
 import { createLogger } from '../src/shared/utils/logger.js';
 import { validEnv } from './helpers/env.js';
-import { pdfFixture } from './fixtures/commercial.js';
+import { pdfFixture, quotationVersionFixture } from './fixtures/commercial.js';
 
 describe('decision boundary and print isolation', () => {
+  it('serializes the real customer DTO without poisoned internal fields while preserving customer prices', () => {
+    const version = quotationVersionFixture(true);
+    const internal = {
+      procurement_cost_bdt: 'SECRET-COST',
+      procurement_unit_cost_bdt: 'SECRET-COST',
+      gross_margin_bdt: 'SECRET-MARGIN',
+      markup_percent: 'SECRET-MARKUP',
+      locked_fx_rate_usd: 'SECRET-FX',
+      internal_cost_data: { value: 'SECRET-COST' },
+      internal_procurement_notes: 'SECRET-NOTES',
+      magic_link_token_hash: 'SECRET-TOKEN-HASH',
+    };
+    Object.assign(version, internal);
+    Object.assign(version.contact_snapshot, internal);
+    Object.assign(version.shipping_terms, internal);
+    version.items.forEach((line) => Object.assign(line, internal));
+    version.bank_details_snapshot = {
+      configured: true,
+      instructions: 'Authorized wire instructions',
+      beneficiary_name: 'Beneficiary',
+      bank_name: 'Bank',
+      account_number: 'AUTHORIZED-ACCOUNT',
+      swift_code: 'TESTBDDH',
+    };
+    const customer = commercialQuotation(version);
+    const json = JSON.stringify(customer);
+    expect(json).not.toMatch(
+      /SECRET-|procurement_cost|procurement_unit_cost|gross_margin|markup_percent|locked_fx_rate|internal_cost_data|internal_procurement_notes|magic_link_token_hash/,
+    );
+    expect(customer.items[0]?.unit_quoted_price).toBe('1.20');
+    expect(customer.items[0]?.total_line_price).toBe('3.60');
+    expect(customer.total_amount).toBe('6.35');
+    expect(customer.bank_details?.account_number).toBe('AUTHORIZED-ACCOUNT');
+    expect(customer.reservation_expires_at).toEqual(new Date('2026-11-21T10:00:00Z'));
+  });
   it('requires affirmative terms and sanitizes buyer notes without permitting payment/total overrides', () => {
     for (const terms of [undefined, false, 'true', 1])
       expect(acceptSchema.safeParse({ terms_accepted: terms }).success).toBe(false);

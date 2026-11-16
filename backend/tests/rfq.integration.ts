@@ -299,8 +299,18 @@ describe('RFQ intake and triage against MongoDB', () => {
   );
   it('rejects stolen/reused prescription IDs and rolls back failed linkage', async () => {
     const file = await uploaded();
+    const anotherSession = await uploaded();
+    expect(anotherSession.cookie).not.toBe(file.cookie);
+    const cookies = file.response.headers['set-cookie'];
+    const stagingCookie = (Array.isArray(cookies) ? cookies : [cookies]).find((value: string) =>
+      value.startsWith('prescription_upload_session='),
+    );
+    expect(stagingCookie).toMatch(/;\s*HttpOnly/i);
+    expect(stagingCookie).toMatch(/;\s*SameSite=Strict/i);
+    expect(stagingCookie).toMatch(/;\s*Path=\/v1\/public(?:;|$)/i);
     const body = { ...input(), prescription_ids: [file.id] };
     expect((await submit(body)).status).toBe(422);
+    expect((await submit(body, anotherSession.cookie)).status).toBe(422);
     expect(await RfqModel.countDocuments()).toBe(0);
     expect(await CustomerModel.countDocuments()).toBe(0);
     expect((await submit(body, file.cookie)).status).toBe(201);
