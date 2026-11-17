@@ -14,6 +14,7 @@ import {
   draftQuoteSchema,
   reviseQuoteSchema,
   sendQuoteSchema,
+  updateDraftQuoteSchema,
   type QuotePricing,
 } from '../../shared/validators/quotation.validator.js';
 import { ProductModel, ManufacturerModel, GenericModel } from '../catalog/catalog.schema.js';
@@ -197,6 +198,7 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
     rfq: IRfq,
     input: QuotePricing,
     session: ClientSession,
+    existing?: VersionDoc,
   ) {
     const snapshot = await fx.snapshot(input.billing_currency, session, true);
     const lines = await buildLines(rfq, input, session);
@@ -210,7 +212,9 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
         quantity: lines.find((line) => line.rfq_item_id === item.rfq_item_id)!.quantity,
       })),
     });
-    const version = new QuotationVersionModel({
+    const version = existing ?? new QuotationVersionModel();
+    const previousUpdate = existing?.updated_at.getTime();
+    version.set({
       _id: quote.current_version_id,
       quotation_id: quote._id,
       version_number: quote.current_version,
@@ -224,12 +228,28 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
       bank_details_snapshot: input.bank_details,
     });
     await version.save({ session });
-    await new QuotationInternalCostModel({
+    const costs = existing
+      ? await QuotationInternalCostModel.findOne({ quotation_version_id: version._id }).session(session)
+      : new QuotationInternalCostModel();
+    if (!costs) throw AppError.conflict('Draft cost record is missing.');
+    costs.set({
       quotation_version_id: version._id,
       ...costFields(calculated.internal),
       internal_procurement_notes: input.internal_procurement_notes,
-    }).save({ session });
-    await audit(req, quote._id, 'QUOTATION_DRAFT_CREATED', session, { version_number: version.version_number });
+    });
+    await costs.save({ session });
+    if (previousUpdate !== undefined) {
+      const updated = new Date(Math.max(Date.now(), previousUpdate + 1));
+      await QuotationVersionModel.updateOne(
+        { _id: version._id, status: 'DRAFT' },
+        { $set: { updated_at: updated } },
+        { session, timestamps: false },
+      );
+      version.updated_at = updated;
+    }
+    await audit(req, quote._id, existing ? 'QUOTATION_DRAFT_UPDATED' : 'QUOTATION_DRAFT_CREATED', session, {
+      version_number: version.version_number,
+    });
     return {
       version,
       preview: { rates_to_bdt: snapshot.rates, stale: snapshot.stale, captured_at: snapshot.captured_at },
@@ -472,6 +492,24 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
     notify(id);
     return result;
   }
+  async function updateDraft(req: Request, id: string, input: z.infer<typeof updateDraftQuoteSchema>) {
+    return mongoose.connection.transaction(async (session) => {
+      const quote = await lockQuote(id, session, input.expected_current_version_id);
+      const version = await QuotationVersionModel.findOne({ _id: quote.current_version_id, quotation_id: id }).session(
+        session,
+      );
+      if (
+        !version ||
+        version.status !== 'DRAFT' ||
+        version.fx_snapshot ||
+        version.updated_at.getTime() !== Date.parse(input.expected_updated_at)
+      )
+        throw AppError.conflict('Draft changed or was issued. Refresh before editing.', 'QUOTATION_VERSION_CONFLICT');
+      const rfq = await rfqFor(quote.rfq_id, session);
+      const built = await createVersion(req, quote.toObject(), rfq, input, session, version);
+      return { version: commercialQuotation(built.version.toObject()), fx_preview: built.preview };
+    });
+  }
   async function detail(id: string) {
     const quote = await QuotationModel.findById(id).lean();
     if (!quote) throw AppError.notFound();
@@ -519,5 +557,5 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
       })),
     };
   }
-  return { draft, send, revise, resend, detail };
+  return { draft, send, revise, resend, detail, updateDraft };
 }

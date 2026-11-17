@@ -7,8 +7,11 @@ export const adminPrivateHeaders = { 'Cache-Control': 'private, no-store', 'Refe
 export const loginBody = z.strictObject({ email: z.string().trim().email().max(200), password: z.string().min(1).max(1024) });
 export const totpBody = z.strictObject({ code: z.string().regex(/^\d{6}$/) });
 export const backupBody = z.strictObject({ backup_code: z.string().trim().min(1).max(72) });
-export const loginResult = z.object({ requires_2fa: z.literal(true), expires_at: z.iso.datetime() });
 export const mfaResult = z.object({ admin: z.object({ id: z.uuidv4(), email: z.email() }), session_id: z.uuidv4(), expires_at: z.iso.datetime() });
+export const loginResult = z.discriminatedUnion('requires_2fa', [
+  z.object({ requires_2fa: z.literal(true), expires_at: z.iso.datetime() }),
+  mfaResult.extend({ requires_2fa: z.literal(false) }),
+]);
 export const logoutResult = z.object({ logged_out: z.literal(true) });
 export const revokeResult = z.object({ revoked_count: z.number().int().nonnegative() });
 export const sessionSchema = z.object({ id: z.uuidv4(), current: z.boolean(), ip_address: z.string().max(100),
@@ -85,6 +88,14 @@ export function adminProxyRule(path: string, method: string): AdminProxyRule | n
   if (path === 'quotations/draft' && method === 'POST' || new RegExp(`^quotations/${uuid}$`).test(path) && method === 'GET' || new RegExp(`^quotations/${uuid}/(?:send|revise|resend)$`).test(path) && method === 'POST' || new RegExp(`^quotations/${uuid}/fulfillment$`).test(path) && method === 'PATCH') return json();
   if (path === 'catalog/images' && method === 'POST') return { kind: 'multipart', query: [] };
   if (path === 'catalog/import-csv' && method === 'POST') return { kind: 'multipart', query: ['dry_run'] };
+  if (path === 'catalog/products' && method === 'GET') return json(['page','limit','q','status','manufacturer_id','generic_id','category_id']);
+  if (/^catalog\/(?:manufacturers|generics|categories)$/.test(path) && method === 'GET') return json(['page','limit','q','is_active']);
+  if (new RegExp(`^catalog/(?:products|manufacturers|generics|categories)/${uuid}$`).test(path) && method === 'GET') return json();
+  if (path === 'cms/banners' && method === 'GET') return json(['page','limit','q','is_active']);
+  if (new RegExp(`^cms/banners/${uuid}$`).test(path) && method === 'GET') return json();
+  if (path === 'quotations' && method === 'GET') return json(['page','limit','q','rfq_id','overall_status','status','reservation_before']);
+  if (path === 'quotations/summary' && method === 'GET') return json(['window_hours']);
+  if (new RegExp(`^quotations/${uuid}/draft$`).test(path) && method === 'PATCH') return json();
   if (/^catalog\/(?:products|generics|manufacturers|categories)$/.test(path) && method === 'POST' || new RegExp(`^catalog/products/${uuid}$`).test(path) && method === 'PATCH' || path === 'cms/banners' && method === 'POST') return json();
   if (path === 'customers' && method === 'GET') return json(['page', 'limit', 'q', 'buyer_type', 'country']);
   if (new RegExp(`^customers/${uuid}$`).test(path) && method === 'GET') return json(['page', 'limit']);

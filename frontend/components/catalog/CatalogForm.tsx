@@ -1,11 +1,28 @@
 'use client';
 
-import { useTransition, type FormEvent, type ReactNode } from 'react';
+import { useTransition, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
-export function CatalogForm({ action, className, label, loadingLabel, children, search = false }: { action: string; className: string; label: string; loadingLabel: string; children: ReactNode; search?: boolean }) {
+export function CatalogForm({
+  action,
+  className,
+  label,
+  loadingLabel,
+  children,
+  search = false,
+  autoSubmitOnSelect = false,
+}: {
+  action: string;
+  className: string;
+  label: string;
+  loadingLabel: string;
+  children: ReactNode;
+  search?: boolean;
+  autoSubmitOnSelect?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parameters = new URLSearchParams();
@@ -15,7 +32,26 @@ export function CatalogForm({ action, className, label, loadingLabel, children, 
     const query = parameters.toString();
     startTransition(() => router.push(query ? `${action}?${query}` : action));
   }
-  return <form action={action} method="get" className={className} aria-label={label} role={search ? 'search' : undefined} aria-busy={pending} onSubmit={submit}>
-    {children}{pending && <p className="catalog-pending" role="status">{loadingLabel}</p>}
-  </form>;
+
+  function handleChange(event: ChangeEvent<HTMLFormElement>) {
+    if (autoSubmitOnSelect && event.target instanceof HTMLSelectElement) {
+      event.currentTarget.requestSubmit();
+    }
+  }
+
+  return (
+    <form
+      action={action}
+      method="get"
+      className={className}
+      aria-label={label}
+      role={search ? 'search' : undefined}
+      aria-busy={pending}
+      onSubmit={submit}
+      onChange={handleChange}
+    >
+      {children}
+      {pending && <p className="catalog-pending" role="status">{loadingLabel}</p>}
+    </form>
+  );
 }

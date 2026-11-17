@@ -1,15 +1,125 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import mongoose, { type ClientSession } from 'mongoose';
 import { createApp } from '../src/app.js';
 import { loadEnv } from '../src/config/env.js';
 import { turnstile } from '../src/shared/middleware/turnstile.js';
 import { canonicalPayload } from '../src/modules/rfq/rfq.intake.service.js';
-import { manualTransitions } from '../src/modules/rfq/rfq.admin.service.js';
+import { createRfqAdminService, manualTransitions } from '../src/modules/rfq/rfq.admin.service.js';
 import { parseRfqIntake } from '../src/shared/validators/rfq.validator.js';
 import { createLogger, redact } from '../src/shared/utils/logger.js';
 import { validEnv, productionEnv } from './helpers/env.js';
+import { RfqModel, ClarificationMessageModel } from '../src/modules/rfq/rfq.schema.js';
+import * as audit from '../src/shared/middleware/auditLogger.js';
+import * as outbox from '../src/modules/rfq/rfq.outbox.js';
+import { rfqRecord } from './fixtures/rfq.js';
+
+afterEach(() => vi.restoreAllMocks());
+function query<T>(value: T) {
+  return {
+    session() {
+      return this;
+    },
+    lean: async () => value,
+    then: (resolve: (result: T) => unknown, reject: (error: unknown) => unknown) =>
+      Promise.resolve(value).then(resolve, reject),
+  };
+}
+function triageHarness() {
+  const rfq = new RfqModel(rfqRecord());
+  const req = { requestId: randomUUID(), admin: { id: randomUUID(), sessionId: randomUUID() } } as Request;
+  const session = {} as ClientSession;
+  vi.spyOn(mongoose.connection, 'transaction').mockImplementation(
+    async <T>(work: (value: ClientSession) => Promise<T>) => work(session),
+  );
+  vi.spyOn(RfqModel, 'findById').mockImplementation(() => query(rfq) as never);
+  const changed = vi.spyOn(RfqModel, 'findOneAndUpdate').mockResolvedValue(rfq);
+  const update = vi.spyOn(RfqModel, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
+  const save = vi.spyOn(ClarificationMessageModel.prototype, 'save').mockImplementation(async function (
+    this: InstanceType<typeof ClarificationMessageModel>,
+  ) {
+    return this;
+  });
+  const log = vi.spyOn(audit, 'writeAuditLog').mockResolvedValue(undefined);
+  const enqueue = vi.spyOn(outbox, 'enqueueRfqEmail').mockResolvedValue(undefined);
+  const signals = { submitted: vi.fn(), notifications: vi.fn() };
+  return { rfq, req, session, changed, update, save, log, enqueue, signals, service: createRfqAdminService(signals) };
+}
+
+describe('real RFQ triage service boundaries with isolated persistence', () => {
+  it.each(['QUOTED', 'CONVERTED', 'CLOSED', 'CANCELLED'] as const)(
+    'refuses line/clarification/unable-to-supply edits from %s',
+    async (status) => {
+      const h = triageHarness();
+      h.rfq.status = status;
+      await expect(
+        h.service.item(h.req, h.rfq._id, h.rfq.items[0]!._id, { item_availability_status: 'AVAILABLE' }),
+      ).rejects.toMatchObject({ status: 409 });
+      await expect(h.service.clarify(h.req, h.rfq._id, { body: 'Question', channel: 'EMAIL' })).rejects.toMatchObject({
+        status: 409,
+      });
+      await expect(h.service.close(h.req, h.rfq._id, { unable_to_supply_reason: 'Unavailable' })).rejects.toMatchObject(
+        { status: 409 },
+      );
+      expect(h.changed).not.toHaveBeenCalled();
+      expect(h.save).not.toHaveBeenCalled();
+      expect(h.enqueue).not.toHaveBeenCalled();
+    },
+  );
+  it('patches only availability/note under the original RFQ state and line ID', async () => {
+    const h = triageHarness();
+    const before = h.rfq.toObject();
+    await h.service.item(h.req, h.rfq._id, h.rfq.items[0]!._id, {
+      item_availability_status: 'AVAILABLE',
+      customer_facing_note: 'Confirmed specification',
+    });
+    expect(h.changed).toHaveBeenCalledWith(
+      { _id: h.rfq._id, status: 'SUBMITTED', 'items._id': before.items[0]!._id },
+      {
+        $set: {
+          'items.$.item_availability_status': 'AVAILABLE',
+          'items.$.customer_facing_note': 'Confirmed specification',
+        },
+      },
+      { session: h.session, returnDocument: 'after' },
+    );
+    expect(h.rfq.toObject().contact_snapshot).toMatchObject(before.contact_snapshot);
+    expect(h.rfq.items[0]!.quantity).toBe(before.items[0]!.quantity);
+  });
+  it('enforces close/cancel reasons and disallows direct QUOTED/CONVERTED transitions', async () => {
+    const h = triageHarness();
+    await expect(h.service.status(h.req, h.rfq._id, { status: 'CLOSED' })).rejects.toMatchObject({ status: 422 });
+    await expect(h.service.status(h.req, h.rfq._id, { status: 'QUOTED' })).rejects.toMatchObject({ status: 409 });
+    expect(h.changed).not.toHaveBeenCalled();
+  });
+  it('requires email before an email clarification and keeps internal notes in their own messages', async () => {
+    const h = triageHarness();
+    h.rfq.contact_snapshot.email = undefined;
+    await expect(
+      h.service.clarify(h.req, h.rfq._id, { body: 'Please confirm', channel: 'EMAIL' }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(h.save).not.toHaveBeenCalled();
+    const result = await h.service.note(h.req, h.rfq._id, { body: 'Private sourcing note' });
+    expect(result.note_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(h.save.mock.contexts[0]).toMatchObject({
+      direction: 'INTERNAL_NOTE',
+      channel: 'ADMIN',
+      body: 'Private sourcing note',
+    });
+    expect(h.update).not.toHaveBeenCalled();
+    expect(h.enqueue).not.toHaveBeenCalled();
+  });
+  it('rejects a concurrent triage-state change before logging success', async () => {
+    const h = triageHarness();
+    h.changed.mockResolvedValue(null);
+    await expect(
+      h.service.item(h.req, h.rfq._id, h.rfq.items[0]!._id, { item_availability_status: 'AVAILABLE' }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(h.log).not.toHaveBeenCalled();
+  });
+});
 
 const logger = createLogger({ silent: true });
 const flatBody = () => ({

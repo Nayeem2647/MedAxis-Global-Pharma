@@ -29,6 +29,7 @@ export const homeProductSchema = z.object({
   manufacturer: masterSchema, generic: masterSchema, categories: z.array(masterSchema),
   strength: text, dosage_form: text, pack_size: text, packaging_unit: z.string().min(1).max(40),
   cold_chain_required: z.boolean(), primary_image_url: imageUrl.nullable(), image_urls: z.array(imageUrl).max(20),
+  review_metadata: z.object({ kind:z.enum(['TECHNICAL','MEDICAL']), reviewed_at:z.iso.datetime(), reviewer_name:text }).optional(),
 }).refine((product) => product.alternate_slugs.en === product.translations.en.slug
   && product.alternate_slugs.zhCN === (product.translations.zhCN?.slug ?? null)
   && product.slug === (product.locale === 'zh-CN' ? product.translations.zhCN?.slug : product.translations.en.slug), 'Product translation identity must match its public locale and alternate slugs.');

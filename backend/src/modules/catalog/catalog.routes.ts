@@ -6,7 +6,8 @@ import type { AppEnv } from '../../config/env.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { adminAuth } from '../../shared/middleware/adminAuth.js';
 import { adminBoundary } from '../../shared/middleware/adminBoundary.js';
-import { sendSuccess } from '../../shared/utils/response.js';
+import { sendPaginated, sendSuccess } from '../../shared/utils/response.js';
+import { adminCatalogQuery, createAdminCatalogReads } from './catalog.admin.reads.js';
 import type { Revalidate } from '../../shared/utils/revalidate.js';
 import { createStorageService, MAX_FILE_BYTES } from '../storage/storage.service.js';
 import { createAdminCatalogService } from './catalog.admin.service.js';
@@ -85,6 +86,27 @@ export function createAdminCatalogRouter(env: AppEnv, revalidate: Revalidate) {
     limits: { fileSize: MAX_FILE_BYTES, files: 1, fields: 1, parts: 2 },
   });
   router.use(adminBoundary(env), adminAuth(env));
+  const reads = createAdminCatalogReads();
+  router.get('/products', async (req, res) => {
+    const query = adminCatalogQuery.omit({ is_active: true }).parse(req.query);
+    const result = await reads.products(query);
+    sendPaginated(res, result.items, { ...query, totalItems: result.total });
+  });
+  router.get('/products/:id', async (req, res) => {
+    z.object({}).strict().parse(req.query);
+    sendSuccess(res, await reads.product(uuid.parse(req.params.id)));
+  });
+  for (const kind of ['manufacturers', 'generics', 'categories'] as const) {
+    router.get(`/${kind}`, async (req, res) => {
+      const query = adminCatalogQuery.pick({ page: true, limit: true, q: true, is_active: true }).parse(req.query);
+      const result = await reads.masters(kind, query);
+      sendPaginated(res, result.items, { ...query, totalItems: result.total });
+    });
+    router.get(`/${kind}/:id`, async (req, res) => {
+      z.object({}).strict().parse(req.query);
+      sendSuccess(res, await reads.master(kind, uuid.parse(req.params.id)));
+    });
+  }
   router.post('/products', async (req, res) => {
     sendSuccess(res, await service.saveProduct(req, productCreate.parse(req.body)), { status: 201 });
   });

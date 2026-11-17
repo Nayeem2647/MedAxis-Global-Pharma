@@ -18,6 +18,7 @@ const failureSchema = z.object({
 const successSchema = z.object({ success: z.literal(true), data: z.unknown(), meta: metaSchema });
 
 export type ApiMeta = z.infer<typeof metaSchema>;
+export type ApiPagination = z.infer<typeof paginationSchema>;
 export type ApiFieldDetail = z.infer<typeof detailSchema>;
 export type ApiFailure = z.infer<typeof failureSchema>;
 export interface ApiSuccess<T> { success: true; data: T; meta: ApiMeta }

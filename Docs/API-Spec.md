@@ -645,3 +645,32 @@ These endpoints capture structured demand from B2B wholesale buyers and B2C pati
 * **Authentication:** PUBLIC with HMAC-SHA256 signature verification (x-webhook-signature header).
 * **Business Logic:** Parses inbound email thread, matches RFQ reference, appends message to clarification_messages collection, and automatically transitions RFQ status from NEED_CLARIFICATION to UNDER_REVIEW.
 * **Response 200 OK:** { "success": true, "message": "Inbound reply threaded successfully." }
+
+## 5. Release 1 admin extensions — Step 8
+
+These routes are implemented behind the existing ADMIN_AUTH and same-origin boundaries. All use the normal validated JSON envelope, private/no-store responses and the existing pagination metadata. No frontend database access is introduced.
+
+| ID | Method | Path | Contract |
+|---|---|---|---|
+| **53** | POST | /v1/admin/catalog/images | Authenticated multipart image upload; JPEG/PNG/WebP up to 5 MiB. |
+| **54** | GET | /v1/admin/catalog/products | Array of allowlisted product records, including DRAFT/ARCHIVED; page,limit,q,status,manufacturer_id,generic_id,category_id. |
+| **55** | GET | /v1/admin/catalog/products/:id | Same product DTO; UUID; no query keys. |
+| **56** | GET | /v1/admin/catalog/manufacturers | Paginated master records; page,limit,q,is_active=true\|false. |
+| **57** | GET | /v1/admin/catalog/manufacturers/:id | Manufacturer DTO; includes actual country/certifications. |
+| **58** | GET | /v1/admin/catalog/generics | Paginated master records; page,limit,q,is_active=true\|false. |
+| **59** | GET | /v1/admin/catalog/generics/:id | Generic DTO; actual therapeutic_indications. |
+| **60** | GET | /v1/admin/catalog/categories | Paginated master records; page,limit,q,is_active=true\|false. |
+| **61** | GET | /v1/admin/catalog/categories/:id | Category DTO; actual sort_order. |
+| **62** | GET | /v1/admin/cms/banners | Paginated active/inactive/scheduled records; page,limit,q,is_active. |
+| **63** | GET | /v1/admin/cms/banners/:id | Bilingual banner DTO including scheduling/link_path; no query keys. |
+| **64** | GET | /v1/admin/quotations | Paginated current-version summaries; page,limit,q (business reference),rfq_id,overall_status,status,reservation_before (ISO timestamp). No contact/cost/token fields. |
+| **65** | GET | /v1/admin/quotations/summary | Global authoritative active_quotations,accepted_payment_pending,ready_to_dispatch,expiring_allocations; as_of and window_hours (1–168; default 24). Counts join only each active parent's current version. Pending/expiring require an ACTIVE unexpired ACCEPTED reservation; dispatch-ready requires PAYMENT_RECEIVED, payment data and CONSUMED reservation. |
+| **66** | PATCH | /v1/admin/quotations/:id/draft | Full registered pricing body plus required expected_current_version_id and expected_updated_at. Only an unlocked current DRAFT may change. Preserves version identity/number, recalculates draft preview/costs atomically, audits the edit, advances updated_at. Stale timestamp/version, issuance or terminal state returns 409; never edits SENT prices/locked FX. |
+
+| **67** | POST | /v1/admin/cms/banners | Bilingual banner create/update; id optional, exact translation/schedule/link fields. |
+
+Collection limits are 1–100 (default 20), pages 1–100000. Unknown/repeated query keys are rejected. Lists retain English/zhCN translations and record IDs, flags and timestamps; they do not expose arbitrary database fields. Master pickers search/page these reads rather than treating one result page as the complete directory.
+
+Product reads/writes additionally support optional `review_metadata:{kind:TECHNICAL|MEDICAL,reviewed_at:ISO timestamp,reviewer_name:string}`. PATCH may explicitly clear it with null. Review dates cannot be future dates; no automatic review date or clinical qualification is inferred from updated_at. This metadata records an actual human review and does not certify a reviewer's credentials. No prescription_required field is added. BSON persistence uses a strict optional review_metadata object with a date; migration is required before deployment, not performed by Next.js.
+
+Authenticated catalog image upload is POST /v1/admin/catalog/images, multipart `image`, JPEG/PNG/WebP ≤5,242,880 bytes; result `{r2_object_key,url,mime_type,file_size_bytes}`. Persist the returned product image key; never expose storage credentials. CMS writes remain POST /v1/admin/cms/banners with the documented id/translation/schedule fields. CSV uses only the existing synchronous dry-run/commit contract; no job endpoint exists. All new reads and draft edits must pass the same cookie/BFF/Origin enforcement as existing admin routes.

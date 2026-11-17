@@ -35,6 +35,7 @@ describe.each(['anonymous', 'pre-authentication only'] as const)('all ADMIN_AUTH
       const call = request(app)[method](url);
       if (identity === 'pre-authentication only') call.set('Cookie', challengeCookie);
       if (id === 41) call.field('dry_run', 'true');
+      else if (id === 53) call.field('image', '');
       else if (method !== 'get') call.send({ unexpected: true });
       const result = await call;
       expect(result.status).toBe(401);

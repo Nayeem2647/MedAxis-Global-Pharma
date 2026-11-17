@@ -55,7 +55,7 @@ describe('fixed-origin Node admin adapter', () => {
     const fetcher = vi.fn<typeof fetch>(); vi.stubGlobal('fetch', fetcher);
     expect((await proxyAdmin(request('auth/logout', 'POST', {}, { origin, 'sec-fetch-site': site }), ['auth', 'logout'])).status).toBe(403); expect(fetcher).not.toHaveBeenCalled();
   });
-  it.each([['https://evil.test', 'GET'], ['catalog/products', 'GET'], ['rfqs', 'DELETE'], ['auth/verify-email', 'POST']])('does not invent/proxy path %s %s', (path, method) => expect(adminProxyRule(path, method)).toBeNull());
+  it.each([['https://evil.test', 'GET'], ['catalog/unregistered', 'GET'], ['rfqs', 'DELETE'], ['auth/verify-email', 'POST']])('does not invent/proxy path %s %s', (path, method) => expect(adminProxyRule(path, method)).toBeNull());
   it('forwards only approved headers and opaque pre-auth to MFA; relays each cookie separately', async () => {
     const headers = new Headers(); headers.append('Set-Cookie', cookie(full, '/v1/admin')); headers.append('Set-Cookie', 'pre_auth_session=; Path=/v1/admin/auth; HttpOnly; SameSite=Strict; Secure; Max-Age=0');
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(success({ admin: { id, email: 'admin@test.example', password_hash: 'NEVER_RENDER' }, session_id: id, expires_at: expires }, headers)); vi.stubGlobal('fetch', fetcher);

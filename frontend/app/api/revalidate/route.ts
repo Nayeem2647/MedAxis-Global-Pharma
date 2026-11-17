@@ -2,11 +2,12 @@ import { timingSafeEqual } from 'node:crypto';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { parseCatalogPath } from '../../../lib/catalog-path';
+import { sitemapPaths } from '../../../lib/sitemap';
 
 export const runtime = 'nodejs';
 const payloadSchema = z.object({
   tags: z.array(z.enum(['catalog', 'cms', 'settings'])).max(3).default([]),
-  paths: z.array(z.string().max(1024).refine((path) => /^\/(en|zh-CN)(?:\/(products|services))?$/.test(path) || parseCatalogPath(path) !== null || path === '/sitemap.xml')).max(100).default([]),
+  paths: z.array(z.string().max(1024).refine((path) => /^\/(en|zh-CN)(?:\/(products|services))?$/.test(path) || parseCatalogPath(path) !== null || sitemapPaths.includes(path))).max(100).default([]),
   request_id: z.uuid().optional(),
 }).strict().refine((body) => body.tags.length > 0 || body.paths.length > 0);
 
@@ -38,7 +39,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     for (const tag of new Set(parsed.data.tags)) revalidateTag(tag);
     for (const path of new Set(parsed.data.paths)) revalidatePath(path);
-    if (parsed.data.tags.includes('catalog')) revalidatePath('/sitemap.xml');
+    if (parsed.data.tags.includes('catalog')) for(const path of sitemapPaths) revalidatePath(path);
     return json({ success: true, data: { revalidated: true, tags: parsed.data.tags, paths: parsed.data.paths } });
   } catch { return json({ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Revalidation failed.' } }, 500); }
 }

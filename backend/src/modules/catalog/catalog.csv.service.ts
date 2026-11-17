@@ -9,7 +9,7 @@ import { productCreate, slug, type ProductInput } from './catalog.validator.js';
 import { validateProductReferences, validateProductSlugs, type AdminCatalogService } from './catalog.admin.service.js';
 
 const optional = z.string().optional();
-const csvRow = z
+export const csvRow = z
   .object({
     sku: z.string(),
     manufacturer_slug: slug,

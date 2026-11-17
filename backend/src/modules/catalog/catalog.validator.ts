@@ -28,6 +28,15 @@ export const productTranslation = z
     image_alt_text: text().optional(),
   })
   .strict();
+export const reviewMetadata = z
+  .object({
+    kind: z.enum(['TECHNICAL', 'MEDICAL']),
+    reviewed_at: z.iso
+      .datetime({ offset: true })
+      .refine((value) => Date.parse(value) <= Date.now(), 'Review date cannot be in the future.'),
+    reviewer_name: text(),
+  })
+  .strict();
 export const productFields = z
   .object({
     sku: text().transform((value) => value.toUpperCase()),
@@ -55,6 +64,7 @@ export const productFields = z
       .max(20)
       .optional(),
     status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']),
+    review_metadata: reviewMetadata.optional(),
   })
   .strict();
 export const productCreate = productFields.extend({
@@ -64,6 +74,7 @@ export const productCreate = productFields.extend({
 export const productPatch = productFields
   .partial()
   .extend({
+    review_metadata: reviewMetadata.nullable().optional(),
     translations: z
       .object({ en: productTranslation.partial().optional(), zhCN: productTranslation.partial().nullable().optional() })
       .strict()

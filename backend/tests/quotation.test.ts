@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import mongoose, { type ClientSession } from 'mongoose';
+import type { Request } from 'express';
 import { createApp } from '../src/app.js';
 import { loadEnv } from '../src/config/env.js';
 import { calculateFastQuote } from '../src/modules/quotation/fastquote.engine.js';
@@ -10,8 +12,309 @@ import type { IQuotationVersion } from '../src/modules/quotation/quotation.schem
 import { bsonDecimal, saneRate } from '../src/shared/utils/decimal.js';
 import { decrypt } from '../src/shared/utils/crypto.js';
 import { createLogger } from '../src/shared/utils/logger.js';
-import { draftQuoteSchema, fxPatchSchema } from '../src/shared/validators/quotation.validator.js';
+import {
+  draftQuoteSchema,
+  fxPatchSchema,
+  updateDraftQuoteSchema,
+} from '../src/shared/validators/quotation.validator.js';
+import { ManufacturerModel } from '../src/modules/catalog/catalog.schema.js';
 import { validEnv } from './helpers/env.js';
+import { quotationVersionFixture } from './fixtures/commercial.js';
+import {
+  QuotationModel,
+  QuotationVersionModel,
+  QuotationInternalCostModel,
+} from '../src/modules/quotation/quotation.schema.js';
+import { PlatformSettingModel } from '../src/modules/settings/settings.schema.js';
+import { RfqModel } from '../src/modules/rfq/rfq.schema.js';
+import { createQuotationService } from '../src/modules/quotation/quotation.service.js';
+import { createDecisionService } from '../src/modules/quotation/quotation.decisions.js';
+import type { FxService } from '../src/modules/fx/fx.service.js';
+import * as outbox from '../src/modules/quotation/quotation.outbox.js';
+import * as audit from '../src/shared/middleware/auditLogger.js';
+import { hashToken } from '../src/shared/utils/crypto.js';
+import { z } from 'zod';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+function query<T>(value: T) {
+  return {
+    select() {
+      return this;
+    },
+    session() {
+      return this;
+    },
+    lean: async () => value,
+    then: (resolve: (result: T) => unknown, reject: (error: unknown) => unknown) =>
+      Promise.resolve(value).then(resolve, reject),
+  };
+}
+
+// Execute the real service/crypto/calculator. Persistence/outbox are isolated;
+// MongoDB transaction atomicity remains covered by the separate integration suite.
+function issuanceHarness() {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-16T10:00:00.000Z'));
+  const env = loadEnv(validEnv);
+  const logger = createLogger({ silent: true });
+  const fixture = quotationVersionFixture();
+  const version = new QuotationVersionModel({ ...fixture, status: 'DRAFT', issued_at: undefined });
+  const quote = new QuotationModel({
+    _id: fixture.quotation_id,
+    quotation_number: 'QT-SERVICE-001',
+    rfq_id: randomUUID(),
+    customer_id: randomUUID(),
+    current_version: 1,
+    current_version_id: fixture._id,
+    overall_status: 'ACTIVE',
+  });
+  const session = {} as ClientSession;
+  vi.spyOn(mongoose.connection, 'transaction').mockImplementation(
+    async <T>(work: (value: ClientSession) => Promise<T>) => work(session),
+  );
+  const req = { requestId: randomUUID(), admin: { id: randomUUID(), sessionId: randomUUID() } } as Request;
+  vi.spyOn(QuotationModel, 'findOne').mockImplementation(() => query(quote) as never);
+  vi.spyOn(QuotationModel, 'findOneAndUpdate').mockImplementation(() => query(quote) as never);
+  vi.spyOn(QuotationModel, 'findById').mockImplementation(() => query(quote.toObject()) as never);
+  vi.spyOn(QuotationVersionModel, 'findOne').mockImplementation((filter) => {
+    const hash = z.object({ magic_link_token_hash: z.string().optional() }).parse(filter).magic_link_token_hash;
+    return query(hash ? (hash === version.magic_link_token_hash ? version.toObject() : null) : version) as never;
+  });
+  vi.spyOn(version, 'save').mockResolvedValue(version);
+  const costs = new QuotationInternalCostModel({
+    quotation_version_id: version._id,
+    items: fixture.items.map((item) => ({
+      rfq_item_id: item.rfq_item_id,
+      manufacturer_id: item.manufacturer_id,
+      quantity: item.quantity,
+      procurement_unit_cost_bdt: bsonDecimal('120'),
+      markup_percent: bsonDecimal('20'),
+    })),
+    procurement_cost_bdt: bsonDecimal('360'),
+    target_markup_percent: bsonDecimal('20'),
+    calculated_base_bdt: bsonDecimal('432'),
+  });
+  vi.spyOn(costs, 'save').mockResolvedValue(costs);
+  vi.spyOn(QuotationInternalCostModel, 'findOne').mockImplementation(() => query(costs) as never);
+  vi.spyOn(RfqModel, 'findById').mockImplementation(
+    () => query({ _id: quote.rfq_id, status: 'UNDER_REVIEW' }) as never,
+  );
+  const rfqWrite = vi.spyOn(RfqModel, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
+  const bank = {
+    configured: true,
+    instructions: 'Verified wire',
+    beneficiary_name: 'Exporter',
+    bank_name: 'Bank',
+    account_number: 'WIRE-001',
+    swift_code: 'TESTBDDH',
+  };
+  vi.spyOn(PlatformSettingModel, 'findOne').mockImplementation(
+    (filter) =>
+      query({
+        value:
+          z.object({ key: z.string() }).parse(filter).key === 'wire_instructions' ? bank : { quote_validity_days: 7 },
+      }) as never,
+  );
+  const snapshot = vi.fn(async () => ({
+    rate: '120',
+    rates: { USD: '120', EUR: '130', CNY: '17' },
+    modes: { USD: 'LIVE', EUR: 'LIVE', CNY: 'LIVE' },
+    fetched: { USD: new Date(), EUR: new Date(), CNY: new Date() },
+    captured_at: new Date(),
+    stale: false,
+  }));
+  const fx = { snapshot } as unknown as FxService;
+  const enqueue = vi.spyOn(outbox, 'enqueueQuotation').mockResolvedValue(undefined);
+  const log = vi.spyOn(audit, 'writeAuditLog').mockResolvedValue(undefined);
+  return {
+    version,
+    quote,
+    req,
+    session,
+    snapshot,
+    rfqWrite,
+    enqueue,
+    log,
+    service: createQuotationService(env, fx, logger),
+    decisions: createDecisionService(env, logger),
+  };
+}
+
+describe('real issue/resend service boundaries with isolated persistence', () => {
+  it('edits an existing draft atomically without creating a version or locking FX, and rejects stale replay', async () => {
+    const h = issuanceHarness();
+    const before = h.version.updated_at.toISOString();
+    const line = h.version.items[0]!;
+    vi.spyOn(RfqModel, 'findById').mockImplementation(
+      () =>
+        query({
+          _id: h.quote.rfq_id,
+          status: 'UNDER_REVIEW',
+          contact_snapshot: h.version.contact_snapshot,
+          items: [{ _id: line.rfq_item_id, is_uncatalogued: true, quantity: 3, packaging_unit: 'BOX' }],
+        }) as never,
+    );
+    vi.spyOn(ManufacturerModel, 'findOneAndUpdate').mockImplementation(
+      () => query({ _id: line.manufacturer_id, is_active: true }) as never,
+    );
+    const stamp = vi.spyOn(QuotationVersionModel, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
+    const input = updateDraftQuoteSchema.parse({
+      expected_current_version_id: h.version._id,
+      expected_updated_at: before,
+      billing_currency: 'USD',
+      items: [
+        {
+          rfq_item_id: line.rfq_item_id,
+          manufacturer_id: line.manufacturer_id,
+          availability_status: 'AVAILABLE',
+          procurement_cost_bdt: '120.12345678',
+          markup_percent: '20',
+          snapshot: {
+            brand_name: 'Actual custom medicine',
+            generic_name: 'Ingredient',
+            strength: '10 mg',
+            dosage_form: 'Tablet',
+            pack_size: '10 tablets',
+          },
+        },
+      ],
+      freight_amount: '2.50',
+      insurance_amount: '0.25',
+      shipping_terms: h.version.toObject().shipping_terms,
+      payment_terms: 'BANK_WIRE_TT',
+    });
+    const result = await h.service.updateDraft(h.req, h.quote._id, input);
+    expect(result.version.id).toBe(h.version._id);
+    expect(result.version.version_number).toBe(1);
+    expect(result.version.status).toBe('DRAFT');
+    expect(result.version.items[0]?.quantity).toBe(3);
+    expect(result.version).not.toHaveProperty('locked_fx_rates');
+    expect(h.snapshot).toHaveBeenCalledExactlyOnceWith('USD', h.session, true);
+    expect(result.version.updated_at.getTime()).toBeGreaterThan(Date.parse(before));
+    expect(stamp).toHaveBeenCalledWith({ _id: h.version._id, status: 'DRAFT' }, expect.any(Object), {
+      session: h.session,
+      timestamps: false,
+    });
+    expect(h.log).toHaveBeenCalledWith(
+      h.req,
+      expect.objectContaining({ action: 'QUOTATION_DRAFT_UPDATED' }),
+      h.session,
+    );
+    expect(h.enqueue).not.toHaveBeenCalled();
+    await expect(h.service.updateDraft(h.req, h.quote._id, input)).rejects.toMatchObject({
+      status: 409,
+      code: 'QUOTATION_VERSION_CONFLICT',
+    });
+  });
+  it('never edits issued prices or a superseded version through draft update', async () => {
+    const h = issuanceHarness();
+    const input = updateDraftQuoteSchema.parse({
+      expected_current_version_id: h.version._id,
+      expected_updated_at: h.version.updated_at.toISOString(),
+      billing_currency: 'USD',
+      items: [
+        {
+          rfq_item_id: h.version.items[0]!.rfq_item_id,
+          manufacturer_id: h.version.items[0]!.manufacturer_id,
+          availability_status: 'AVAILABLE',
+          procurement_cost_bdt: '120',
+          markup_percent: '20',
+        },
+      ],
+      freight_amount: '0',
+      insurance_amount: '0',
+      shipping_terms: h.version.toObject().shipping_terms,
+    });
+    h.version.status = 'SENT';
+    await expect(h.service.updateDraft(h.req, h.quote._id, input)).rejects.toMatchObject({ status: 409 });
+    expect(h.snapshot).not.toHaveBeenCalled();
+    h.version.status = 'DRAFT';
+    await expect(
+      h.service.updateDraft(h.req, h.quote._id, { ...input, expected_current_version_id: randomUUID() }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+  it('recalculates and captures FX only at issue, then rotates the token without changing locked prices/rates', async () => {
+    const h = issuanceHarness();
+    h.snapshot.mockResolvedValueOnce({
+      rate: '240',
+      rates: { USD: '240', EUR: '130', CNY: '17' },
+      modes: { USD: 'LIVE', EUR: 'LIVE', CNY: 'LIVE' },
+      fetched: { USD: new Date(), EUR: new Date(), CNY: new Date() },
+      captured_at: new Date(),
+      stale: false,
+    });
+    const sent = await h.service.send(h.req, h.quote._id, {
+      expected_version_id: h.version._id,
+      allow_stale_fx: false,
+    });
+    expect(h.snapshot).toHaveBeenCalledExactlyOnceWith('USD', h.session, false);
+    expect(sent.version.total_amount).toBe('4.55');
+    expect(h.version.fx_snapshot?.rates_to_bdt.USD.toString()).toBe('240');
+    expect(h.version.status).toBe('SENT');
+    const first = new URL(sent.magic_link_url).pathname.split('/').at(-1)!;
+    expect(h.version.magic_link_token_hash).toBe(hashToken(first));
+    expect((await h.decisions.get(first)).total_amount).toBe('4.55');
+    vi.spyOn(QuotationVersionModel, 'findOneAndUpdate').mockImplementation((filter, update) => {
+      expect(filter).toMatchObject({ _id: h.version._id, status: 'SENT', magic_link_token_hash: hashToken(first) });
+      h.version.magic_link_token_hash = z
+        .object({ $set: z.object({ magic_link_token_hash: z.string() }) })
+        .parse(update).$set.magic_link_token_hash;
+      return query(h.version) as never;
+    });
+    const rotated = await h.service.resend(h.req, h.quote._id, h.version._id);
+    const second = new URL(rotated.magic_link_url).pathname.split('/').at(-1)!;
+    expect(second).not.toBe(first);
+    await expect(h.decisions.get(first)).rejects.toMatchObject({ status: 404 });
+    expect((await h.decisions.get(second)).total_amount).toBe('4.55');
+    expect(h.snapshot).toHaveBeenCalledOnce();
+    expect(h.version.fx_snapshot?.rates_to_bdt.USD.toString()).toBe('240');
+    expect(h.enqueue).toHaveBeenCalledTimes(2);
+    expect(h.enqueue.mock.calls[1]?.at(-1)).toBe(true);
+  });
+  it('rejects stale expected versions before any issue work, FX capture or notification', async () => {
+    const h = issuanceHarness();
+    await expect(
+      h.service.send(h.req, h.quote._id, { expected_version_id: randomUUID(), allow_stale_fx: false }),
+    ).rejects.toMatchObject({ status: 409, code: 'QUOTATION_VERSION_CONFLICT' });
+    expect(h.snapshot).not.toHaveBeenCalled();
+    expect(h.enqueue).not.toHaveBeenCalled();
+    expect(h.rfqWrite).not.toHaveBeenCalled();
+  });
+  it('rejects a concurrent parent-version change at its compare-and-set lock', async () => {
+    const h = issuanceHarness();
+    vi.mocked(QuotationModel.findOneAndUpdate).mockImplementation(() => query(null) as never);
+    await expect(
+      h.service.send(h.req, h.quote._id, { expected_version_id: h.version._id, allow_stale_fx: false }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(QuotationModel.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ current_version_id: h.version._id, current_version: 1, overall_status: 'ACTIVE' }),
+      expect.anything(),
+      expect.objectContaining({ session: h.session }),
+    );
+    expect(h.enqueue).not.toHaveBeenCalled();
+  });
+  it('refuses to issue sourcing lines before FX capture or side effects', async () => {
+    const h = issuanceHarness();
+    h.version.items[0]!.availability_status = 'SOURCING';
+    await expect(
+      h.service.send(h.req, h.quote._id, { expected_version_id: h.version._id, allow_stale_fx: false }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(h.snapshot).not.toHaveBeenCalled();
+    expect(h.enqueue).not.toHaveBeenCalled();
+  });
+  it('rejects a resend token changed by a concurrent actor without queuing another delivery', async () => {
+    const h = issuanceHarness();
+    h.version.status = 'SENT';
+    h.version.magic_link_token_hash = hashToken('a'.repeat(64));
+    vi.spyOn(QuotationVersionModel, 'findOneAndUpdate').mockImplementation(() => query(null) as never);
+    await expect(h.service.resend(h.req, h.quote._id, h.version._id)).rejects.toMatchObject({ status: 409 });
+    expect(h.enqueue).not.toHaveBeenCalled();
+    expect(h.snapshot).not.toHaveBeenCalled();
+  });
+});
 
 const line = {
   rfq_item_id: randomUUID(),

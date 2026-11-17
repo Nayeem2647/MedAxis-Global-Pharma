@@ -96,7 +96,7 @@ test('different translated slugs switch exactly while absent translations stay d
   await expect(page.locator('link[hreflang="zh-CN"]')).toHaveCount(0);
   await expect(page.locator('link[hreflang="x-default"]')).toHaveAttribute('href', 'https://medaxisglobalpharma.com/en/products/english-only-medicine');
   const sitemap = await request.get('/sitemap.xml');
-  const xml = await sitemap.text();
+  const index=await sitemap.text();const children=[...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match)=>new URL(match[1]).pathname);const xml=(await Promise.all(children.map(async(path)=>(await request.get(path)).text()))).join('');
   expect(xml).not.toContain('/zh-CN/products/english-only-medicine');
   for (const path of ['/products', '/services', '/services/pharmaceutical-sourcing', '/generics', '/manufacturers', '/categories']) expect(xml).toContain(`/en${path}</loc>`);
   for (const match of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) { expect(new URL(match[1]).search).toBe(''); expect(match[1]).not.toMatch(/\/privacy|\/terms|\/admin\/|\/q\/|\/api\//); }

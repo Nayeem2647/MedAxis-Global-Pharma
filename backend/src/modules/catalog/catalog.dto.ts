@@ -54,6 +54,7 @@ export const PUBLIC_PRODUCT_PROJECTION = {
   cold_chain_required: 1,
   storage_condition: 1,
   image_keys: 1,
+  review_metadata: 1,
   updated_at: 1,
 };
 export interface PublicProductTranslation {
@@ -85,6 +86,7 @@ export interface JoinedProduct extends IProduct {
   category_profiles: MasterRecord[];
 }
 export interface PublicProduct extends PublicProductTranslation {
+  review_metadata?: IProduct['review_metadata'];
   id: string;
   sku: string;
   locale: Locale;
@@ -158,6 +160,7 @@ export function publicProduct(record: JoinedProduct, locale: Locale, imageBase?:
     packaging_unit: record.packaging_unit,
     cold_chain_required: record.cold_chain_required,
     storage_condition: translation.storage_condition ?? record.storage_condition,
+    review_metadata: record.review_metadata,
     primary_image_url: images[0] ?? null,
     image_urls: images,
   };

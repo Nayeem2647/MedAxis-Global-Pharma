@@ -7,6 +7,7 @@ import { getProducts } from '../../../lib/catalog-data';
 import { catalogQueryString, readCatalogQuery, type SearchValues } from '../../../lib/catalog-query';
 import { ApiError } from '../../../lib/api-client';
 import { ProductCard } from '../../../components/catalog/ProductCard';
+import { CatalogGridShell } from '../../../components/catalog/CatalogGridShell';
 import { Filters } from '../../../components/catalog/Filters';
 import { Pagination } from '../../../components/catalog/Pagination';
 import { CatalogState } from '../../../components/catalog/CatalogState';
@@ -40,8 +41,14 @@ export default async function ProductsPage({ params, searchParams }: Props) {
     <Breadcrumbs locale={locale} entries={[{ name: t('products'), href: path }]}/>
     <div className="catalog-heading"><p className="eyebrow">MEDAXIS GLOBAL PHARMA</p><h1>{t('products')}</h1><p>{t('catalogDescription')}</p></div>
     <Filters locale={locale} path={path} query={query} facets={data?.facets ?? { dosage_forms: [], cold_chain: [] }}/>
-    {data && <p className="results-count" role="status">{t('results', { count: data.pagination.total_items })}</p>}
-    {data?.products.length ? <><div className="product-grid">{data.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}</div><Pagination locale={locale} path={path} query={query} pagination={data.pagination}/></>
-      : <CatalogState locale={locale} error={error} query={query.q} path={path}/>}
+    {data?.products.length ? <>
+      <CatalogGridShell resultsLabel={t('results', { count: data.pagination.total_items })} viewLabel={t('viewMode')} gridLabel={t('gridView')} listLabel={t('listView')}>
+        {data.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}
+      </CatalogGridShell>
+      <Pagination locale={locale} path={path} query={query} pagination={data.pagination}/>
+    </> : <>
+      {data && <p className="results-count" role="status">{t('results', { count: data.pagination.total_items })}</p>}
+      <CatalogState locale={locale} error={error} query={query.q} path={path}/>
+    </>}
   </div></main>;
 }

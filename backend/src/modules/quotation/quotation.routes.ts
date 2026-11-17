@@ -10,18 +10,38 @@ import {
   reviseQuoteSchema,
   resendQuoteSchema,
   sendQuoteSchema,
+  updateDraftQuoteSchema,
 } from '../../shared/validators/quotation.validator.js';
 import { uuid } from '../catalog/catalog.validator.js';
 import type { FxService } from '../fx/fx.service.js';
 import { createQuotationService, type QuotationHooks } from './quotation.service.js';
 import { createFulfillmentService } from './quotation.fulfillment.js';
 import { fulfillmentSchema } from '../../shared/validators/decision.validator.js';
+import {
+  listQuotations,
+  quotationListQuery,
+  quotationSummary,
+  quotationSummaryQuery,
+} from './quotation.admin.reads.js';
+import { sendPaginated } from '../../shared/utils/response.js';
 
 export function createQuotationRouter(env: AppEnv, fx: FxService, logger: AppLogger, hooks?: QuotationHooks) {
   const router = Router();
   const service = createQuotationService(env, fx, logger, hooks);
   const fulfill = createFulfillmentService(logger, hooks?.dispatchNotifications);
   router.use(adminBoundary(env), adminAuth(env));
+  router.get('/', async (req, res) => {
+    const query = quotationListQuery.parse(req.query);
+    const result = await listQuotations(query);
+    sendPaginated(res, result.items, { ...query, totalItems: result.total });
+  });
+  router.get('/summary', async (req, res) => {
+    const query = quotationSummaryQuery.parse(req.query);
+    sendSuccess(res, await quotationSummary(query.window_hours));
+  });
+  router.patch('/:id/draft', async (req, res) => {
+    sendSuccess(res, await service.updateDraft(req, uuid.parse(req.params.id), updateDraftQuoteSchema.parse(req.body)));
+  });
   router.patch('/:id/fulfillment', async (req, res) => {
     sendSuccess(res, await fulfill(req, uuid.parse(req.params.id), fulfillmentSchema.parse(req.body)));
   });

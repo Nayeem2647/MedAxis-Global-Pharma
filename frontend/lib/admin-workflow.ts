@@ -14,7 +14,7 @@ const contactSchema = z.object({ full_name: text(), customer_type: z.enum(['B2B_
 export const rfqLineSchema = z.object({ _id: uuid, product_id: uuid.optional(), is_uncatalogued: z.boolean(), product_snapshot: z.object({ brand_name: text().optional(), pack_size: text().optional() }).optional(), custom_medicine_name: text().optional(), custom_strength: text(100).optional(), quantity: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), packaging_unit: text(40), item_availability_status: z.enum(availability), customer_facing_note: text(2000).optional(), line_notes: text(2000).optional(), internal_note: text(2000).optional() }).transform(({ _id, ...value }) => ({ id: _id, ...value }));
 const quoteReference = z.object({ _id: uuid, quotation_number: text(), current_version: z.number().int().positive(), current_version_id: uuid, overall_status: z.enum(['ACTIVE', 'COMPLETED', 'DECLINED', 'EXPIRED']), created_at: date }).transform(({ _id, ...value }) => ({ id: _id, ...value }));
 export const rfqDetailSchema = z.object({ ...adminRfqSchema.in.shape, contact_snapshot: contactSchema, customer_id: uuid, preferred_currency: z.enum(currencies), destination_city_port: text().optional(), close_reason: text().optional(), unable_to_supply_reason: text(2000).optional(), terminal_at: date.optional(), items: z.array(rfqLineSchema).min(1).max(100),
-  prescriptions: z.array(z.object({ _id: uuid, mime_type: z.enum(['image/jpeg', 'image/png', 'application/pdf']), file_size_bytes: z.number().int().positive().max(5_242_880), uploaded_at: date, purge_scheduled_at: date, purge_status: z.enum(['ACTIVE', 'PENDING', 'PURGED', 'FAILED']) }).transform(({ _id, ...value }) => ({ id: _id, ...value }))),
+  prescriptions: z.array(z.object({ _id: uuid, mime_type: z.enum(['image/jpeg', 'image/png', 'application/pdf']), file_size_bytes: z.number().int().positive().max(5_242_880), uploaded_at: date, purge_scheduled_at: date, purge_status: z.enum(['ACTIVE', 'PENDING', 'DELETING', 'PURGED']) }).transform(({ _id, ...value }) => ({ id: _id, ...value }))),
   clarification_messages: z.array(z.object({ _id: uuid, direction: z.enum(['ADMIN_TO_BUYER', 'BUYER_TO_ADMIN', 'INTERNAL_NOTE']), channel: z.enum(['EMAIL', 'WHATSAPP', 'WECHAT', 'ADMIN']), body: text(5000), status: z.enum(['PENDING_BUYER', 'REPLIED', 'RESOLVED']), created_at: date }).transform(({ _id, ...value }) => ({ id: _id, ...value }))), quotations: z.array(quoteReference),
 }).transform(({ _id, ...value }) => ({ id: _id, ...value }));
 export type RfqDetail = z.infer<typeof rfqDetailSchema>;
@@ -31,7 +31,15 @@ export const noteResult = z.object({ note_id: uuid });
 export const clarificationResult = z.object({ message_id: uuid, thread_id: uuid, status: z.literal('NEED_CLARIFICATION') });
 
 export const decimalInput = z.string().regex(/^\d{1,18}(?:\.\d{1,8})?$/, 'Use a nonnegative decimal string with up to eight decimal places.');
-const markup = decimalInput.refine((value) => { const [whole, fraction = ''] = value.split('.'); return BigInt(whole) < 1_000_000n || BigInt(whole) === 1_000_000n && !/[1-9]/.test(fraction); }, 'Markup exceeds 1000000%.');
+/** Lossless decimal text expansion for editable server Decimal128 strings. */
+export function decimalForInput(value: string): string {
+  const match = /^(\d+)(?:\.(\d+))?(?:[Ee]([+-]?\d+))?$/.exec(value); if (!match) return value;
+  const exponent = Number(match[3] ?? '0'); if (Math.abs(exponent) > 100) return value;
+  const digits = match[1] + (match[2] ?? ''); const point = match[1].length + exponent;
+  const expanded = point <= 0 ? `0.${'0'.repeat(-point)}${digits}` : point >= digits.length ? digits + '0'.repeat(point - digits.length) : `${digits.slice(0, point)}.${digits.slice(point)}`;
+  const normalized = expanded.replace(/^0+(?=\d)/, ''); return decimalInput.safeParse(normalized).success ? normalized : value;
+}
+const markup = decimalInput.refine((value) => { if (!decimalInput.safeParse(value).success) return false; const [whole, fraction = ''] = value.split('.'); return BigInt(whole) < BigInt('1000000') || BigInt(whole) === BigInt('1000000') && !/[1-9]/.test(fraction); }, 'Markup exceeds 1000000%.');
 const snapshot = z.strictObject({ brand_name: text(), generic_name: text(), strength: text(), dosage_form: text(), pack_size: text() });
 export const pricingLineSchema = z.strictObject({ rfq_item_id: uuid, manufacturer_id: uuid, availability_status: z.enum(availability), procurement_cost_bdt: decimalInput.optional(), markup_percent: markup.optional(), customer_facing_note: text(2000).optional(), snapshot: snapshot.optional() }).superRefine((value, ctx) => {
   if (value.availability_status === 'AVAILABLE' && (value.procurement_cost_bdt === undefined || value.markup_percent === undefined)) ctx.addIssue({ code: 'custom', path: ['procurement_cost_bdt'], message: 'Available lines require per-unit cost and markup.' });
@@ -48,8 +56,8 @@ export const sendBody = z.strictObject({ expected_version_id: uuid, bank_details
 export const resendBody = z.strictObject({ expected_version_id: uuid });
 export const fulfillmentBody = z.discriminatedUnion('status', [z.strictObject({ expected_version_id: uuid, status: z.literal('PAYMENT_RECEIVED'), wire_reference: text(), amount: decimalInput, currency: z.enum(currencies) }), z.strictObject({ expected_version_id: uuid, status: z.literal('DISPATCHED'), courier_name: text(), awb_tracking_number: text(), estimated_delivery: date.optional() }), z.strictObject({ expected_version_id: uuid, status: z.literal('DELIVERED') })]);
 const rateMap = z.object({ USD: commercialDecimal, EUR: commercialDecimal, CNY: commercialDecimal });
-export const adminVersionSchema = z.object({ ...customerQuotationSchema.shape, status: z.enum(['DRAFT', 'SENT', 'ACCEPTED', 'PAYMENT_RECEIVED', 'DISPATCHED', 'DELIVERED', 'DECLINED', 'VALIDITY_EXPIRED', 'SUPERSEDED', 'PAYMENT_EXPIRED']), valid_until: date.optional(), locked_fx_rates: z.object({ mode: z.enum(['LIVE', 'MANUAL_FIXED']), modes: z.object({ USD: z.enum(['LIVE', 'MANUAL_FIXED']), EUR: z.enum(['LIVE', 'MANUAL_FIXED']), CNY: z.enum(['LIVE', 'MANUAL_FIXED']) }), captured_at: date, fetched_at: z.object({ USD: date, EUR: date, CNY: date }), stale_rates_used: z.boolean(), rates_to_bdt: rateMap }).optional() }).superRefine((value, ctx) => {
-  for (const [key, status] of [['available', 'AVAILABLE'], ['unavailable', 'UNAVAILABLE'], ['sourcing', 'SOURCING']] as const) if (value.availability[key] !== value.items.filter((line) => line.availability_status === status).length) ctx.addIssue({ code: 'custom', path: ['availability'], message: 'Invalid line counts.' });
+export const adminVersionSchema = z.object({ ...customerQuotationSchema.shape, availability: customerQuotationSchema.shape.availability.optional(), status: z.enum(['DRAFT', 'SENT', 'ACCEPTED', 'PAYMENT_RECEIVED', 'DISPATCHED', 'DELIVERED', 'DECLINED', 'VALIDITY_EXPIRED', 'SUPERSEDED', 'PAYMENT_EXPIRED']), valid_until: date.optional(), locked_fx_rates: z.object({ mode: z.enum(['LIVE', 'MANUAL_FIXED']), modes: z.object({ USD: z.enum(['LIVE', 'MANUAL_FIXED']), EUR: z.enum(['LIVE', 'MANUAL_FIXED']), CNY: z.enum(['LIVE', 'MANUAL_FIXED']) }), captured_at: date, fetched_at: z.object({ USD: date, EUR: date, CNY: date }), stale_rates_used: z.boolean(), rates_to_bdt: rateMap }).optional() }).superRefine((value, ctx) => {
+  for (const [key, status] of [['available', 'AVAILABLE'], ['unavailable', 'UNAVAILABLE'], ['sourcing', 'SOURCING']] as const) if (value.availability && value.availability[key] !== value.items.filter((line) => line.availability_status === status).length) ctx.addIssue({ code: 'custom', path: ['availability'], message: 'Invalid line counts.' });
 });
 export type AdminVersion = z.infer<typeof adminVersionSchema>;
 const signedDecimal = z.string().regex(/^-?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?$/).max(100);
@@ -81,5 +89,40 @@ export async function prescriptionBlob(id: string, signal: AbortSignal): Promise
   if (!response.ok || !['image/jpeg', 'image/png', 'application/pdf'].includes(mime ?? '')) { await parseApiResponse(response, z.never()); throw new ApiError('Invalid prescription response.', { status: 502, code: 'INVALID_API_RESPONSE' }); }
   const blob = await response.blob(); const bytes = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
   const valid = mime === 'application/pdf' ? new TextDecoder().decode(bytes).startsWith('%PDF-') : mime === 'image/jpeg' ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : bytes.join(',') === '137,80,78,71,13,10,26,10';
-  if (!valid || !blob.size || blob.size > 5_242_880) throw new ApiError('Invalid prescription file.', { status: 502, code: 'INVALID_API_RESPONSE' }); return blob;
+  if (!valid || !blob.size || blob.size > 5_242_880) throw new ApiError('Invalid prescription file.', { status: 502, code: 'INVALID_API_RESPONSE' }); return blob.type === mime ? blob : blob.slice(0, blob.size, mime);
+}
+
+export interface OperationState { busy: boolean; blocked: boolean; uncertain: boolean; notice: string; problem: { status: number; requestId?: string; fields: string[] } | null }
+/** One synchronous lock per workspace; writes never replay on uncertain delivery. */
+export class AdminOperation {
+  private locked = false;
+  private state: OperationState = { busy: false, blocked: false, uncertain: false, notice: '', problem: null };
+  private listeners = new Set<() => void>();
+  getSnapshot = () => this.state;
+  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  reconcileAdvancedVersion() { if (this.state.uncertain) this.update({ uncertain: false, blocked: false, notice: 'The authoritative version/state advanced. Review it before a distinct action; the original write was not replayed.' }); }
+  private update(change: Partial<OperationState>) { this.state = { ...this.state, ...change }; this.listeners.forEach((listener) => listener()); }
+  private problem(error: unknown) { return { status: error instanceof ApiError ? error.status : 503, requestId: error instanceof ApiError && /^[\w-]{1,100}$/.test(error.requestId ?? '') ? error.requestId : undefined, fields: error instanceof ApiError ? error.details.map((detail) => detail.field).filter((field) => /^[\w.[\]-]{1,160}$/.test(field)) : [] }; }
+  async run<T>(work: () => Promise<T>, refresh: () => Promise<void>, committed?: (result: T) => void) {
+    if (this.locked || this.state.blocked) return;
+    this.locked = true; this.update({ busy: true, problem: null, notice: '' });
+    try {
+      const result = await work(); this.update({ notice: 'Saved. Refreshing authoritative state.' }); committed?.(result);
+      try { await refresh(); this.update({ notice: 'Saved. Server state refreshed.', blocked: false }); }
+      catch (error: unknown) { this.update({ notice: 'Saved. The latest state could not be loaded; use Refresh state.', blocked: true, problem: this.problem(error) }); }
+    } catch (error: unknown) {
+      const definite = error instanceof ApiError && error.responseValidated && [400, 422].includes(error.status);
+      this.update({ problem: this.problem(error), blocked: !definite, uncertain: !definite, notice: definite ? 'Correct the listed form fields before submitting again.' : 'Delivery was not confirmed. Refreshing server state; this action will not be replayed.' });
+      if (!definite) {
+        try { await refresh(); if (error instanceof ApiError && error.responseValidated && error.status === 409) this.update({ blocked: false, uncertain: false, notice: 'The server rejected a conflict. Review the refreshed version before a manual action.' }); }
+        catch { /* Keep the original failure and locked business action. */ }
+      }
+    } finally { this.locked = false; this.update({ busy: false }); }
+  }
+  async refresh(read: () => Promise<void>) {
+    if (this.locked) return; this.locked = true; this.update({ busy: true });
+    try { await read(); this.update({ problem: null, blocked: this.state.uncertain, notice: this.state.uncertain ? 'Server state refreshed. Delivery remains uncertain; confirm with the team before another write. Keep this page open.' : 'Server state refreshed.', }); }
+    catch (error: unknown) { this.update({ problem: this.problem(error) }); }
+    finally { this.locked = false; this.update({ busy: false }); }
+  }
 }

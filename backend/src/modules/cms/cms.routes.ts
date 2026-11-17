@@ -2,10 +2,11 @@ import { Router } from 'express';
 import type { AppEnv } from '../../config/env.js';
 import { adminAuth } from '../../shared/middleware/adminAuth.js';
 import { adminBoundary } from '../../shared/middleware/adminBoundary.js';
-import { sendSuccess } from '../../shared/utils/response.js';
+import { sendPaginated, sendSuccess } from '../../shared/utils/response.js';
 import type { Revalidate } from '../../shared/utils/revalidate.js';
-import { localeQuery } from '../catalog/catalog.validator.js';
-import { bannerBody, createCmsService } from './cms.service.js';
+import { localeQuery, uuid } from '../catalog/catalog.validator.js';
+import { z } from 'zod';
+import { bannerBody, bannerQuery, createCmsService } from './cms.service.js';
 
 export function createCmsRouters(env: AppEnv, revalidate: Revalidate) {
   const service = createCmsService(revalidate);
@@ -16,6 +17,15 @@ export function createCmsRouters(env: AppEnv, revalidate: Revalidate) {
     sendSuccess(res, await service.active(query.locale));
   });
   adminRouter.use(adminBoundary(env), adminAuth(env));
+  adminRouter.get('/banners', async (req, res) => {
+    const query = bannerQuery.parse(req.query);
+    const result = await service.list(query);
+    sendPaginated(res, result.items, { ...query, totalItems: result.total });
+  });
+  adminRouter.get('/banners/:id', async (req, res) => {
+    z.object({}).strict().parse(req.query);
+    sendSuccess(res, await service.detail(uuid.parse(req.params.id)));
+  });
   adminRouter.post('/banners', async (req, res) => {
     sendSuccess(res, await service.save(req, bannerBody.parse(req.body)));
   });

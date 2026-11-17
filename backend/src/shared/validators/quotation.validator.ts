@@ -75,6 +75,10 @@ export const pricingSchema = z
   })
   .strict();
 export const draftQuoteSchema = pricingSchema.extend({ rfq_id: uuid });
+export const updateDraftQuoteSchema = pricingSchema.extend({
+  expected_current_version_id: uuid,
+  expected_updated_at: z.iso.datetime({ offset: true }),
+});
 export const sendQuoteSchema = z
   .object({
     expected_version_id: uuid.optional(),

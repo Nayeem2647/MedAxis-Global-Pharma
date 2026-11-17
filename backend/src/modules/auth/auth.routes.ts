@@ -48,6 +48,18 @@ export function createAuthRouter({
 
   router.post('/login', async (req, res) => {
     const body = loginBody.parse(req.body);
+    if (!env.ADMIN_REQUIRE_2FA) {
+      const result = await service.loginDirect(req, body.email, body.password);
+      res.clearCookie(PRE_AUTH_COOKIE, { ...preAuthOptions, signed: false });
+      res.cookie(ADMIN_SESSION_COOKIE, result.token, { ...sessionCookieOptions(env), maxAge: ADMIN_SESSION_IDLE_MS });
+      sendSuccess(res, {
+        requires_2fa: false,
+        admin: result.admin,
+        session_id: result.session_id,
+        expires_at: result.expires_at,
+      });
+      return;
+    }
     const result = await service.login(req, body.email, body.password);
     res.cookie(PRE_AUTH_COOKIE, result.token, { ...preAuthOptions, maxAge: PRE_AUTH_MS });
     sendSuccess(res, { requires_2fa: true, expires_at: result.expires_at });

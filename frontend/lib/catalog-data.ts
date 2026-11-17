@@ -78,6 +78,18 @@ export const getMasterOptions = unstable_cache(async (locale: Locale, kind: Mast
   } catch { return { complete: false, options: [] }; }
 }, ['public-master-options-v1'], catalogCache);
 
+export const getFilterOptions = cache(async (locale: Locale, kind: MasterKind): Promise<CatalogMaster[]> => {
+  try {
+    const feed = await getSitemapCatalog();
+    const entries = feed[kind].slice(0, 60);
+    const profiles = await mapBounded(entries, async (entry) => {
+      const result = await getMaster(locale, kind, locale === 'zh-CN' ? entry.zhCN ?? entry.en : entry.en, 'page=1&limit=1');
+      return masterSchema.parse(result.profile);
+    });
+    return profiles.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+  } catch { return []; }
+});
+
 export async function catalogStaticParams(kind: CatalogKind, locale: Locale) {
   try {
     const feed = await getSitemapCatalog();

@@ -7,10 +7,29 @@ import { cleanHtml, isSafeInternalPath } from '../../shared/utils/content.js';
 import type { Revalidate } from '../../shared/utils/revalidate.js';
 import { localeKey, uuid, type Locale } from '../catalog/catalog.validator.js';
 import { CmsBannerModel } from './cms.schema.js';
-
-const translation = z
-  .object({ title: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(5000).transform(cleanHtml) })
+import { adminPage } from '../catalog/catalog.admin.reads.js';
+export const bannerQuery = z
+  .object({
+    ...adminPage,
+    q: z.string().trim().min(1).max(100).optional(),
+    is_active: z.enum(['true', 'false']).optional(),
+  })
   .strict();
+
+const publicCopy = (max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(max)
+    .refine(
+      (value) =>
+        !/[$€¥৳]\s*\d|\b(?:USD|EUR|CNY|BDT|RMB)\s*\d|\d\s*(?:美元|人民币)|\d+(?:\.\d+)?\s*%\s*(?:off|discount|折扣)/iu.test(
+          value,
+        ),
+      'Public prices and discounts are not allowed.',
+    );
+const translation = z.object({ title: publicCopy(200), body: publicCopy(5000).transform(cleanHtml) }).strict();
 export const bannerBody = z
   .object({
     id: uuid.optional(),
@@ -31,6 +50,39 @@ export const bannerBody = z
   .refine((data) => !data.starts_at || !data.ends_at || data.starts_at < data.ends_at, 'Banner end must follow start.');
 
 export function createCmsService(revalidate: Revalidate) {
+  const projection = {
+    translations: 1,
+    is_active: 1,
+    sort_order: 1,
+    starts_at: 1,
+    ends_at: 1,
+    link_path: 1,
+    created_at: 1,
+    updated_at: 1,
+  };
+  async function list(query: z.infer<typeof bannerQuery>) {
+    const filter: Record<string, unknown> = {};
+    if (query.is_active !== undefined) filter.is_active = query.is_active === 'true';
+    if (query.q)
+      filter.$or = ['translations.en.title', 'translations.zhCN.title'].map((key) => ({
+        [key]: new RegExp(query.q!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+      }));
+    const [items, total] = await Promise.all([
+      CmsBannerModel.find(filter)
+        .select(projection)
+        .sort({ sort_order: 1, _id: 1 })
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit)
+        .lean(),
+      CmsBannerModel.countDocuments(filter),
+    ]);
+    return { items, total };
+  }
+  async function detail(id: string) {
+    const row = await CmsBannerModel.findById(id).select(projection).lean();
+    if (!row) throw AppError.notFound();
+    return row;
+  }
   async function active(locale: Locale) {
     const now = new Date();
     const rows = await CmsBannerModel.find({
@@ -88,5 +140,5 @@ export function createCmsService(revalidate: Revalidate) {
     revalidate(req.requestId);
     return record;
   }
-  return { active, save };
+  return { active, save, list, detail };
 }

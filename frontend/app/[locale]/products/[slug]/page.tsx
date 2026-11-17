@@ -52,6 +52,7 @@ export default async function ProductPage({ params }: Props) {
         <dl className="specifications">{fields.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
         <div className="category-links">{product.categories.map((category) => <Link key={category.id} href={catalogEntityPath(locale, 'categories', category.alternate_slugs)}>{category.name}</Link>)}</div>
         <ProductActions product={cartInput(product)}/><p className="small muted">{t('privateAvailability')}</p>
+        {product.review_metadata&&<p className="small muted">{locale==='zh-CN'?(product.review_metadata.kind==='MEDICAL'?'医学审核':'技术审核'):(product.review_metadata.kind==='MEDICAL'?'Medical review':'Technical review')} · {product.review_metadata.reviewer_name} · <time dateTime={product.review_metadata.reviewed_at}>{product.review_metadata.reviewed_at.slice(0,10)}</time></p>}
       </div>
     </div>
     <div className="product-information">{[[t('description'), product.description], [t('indications'), product.indication_summary], [t('usageNotes'), product.usage_notes]].map(([label, content]) => content && <section key={label}><h2>{label}</h2><p>{content}</p></section>)}<p className="medical-notice">{t('medicalNotice')}</p></div>

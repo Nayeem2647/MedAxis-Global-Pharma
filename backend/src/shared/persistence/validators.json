@@ -537,6 +537,31 @@
       },
       "updated_at": {
         "bsonType": "date"
+      },
+      "review_metadata": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "reviewed_at",
+          "reviewer_name"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "TECHNICAL",
+              "MEDICAL"
+            ]
+          },
+          "reviewed_at": {
+            "bsonType": "date"
+          },
+          "reviewer_name": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
       }
     }
   },

@@ -28,87 +28,32 @@ export function createAuthService(env: AppEnv, logger: AppLogger, hooks: AuthHoo
     return { key, keyId: env.TOTP_KEY_ID };
   };
 
-  async function login(req: Request, email: string, password: string) {
+  async function verifyCredentials(req: Request, email: string, password: string) {
     await security.assertUnlocked(req);
     const admin = await AdminModel.findOne({ email }).select('+password_hash').lean();
     const hash = admin?.password_hash ?? (await (dummyHash ??= hashPassword(generateToken())));
     const valid = await verifyPassword(hash, password);
     if (!admin?.is_active || !valid) return security.fail(req);
-    // Successful password checks deliberately preserve the failure counter until MFA completes.
-    await security.assertUnlocked(req);
-    const now = new Date();
-    const token = generateToken();
-    const { ip, userAgent } = securityContext(req);
-    const expiresAt = new Date(now.getTime() + PRE_AUTH_MS);
-    await AdminSessionModel.create({
-      admin_id: admin._id,
-      token_hash: hashToken(token),
-      purpose: 'PRE_AUTH',
-      session_generation: admin.session_generation,
-      last_seen_at: now,
-      expires_at: expiresAt,
-      ip_address: ip,
-      device_label: hashToken(userAgent),
-    });
-    return { token, expires_at: expiresAt };
+    return admin;
   }
 
-  async function completeMfa(req: Request, preAuthToken: unknown, code: string, method: 'TOTP' | 'BACKUP') {
-    await security.assertUnlocked(req);
-    if (typeof preAuthToken !== 'string' || !/^[a-f0-9]{64}$/.test(preAuthToken)) return security.fail(req);
-    const now = new Date();
-    const { ip, userAgent } = securityContext(req);
-    const challengeFilter = {
-      token_hash: hashToken(preAuthToken),
-      purpose: 'PRE_AUTH' as const,
-      revoked_at: null,
-      expires_at: { $gt: now },
-      ip_address: ip,
-      device_label: hashToken(userAgent),
-    };
-    const challenge = await AdminSessionModel.findOne(challengeFilter).lean();
-    if (!challenge) return security.fail(req);
-    const admin = await AdminModel.findOne({
-      _id: challenge.admin_id,
-      is_active: true,
-      session_generation: challenge.session_generation,
-    })
-      .select('+totp_secret_encrypted +backup_code_hashes +last_totp_step')
-      .lean();
-    if (!admin) return security.fail(req);
-    let backupHash: string | undefined;
-    let matchedStep: number | undefined;
-    if (method === 'TOTP') {
-      const { key, keyId } = encryptionKey();
-      let secret: string;
-      try {
-        secret = decrypt(JSON.parse(admin.totp_secret_encrypted) as unknown, key, keyId).toString('utf8');
-      } catch {
-        throw AppError.unavailable('TOTP verification is temporarily unavailable.');
-      }
-      const options = {
-        secret,
-        encoding: 'base32' as const,
-        token: code,
-        window: 1,
-        time: Math.floor(now.getTime() / 1000),
-      };
-      if (!speakeasy.totp.verify(options)) return security.fail(req);
-      const delta = speakeasy.totp.verifyDelta(options);
-      if (!delta) return security.fail(req);
-      matchedStep = Math.floor(now.getTime() / 30_000) + delta.delta;
-    } else {
-      for (const hash of admin.backup_code_hashes) {
-        if (await bcrypt.compare(code, hash)) {
-          backupHash = hash;
-          break;
-        }
-      }
-      if (!backupHash) return security.fail(req);
-    }
+  async function issueAdminSession(
+    req: Request,
+    admin: { _id: string; email: string; session_generation: number },
+    method: 'TOTP' | 'BACKUP' | 'PASSWORD',
+    now: Date,
+    extra: {
+      challengeFilter?: Record<string, unknown>;
+      challengeId?: string;
+      totpSecretEncrypted?: string;
+      backupHash?: string;
+      matchedStep?: number;
+    } = {},
+  ) {
     const rawToken = generateToken();
     const sessionId = randomUUID();
     const expiresAt = new Date(now.getTime() + ADMIN_SESSION_IDLE_MS);
+    const { ip, userAgent } = securityContext(req);
     const geo = lookupGeoIp(ip);
     let newIp = false;
     try {
@@ -118,30 +63,34 @@ export function createAuthService(env: AppEnv, logger: AppLogger, hooks: AuthHoo
           locked_until: { $gt: new Date() },
         }).session(transaction);
         if (locked) throw AppError.forbidden('Too many failed authentication attempts. Try again later.');
-        const consumed = await AdminSessionModel.findOneAndUpdate(
-          { ...challengeFilter, _id: challenge._id },
-          { $set: { revoked_at: now } },
-          { session: transaction, returnDocument: 'after' },
-        );
-        if (!consumed) throw new MfaRejected();
-        const updated = await AdminModel.findOneAndUpdate(
-          {
-            _id: admin._id,
-            is_active: true,
-            session_generation: challenge.session_generation,
-            totp_secret_encrypted: admin.totp_secret_encrypted,
-            ...(method === 'BACKUP'
-              ? { backup_code_hashes: backupHash }
-              : {
-                  $or: [{ last_totp_step: { $exists: false } }, { last_totp_step: { $lt: matchedStep } }],
-                }),
-          },
-          method === 'BACKUP'
-            ? { $pull: { backup_code_hashes: backupHash } }
-            : { $set: { last_totp_step: matchedStep } },
-          { session: transaction, returnDocument: 'after' },
-        );
-        if (!updated) throw new MfaRejected();
+        if (extra.challengeFilter && extra.challengeId) {
+          const consumed = await AdminSessionModel.findOneAndUpdate(
+            { ...extra.challengeFilter, _id: extra.challengeId },
+            { $set: { revoked_at: now } },
+            { session: transaction, returnDocument: 'after' },
+          );
+          if (!consumed) throw new MfaRejected();
+        }
+        if (method !== 'PASSWORD') {
+          const updated = await AdminModel.findOneAndUpdate(
+            {
+              _id: admin._id,
+              is_active: true,
+              session_generation: admin.session_generation,
+              totp_secret_encrypted: extra.totpSecretEncrypted,
+              ...(method === 'BACKUP'
+                ? { backup_code_hashes: extra.backupHash }
+                : {
+                    $or: [{ last_totp_step: { $exists: false } }, { last_totp_step: { $lt: extra.matchedStep } }],
+                  }),
+            },
+            method === 'BACKUP'
+              ? { $pull: { backup_code_hashes: extra.backupHash } }
+              : { $set: { last_totp_step: extra.matchedStep } },
+            { session: transaction, returnDocument: 'after' },
+          );
+          if (!updated) throw new MfaRejected();
+        }
         newIp = !(await AuditLogModel.exists({
           actor_id: admin._id,
           action_type: { $in: ['ADMIN_LOGIN', 'ADMIN_BACKUP_LOGIN'] },
@@ -204,6 +153,94 @@ export function createAuthService(env: AppEnv, logger: AppLogger, hooks: AuthHoo
       admin: { id: admin._id, email: admin.email },
       session_id: sessionId,
     };
+  }
+
+  async function login(req: Request, email: string, password: string) {
+    const admin = await verifyCredentials(req, email, password);
+    // Successful password checks deliberately preserve the failure counter until MFA completes.
+    await security.assertUnlocked(req);
+    const now = new Date();
+    const token = generateToken();
+    const { ip, userAgent } = securityContext(req);
+    const expiresAt = new Date(now.getTime() + PRE_AUTH_MS);
+    await AdminSessionModel.create({
+      admin_id: admin._id,
+      token_hash: hashToken(token),
+      purpose: 'PRE_AUTH',
+      session_generation: admin.session_generation,
+      last_seen_at: now,
+      expires_at: expiresAt,
+      ip_address: ip,
+      device_label: hashToken(userAgent),
+    });
+    return { token, expires_at: expiresAt };
+  }
+
+  async function loginDirect(req: Request, email: string, password: string) {
+    const admin = await verifyCredentials(req, email, password);
+    return issueAdminSession(req, admin, 'PASSWORD', new Date());
+  }
+
+  async function completeMfa(req: Request, preAuthToken: unknown, code: string, method: 'TOTP' | 'BACKUP') {
+    await security.assertUnlocked(req);
+    if (typeof preAuthToken !== 'string' || !/^[a-f0-9]{64}$/.test(preAuthToken)) return security.fail(req);
+    const now = new Date();
+    const { ip, userAgent } = securityContext(req);
+    const challengeFilter = {
+      token_hash: hashToken(preAuthToken),
+      purpose: 'PRE_AUTH' as const,
+      revoked_at: null,
+      expires_at: { $gt: now },
+      ip_address: ip,
+      device_label: hashToken(userAgent),
+    };
+    const challenge = await AdminSessionModel.findOne(challengeFilter).lean();
+    if (!challenge) return security.fail(req);
+    const admin = await AdminModel.findOne({
+      _id: challenge.admin_id,
+      is_active: true,
+      session_generation: challenge.session_generation,
+    })
+      .select('+totp_secret_encrypted +backup_code_hashes +last_totp_step')
+      .lean();
+    if (!admin) return security.fail(req);
+    let backupHash: string | undefined;
+    let matchedStep: number | undefined;
+    if (method === 'TOTP') {
+      const { key, keyId } = encryptionKey();
+      let secret: string;
+      try {
+        secret = decrypt(JSON.parse(admin.totp_secret_encrypted) as unknown, key, keyId).toString('utf8');
+      } catch {
+        throw AppError.unavailable('TOTP verification is temporarily unavailable.');
+      }
+      const options = {
+        secret,
+        encoding: 'base32' as const,
+        token: code,
+        window: 1,
+        time: Math.floor(now.getTime() / 1000),
+      };
+      if (!speakeasy.totp.verify(options)) return security.fail(req);
+      const delta = speakeasy.totp.verifyDelta(options);
+      if (!delta) return security.fail(req);
+      matchedStep = Math.floor(now.getTime() / 30_000) + delta.delta;
+    } else {
+      for (const hash of admin.backup_code_hashes) {
+        if (await bcrypt.compare(code, hash)) {
+          backupHash = hash;
+          break;
+        }
+      }
+      if (!backupHash) return security.fail(req);
+    }
+    return issueAdminSession(req, admin, method, now, {
+      challengeFilter,
+      challengeId: challenge._id,
+      totpSecretEncrypted: admin.totp_secret_encrypted,
+      backupHash,
+      matchedStep,
+    });
   }
 
   async function enroll(req: Request) {
@@ -367,7 +404,7 @@ export function createAuthService(env: AppEnv, logger: AppLogger, hooks: AuthHoo
     return { logged_out: true };
   }
 
-  return { login, completeMfa, enroll, sessions, revokeSessions, logout };
+  return { login, loginDirect, completeMfa, enroll, sessions, revokeSessions, logout };
 }
 
 export type AuthService = ReturnType<typeof createAuthService>;

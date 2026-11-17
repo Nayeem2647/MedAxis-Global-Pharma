@@ -261,6 +261,7 @@ installPersistenceGuards(CategorySchema, 'categories');
 export const CategoryModel = model<ICategory>('Category', CategorySchema, 'categories');
 
 export interface IProduct {
+  review_metadata?: { kind: 'TECHNICAL' | 'MEDICAL'; reviewed_at: Date; reviewer_name: string };
   _id: string;
   sku: string;
   manufacturer_id: string;
@@ -307,6 +308,17 @@ export interface IProduct {
 
 export const ProductSchema = new Schema<IProduct>(
   {
+    review_metadata: {
+      type: new Schema(
+        {
+          kind: { type: String, required: true, enum: ['TECHNICAL', 'MEDICAL'] },
+          reviewed_at: { type: Date, required: true },
+          reviewer_name: { type: String, required: true, maxlength: 200 },
+        },
+        { _id: false, strict: 'throw' },
+      ),
+      required: false,
+    },
     _id: {
       type: String,
       required: true,

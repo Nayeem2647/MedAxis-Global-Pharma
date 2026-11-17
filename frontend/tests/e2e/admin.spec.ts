@@ -85,7 +85,7 @@ test('production BFF streams heartbeats then reconnects/refetches after its real
 
 test('lockout, HTML upstream errors and BFF Origin/path attacks fail safely', async ({ page, request }) => {
   const email = await configure(request, 'lockout'); await page.goto('/admin/login'); await page.getByLabel('Email', { exact: true }).fill(email); await page.getByLabel('Password', { exact: true }).fill('fixture-password'); await page.getByRole('button', { name: 'Continue to authenticator' }).click(); await expect(page.getByRole('alert', { name: 'Admin request feedback' })).toContainText('Retry after 900 seconds.'); await page.getByRole('button', { name: 'Continue to authenticator' }).click(); expect((await state(request, email)).data.calls.filter((call) => call.path === 'auth/login')).toHaveLength(1);
-  expect((await request.post('/api/admin/auth/logout', { data: {}, headers: { origin: 'https://evil.example' } })).status()).toBe(403); expect((await request.get('/api/admin/catalog/products')).status()).toBe(404); expect((await request.get('/api/admin/rfqs?price=1')).status()).toBe(400);
+  expect((await request.post('/api/admin/auth/logout', { data: {}, headers: { origin: 'https://evil.example' } })).status()).toBe(403); expect((await request.get('/api/admin/catalog/unregistered')).status()).toBe(404); expect((await request.get('/api/admin/rfqs?price=1')).status()).toBe(400);
   const proxyEmail = await configure(request, 'proxy'); await login(page, proxyEmail); await expect(page.getByRole('alert', { name: 'Admin request feedback' })).toBeVisible(); expect(await page.content()).not.toContain('NEVER_RENDER_ADMIN_PROXY');
 });
 

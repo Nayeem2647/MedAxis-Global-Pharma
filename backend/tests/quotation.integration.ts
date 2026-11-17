@@ -105,6 +105,8 @@ beforeAll(async () => {
     autoCreate: false,
     serverSelectionTimeoutMS: 10_000,
   });
+  if (mongoose.connection.name !== databaseName || !databaseName.startsWith('quote_test_'))
+    throw new Error('Refusing to migrate a non-test database');
   await migrate();
   passwordHash = await hashPassword('test-only admin password');
 });

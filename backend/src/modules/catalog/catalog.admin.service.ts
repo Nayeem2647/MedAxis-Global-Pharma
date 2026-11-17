@@ -149,12 +149,21 @@ export function createAdminCatalogService(revalidate: Revalidate) {
               }),
         }
       : input.translations;
-    const parsed = productCreate.parse({ ...(old ? pickProduct(old) : {}), ...input, translations });
+    const parsed = productCreate.parse({
+      ...(old ? pickProduct(old) : {}),
+      ...input,
+      translations,
+      review_metadata:
+        input.review_metadata === null
+          ? undefined
+          : (input.review_metadata ?? (old ? pickProduct(old).review_metadata : undefined)),
+    });
     await validateProductSlugs(parsed, id, session);
     const labels = await validateProductReferences(parsed, session);
     const doc = previous ?? new ProductModel();
     doc.set({ ...parsed, ...labels });
     if (!parsed.translations.zhCN) doc.set('translations.zhCN', undefined);
+    if (!parsed.review_metadata) doc.set('review_metadata', undefined);
     await doc.save({ session });
     if (old?.status === 'PUBLISHED') await recordSlugChanges('products', old, parsed, session);
     await writeAuditLog(
@@ -231,6 +240,9 @@ function pickProduct(record: IProduct): ProductInput {
     packaging_unit: record.packaging_unit,
     cold_chain_required: record.cold_chain_required,
     storage_condition: record.storage_condition,
+    review_metadata: record.review_metadata
+      ? { ...record.review_metadata, reviewed_at: record.review_metadata.reviewed_at.toISOString() }
+      : undefined,
     image_keys: record.image_keys,
     status: record.status,
   };

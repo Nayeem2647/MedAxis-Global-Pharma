@@ -22,9 +22,9 @@ const spec = readFileSync(new URL('../../Docs/API-Spec.md', import.meta.url), 'u
 const contracts = [...spec.matchAll(/\|\s*\*\*(\d{2})\*\*\s*\|\s*(GET|POST|PATCH)\s*\|\s*(\/v1\/[^\s|]+)\s*\|/g)].map(
   (match) => ({ id: Number(match[1]), method: match[2]!.toLowerCase() as 'get' | 'post' | 'patch', path: match[3]! }),
 );
-describe('all 52 API-Spec endpoint envelopes and registered validation boundaries', () => {
+describe('all registered API-Spec endpoint envelopes and registered validation boundaries', () => {
   it('covers the complete numbered Release 1 endpoint table', () => {
-    expect(contracts.map((item) => item.id)).toEqual(Array.from({ length: 52 }, (_, index) => index + 1));
+    expect(contracts.map((item) => item.id)).toEqual(Array.from({ length: 67 }, (_, index) => index + 1));
   });
   it.each(contracts)('#$id $method $path', async ({ id, method, path }) => {
     const app = createApp({
@@ -40,6 +40,7 @@ describe('all 52 API-Spec endpoint envelopes and registered validation boundarie
     else if (method === 'get' && id >= 25) call.query({ limit: 0 });
     if (id === 10) call.field('turnstile_token', '');
     else if (id === 41) call.field('dry_run', 'true');
+    else if (id === 53) call.field('image', '');
     else if (method !== 'get') call.send({ unexpected: true });
     const result = await call;
     const expected = id === 22 ? 200 : id >= 8 && id <= 11 ? 403 : id >= 12 && id <= 17 ? 404 : 422;

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import mongoose, { type ClientSession } from 'mongoose';
+import type { Request } from 'express';
 import type puppeteer from 'puppeteer';
 import type { Browser } from 'puppeteer';
 import { createApp } from '../src/app.js';
@@ -18,6 +20,238 @@ import { createPdfService, loadEmbeddedFonts, PDF_TIMEOUT_MS } from '../src/modu
 import { createLogger } from '../src/shared/utils/logger.js';
 import { validEnv } from './helpers/env.js';
 import { pdfFixture, quotationVersionFixture } from './fixtures/commercial.js';
+import { QuotationModel, QuotationVersionModel } from '../src/modules/quotation/quotation.schema.js';
+import { createFulfillmentService } from '../src/modules/quotation/quotation.fulfillment.js';
+import * as lifecycle from '../src/modules/quotation/quotation.lifecycle.js';
+import * as audit from '../src/shared/middleware/auditLogger.js';
+import { bsonDecimal } from '../src/shared/utils/decimal.js';
+import { z } from 'zod';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+function query<T>(value: T) {
+  return {
+    select() {
+      return this;
+    },
+    session() {
+      return this;
+    },
+    lean: async () => value,
+  };
+}
+function fulfillmentHarness() {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-16T10:00:00Z'));
+  const version = quotationVersionFixture(true);
+  const quote = {
+    _id: version.quotation_id,
+    current_version_id: version._id,
+    rfq_id: randomUUID(),
+    overall_status: 'ACTIVE',
+  };
+  const req = { requestId: randomUUID(), admin: { id: randomUUID(), sessionId: randomUUID() } } as Request;
+  const session = {} as ClientSession;
+  const transaction = vi
+    .spyOn(mongoose.connection, 'transaction')
+    .mockImplementation(async <T>(work: (value: ClientSession) => Promise<T>) => work(session));
+  vi.spyOn(QuotationModel, 'findById').mockImplementation(() => query(quote) as never);
+  vi.spyOn(QuotationVersionModel, 'findById').mockImplementation(() => query(version) as never);
+  const changed = vi.spyOn(QuotationVersionModel, 'findOneAndUpdate').mockImplementation((_filter, update) => {
+    const values = z.object({ $set: z.record(z.string(), z.unknown()) }).parse(update).$set;
+    return query({ ...version, ...values }) as never;
+  });
+  const parent = vi.spyOn(QuotationModel, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
+  const queue = vi.spyOn(lifecycle, 'queueLifecycleEmail').mockResolvedValue(undefined);
+  const purge = vi.spyOn(lifecycle, 'scheduleMedicalPurge').mockResolvedValue(undefined);
+  const log = vi.spyOn(audit, 'writeAuditLog').mockResolvedValue(undefined);
+  return {
+    version,
+    quote,
+    req,
+    session,
+    transaction,
+    changed,
+    parent,
+    queue,
+    purge,
+    log,
+    service: createFulfillmentService(createLogger({ silent: true })),
+  };
+}
+
+describe('real fulfillment service guards with isolated persistence', () => {
+  it.each(['SENT', 'DRAFT', 'DELIVERED'] as const)('cannot record payment from %s', async (status) => {
+    const h = fulfillmentHarness();
+    h.version.status = status;
+    await expect(
+      h.service(h.req, h.quote._id, {
+        expected_version_id: h.version._id,
+        status: 'PAYMENT_RECEIVED',
+        wire_reference: 'WIRE',
+        amount: '6.35',
+        currency: 'USD',
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(h.changed).not.toHaveBeenCalled();
+    expect(h.queue).not.toHaveBeenCalled();
+  });
+  it.each(['2026-11-16T09:59:59Z', '2026-11-16T10:00:00Z'])(
+    'blocks an expired reservation without depending on workers: %s',
+    async (deadline) => {
+      const h = fulfillmentHarness();
+      h.version.reservation_expires_at = new Date(deadline);
+      await expect(
+        h.service(h.req, h.quote._id, {
+          expected_version_id: h.version._id,
+          status: 'PAYMENT_RECEIVED',
+          wire_reference: 'WIRE',
+          amount: '6.35',
+          currency: 'USD',
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(h.changed).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
+    { amount: '6.34', currency: 'USD' as const },
+    { amount: '0', currency: 'USD' as const },
+    { amount: '6.35', currency: 'EUR' as const },
+  ])('checks exact payment amount/currency: %j', async (payment) => {
+    const h = fulfillmentHarness();
+    await expect(
+      h.service(h.req, h.quote._id, {
+        expected_version_id: h.version._id,
+        status: 'PAYMENT_RECEIVED',
+        wire_reference: 'WIRE',
+        ...payment,
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(h.changed).not.toHaveBeenCalled();
+  });
+  it('rejects a stale expected version before updating a commercial document', async () => {
+    const h = fulfillmentHarness();
+    await expect(
+      h.service(h.req, h.quote._id, {
+        expected_version_id: randomUUID(),
+        status: 'PAYMENT_RECEIVED',
+        wire_reference: 'WIRE',
+        amount: '6.35',
+        currency: 'USD',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'QUOTATION_VERSION_CONFLICT' });
+    expect(h.changed).not.toHaveBeenCalled();
+    expect(h.queue).not.toHaveBeenCalled();
+  });
+  it('uses status/reservation compare-and-set predicates and snapshot/majority transaction options', async () => {
+    const h = fulfillmentHarness();
+    const paid = await h.service(h.req, h.quote._id, {
+      expected_version_id: h.version._id,
+      status: 'PAYMENT_RECEIVED',
+      wire_reference: 'WIRE',
+      amount: '6.35000000',
+      currency: 'USD',
+    });
+    expect(paid.status).toBe('PAYMENT_RECEIVED');
+    expect(paid.payment?.amount).toBe('6.35');
+    expect(h.changed).toHaveBeenCalledWith(
+      {
+        _id: h.version._id,
+        quotation_id: h.quote._id,
+        status: 'ACCEPTED',
+        reservation_status: 'ACTIVE',
+        reservation_expires_at: { $gt: new Date() },
+      },
+      expect.objectContaining({ $set: expect.objectContaining({ reservation_status: 'CONSUMED' }) }),
+      expect.objectContaining({ session: h.session }),
+    );
+    expect(h.transaction).toHaveBeenCalledWith(expect.any(Function), {
+      readConcern: { level: 'snapshot' },
+      writeConcern: { w: 'majority' },
+    });
+    expect(h.queue).toHaveBeenCalledOnce();
+  });
+  it('handles a lost concurrent compare-and-set without queuing fulfillment', async () => {
+    const h = fulfillmentHarness();
+    h.changed.mockImplementation(() => query(null) as never);
+    await expect(
+      h.service(h.req, h.quote._id, {
+        expected_version_id: h.version._id,
+        status: 'PAYMENT_RECEIVED',
+        wire_reference: 'WIRE',
+        amount: '6.35',
+        currency: 'USD',
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(h.parent).not.toHaveBeenCalled();
+    expect(h.queue).not.toHaveBeenCalled();
+    expect(h.log).not.toHaveBeenCalled();
+  });
+  it('rejects a parent-version change before enqueueing side effects', async () => {
+    const h = fulfillmentHarness();
+    h.parent.mockResolvedValue({ matchedCount: 0 } as never);
+    await expect(
+      h.service(h.req, h.quote._id, {
+        expected_version_id: h.version._id,
+        status: 'PAYMENT_RECEIVED',
+        wire_reference: 'WIRE',
+        amount: '6.35',
+        currency: 'USD',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'QUOTATION_VERSION_CONFLICT' });
+    expect(h.queue).not.toHaveBeenCalled();
+    expect(h.log).not.toHaveBeenCalled();
+  });
+  it('does not dispatch before verified payment and consumed reservation', async () => {
+    const h = fulfillmentHarness();
+    await expect(
+      h.service(h.req, h.quote._id, {
+        expected_version_id: h.version._id,
+        status: 'DISPATCHED',
+        courier_name: 'Courier',
+        awb_tracking_number: 'AWB',
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(h.changed).not.toHaveBeenCalled();
+    h.version.status = 'PAYMENT_RECEIVED';
+    h.version.reservation_status = 'CONSUMED';
+    h.version.payment = {
+      reference: 'WIRE',
+      amount: bsonDecimal('6.35'),
+      currency: 'USD',
+      received_at: new Date(),
+      recorded_by: h.req.admin!.id,
+    };
+    expect(
+      (
+        await h.service(h.req, h.quote._id, {
+          expected_version_id: h.version._id,
+          status: 'DISPATCHED',
+          courier_name: 'Courier',
+          awb_tracking_number: 'AWB',
+        })
+      ).status,
+    ).toBe('DISPATCHED');
+  });
+  it('requires dispatch and refuses repeated delivery without another purge/email', async () => {
+    const h = fulfillmentHarness();
+    await expect(
+      h.service(h.req, h.quote._id, { expected_version_id: h.version._id, status: 'DELIVERED' }),
+    ).rejects.toMatchObject({ status: 409 });
+    h.version.status = 'DISPATCHED';
+    h.version.shipment = { courier_name: 'Courier', awb_number: 'AWB', dispatched_at: new Date() };
+    const delivered = await h.service(h.req, h.quote._id, { expected_version_id: h.version._id, status: 'DELIVERED' });
+    expect(delivered.status).toBe('DELIVERED');
+    h.version.status = 'DELIVERED';
+    await expect(
+      h.service(h.req, h.quote._id, { expected_version_id: h.version._id, status: 'DELIVERED' }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(h.purge).toHaveBeenCalledOnce();
+    expect(h.queue).toHaveBeenCalledOnce();
+  });
+});
 
 describe('decision boundary and print isolation', () => {
   it('serializes the real customer DTO without poisoned internal fields while preserving customer prices', () => {

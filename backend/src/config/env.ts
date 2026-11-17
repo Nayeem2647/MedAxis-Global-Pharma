@@ -45,6 +45,7 @@ const baseSchema = z.object({
       .optional(),
   ),
   TOTP_KEY_ID: z.preprocess(emptyToUndefined, z.string().min(1).max(200).optional()),
+  ADMIN_REQUIRE_2FA: booleanFromString.default(true),
   ADMIN_HOME_COUNTRY: z
     .string()
     .regex(/^[A-Z]{2}$/)

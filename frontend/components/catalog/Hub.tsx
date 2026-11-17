@@ -9,6 +9,7 @@ import { catalogQueryString, readCatalogQuery, type SearchValues } from '../../l
 import { entityMetadata } from '../../lib/catalog-seo';
 import { Breadcrumbs } from './Breadcrumbs';
 import { CatalogState } from './CatalogState';
+import { CatalogGridShell } from './CatalogGridShell';
 import { Filters } from './Filters';
 import { ProductCard } from './ProductCard';
 import { Pagination } from './Pagination';
@@ -49,7 +50,15 @@ export async function Hub({ params, searchParams, kind }: HubProps & { kind: Mas
     {profile.certifications && profile.certifications.length > 0 && <section className="profile-facts"><h2>{t('certifications')}</h2><ul>{profile.certifications.map((value) => <li key={value}>{value}</li>)}</ul></section>}
     {profile.therapeutic_indications && profile.therapeutic_indications.length > 0 && <section className="profile-facts"><h2>{t('indications')}</h2><ul>{profile.therapeutic_indications.map((value) => <li key={value}>{value}</li>)}</ul></section>}
     <p className="medical-notice">{t('medicalNotice')}</p>
-    <Filters locale={locale} path={path} query={query} facets={profile.facets} lockedKind={kind}/><p className="results-count" role="status">{t('results', { count: pagination.total_items })}</p>
-    {profile.products.length ? <><div className="product-grid">{profile.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}</div><Pagination locale={locale} path={path} query={query} pagination={pagination}/></> : <CatalogState locale={locale} query={query.q} path={path}/>}
+    <Filters locale={locale} path={path} query={query} facets={profile.facets} lockedKind={kind}/>
+    {profile.products.length ? <>
+      <CatalogGridShell resultsLabel={t('results', { count: pagination.total_items })} viewLabel={t('viewMode')} gridLabel={t('gridView')} listLabel={t('listView')}>
+        {profile.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}
+      </CatalogGridShell>
+      <Pagination locale={locale} path={path} query={query} pagination={pagination}/>
+    </> : <>
+      <p className="results-count" role="status">{t('results', { count: pagination.total_items })}</p>
+      <CatalogState locale={locale} query={query.q} path={path}/>
+    </>}
   </div></main>;
 }

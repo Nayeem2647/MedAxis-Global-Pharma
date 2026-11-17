@@ -31,7 +31,7 @@ export function PublicShell({ children, contact }: { children: ReactNode; contac
   const openQuickQuote = (product?: CatalogCartInput, initialName?: string) => { if (quote) return; setDrawerOpen(false); setContactOpen(false); setQuote({ kind: 'quick-quote', product, initialName }); };
   const openContact = () => { if (quote) return; setDrawerOpen(false); setContactOpen(true); };
   return <ShellContext.Provider value={{ openQuickQuote, openContact }}>
-    <Header itemCount={itemCount} hydrated={hydrated} onCart={() => { if (!quote) { setContactOpen(false); setDrawerOpen(true); } }} onContact={openContact} onQuickQuote={() => openQuickQuote()}/>
+    <Header itemCount={itemCount} hydrated={hydrated} onCart={() => { if (!quote) { setContactOpen(false); setDrawerOpen(true); } }} onContact={openContact} onQuickQuote={() => openQuickQuote()} contact={contact}/>
     {children}
     <Footer contact={contact} onContact={openContact}/>
     {quote && <RfqDialog {...quote} contact={contact} onClose={() => setQuote(null)}/>}

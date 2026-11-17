@@ -245,7 +245,7 @@ test('bilingual homepage, anchors and touch controls work from 320px through des
     for (const width of [768, 390, 320]) {
       await page.setViewportSize({ width, height: 844 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      const targets = await page.locator('.site-header button, .locale-switcher a, .trust-bar button').evaluateAll((elements) => elements
+      const targets = await page.locator('.site-header button, .locale-switcher a').evaluateAll((elements) => elements
         .filter((element) => element.getClientRects().length > 0)
         .map((element) => { const bounds = element.getBoundingClientRect(); return { label: element.getAttribute('aria-label') ?? element.textContent, width: bounds.width, height: bounds.height, left: bounds.left, right: bounds.right }; }));
       for (const target of targets) {
@@ -356,12 +356,12 @@ test('bilingual 320px quote, cart and contact dialogs have reachable touch contr
     await expectDialogControlsToFit(dialog);
     await page.screenshot({ path: testInfo.outputPath(`cart-${locale}-320.png`) });
     await page.keyboard.press('Escape');
-    await page.locator('.trust-bar button').click();
+    await page.locator('.footer-contact').click();
     await expect(dialog.locator('.contact-channel h3').first()).toHaveText(locale === 'zh-CN' ? 'WeChat' : 'WhatsApp');
     await expectDialogControlsToFit(dialog);
     await dialog.evaluate((element) => { element.scrollTop = 0; });
     await page.screenshot({ path: testInfo.outputPath(`contact-${locale}-320.png`) });
     await page.keyboard.press('Escape');
-    await expect(page.locator('.trust-bar button')).toBeFocused();
+    await expect(page.locator('.footer-contact')).toBeFocused();
   }
 });

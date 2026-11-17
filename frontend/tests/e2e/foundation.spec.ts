@@ -75,7 +75,7 @@ test('sitemap consumes the backend feed and robots excludes private routes', asy
   const response = await request.get('/sitemap.xml');
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toContain('application/xml');
-  const xml = await response.text();
+  const index=await response.text();expect(index).toContain('<sitemapindex');const children=[...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match)=>new URL(match[1]).pathname);expect(children).toHaveLength(5);const documents=await Promise.all(children.map(async(path)=>{const child=await request.get(path);expect(child.status()).toBe(200);return child.text();}));const xml=documents.join('');
   expect(xml).toContain('/en/products/osimert-80mg');
   expect(xml).toContain('hreflang="zh-CN"');
   expect(xml).toContain('hreflang="x-default" href="https://medaxisglobalpharma.com/en/products/osimert-80mg"');
@@ -91,7 +91,7 @@ test('sitemap consumes the backend feed and robots excludes private routes', asy
         })),
       })),
     };
-  }, xml);
+  }, documents.join('').replaceAll(/<\?xml[^>]*>/g,'').replaceAll(/<\/?urlset[^>]*>/g,'').replace(/^/,'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">')+'</urlset>');
   expect(parsed.errors).toBe(0);
   for (const [kind, enSlug, zhSlug] of [
     ['products', 'osimert-80mg', '奥希替尼-80mg'],

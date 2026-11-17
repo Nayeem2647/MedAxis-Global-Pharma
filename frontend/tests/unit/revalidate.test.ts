@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { POST } from '../../app/api/revalidate/route';
 import { requestId } from '../fixtures';
+import { sitemapPaths } from '../../lib/sitemap';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 
@@ -17,6 +18,7 @@ describe('authenticated revalidation webhook', () => {
     expect(response.status).toBe(200);
     expect(revalidateTag).toHaveBeenCalledTimes(3);
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
+    for(const path of sitemapPaths)expect(revalidatePath).toHaveBeenCalledWith(path);
   });
 
   it('supports explicit public paths and deduplicates targets', async () => {
