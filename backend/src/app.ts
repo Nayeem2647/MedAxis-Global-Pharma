@@ -28,6 +28,8 @@ import type { DecisionHooks } from './modules/quotation/quotation.decisions.js';
 import { createPdfRuntime, type PdfDelivery } from './modules/pdf/pdf.worker.js';
 import { createAdminStream, type AdminStream } from './modules/admin/admin.stream.js';
 import { createAdminOperationsRouter } from './modules/admin/admin.operations.js';
+import { createLocalMediaRouter } from './modules/storage/localMedia.routes.js';
+import { createStorageService, type StorageService } from './modules/storage/storage.service.js';
 
 export interface CreateAppOptions {
   env: AppEnv;
@@ -42,6 +44,7 @@ export interface CreateAppOptions {
   decisionHooks?: DecisionHooks;
   pdf?: PdfDelivery;
   adminStream?: AdminStream;
+  storage?: StorageService;
 }
 
 export function createApp({
@@ -55,7 +58,8 @@ export function createApp({
   fx = createFxService(env, logger),
   quotationHooks,
   decisionHooks,
-  pdf = createPdfRuntime(env, logger),
+  storage = createStorageService(env),
+  pdf = createPdfRuntime(env, logger, { storage }),
   adminStream = createAdminStream(logger),
 }: CreateAppOptions): Express {
   const app = express();
@@ -94,15 +98,18 @@ export function createApp({
 
   const v1 = Router();
   v1.use(createHealthRouter({ checkDatabase, startedAt }));
-  v1.use('/admin/auth', createAuthRouter({ env, logger, hooks: authHooks }));
+  v1.use('/admin/auth', createAuthRouter({ env, logger, hooks: authHooks, storage }));
   const revalidate = createRevalidator(env, logger, revalidateFetch);
   const cms = createCmsRouters(env, revalidate);
   v1.use('/public', createPublicCatalogRouter(env));
+  if (env.STORAGE_DRIVER === 'local' && !env.isProduction) {
+    v1.use('/public/media', createLocalMediaRouter(env));
+  }
   v1.use('/public/cms', cms.publicRouter);
-  v1.use('/admin/catalog', createAdminCatalogRouter(env, revalidate));
+  v1.use('/admin/catalog', createAdminCatalogRouter(env, revalidate, storage));
   v1.use('/admin/cms', cms.adminRouter);
   v1.use('/admin/settings', createSettingsRouter(env, revalidate));
-  v1.use(createRfqRouter(env, logger, rfq));
+  v1.use(createRfqRouter(env, logger, { storage, ...rfq }));
   v1.use('/admin/fx-rates', createFxRouter(env, fx));
   v1.use(
     '/admin/quotations',

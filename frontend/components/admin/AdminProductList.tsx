@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CatalogDelete } from './CatalogDelete';
 import { ArrowUpRight, Package, Pencil, Pill, Plus, Search, Snowflake, Upload } from 'lucide-react';
 import { guardedAdminRead } from '../../lib/admin-server';
 import { productRecord, requirePagination } from '../../lib/admin-management';
@@ -13,8 +14,15 @@ import { ProductListExport, ProductPreview, ProductPublication, ProductStatusFil
 const path = '/admin/catalog/products';
 
 function productImageUrl(key: string | undefined) {
-  const base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || 'https://cdn.medaxisglobalpharma.com').replace(/\/$/, '');
-  return key ? publicAssetUrl(`${base}/${key}`) : null;
+  if (!key) return null;
+  const localDevBase =
+    process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_API_BASE_URL
+      ? `${process.env.NEXT_PUBLIC_API_BASE_URL.replace(/\/$/, '')}/v1/public/media`
+      : undefined;
+  const base = key.startsWith('products/local/') ? localDevBase : key.startsWith('products/s3/')
+    ? process.env.NEXT_PUBLIC_S3_PUBLIC_BASE_URL || localDevBase
+    : process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_S3_PUBLIC_BASE_URL || localDevBase || 'https://cdn.medaxisglobalpharma.com';
+  return base ? publicAssetUrl(`${base.replace(/\/$/, '')}/${key}`) : null;
 }
 
 export async function AdminProductList({ query }: { query: Record<string, string> }) {
@@ -87,6 +95,7 @@ export async function AdminProductList({ query }: { query: Record<string, string
             <td>
               <div className="admin-product-actions">
                 <ProductPreview product={row} image={image} />
+                <CatalogDelete kind="products" id={row.id} name={row.translations.en.brand_name} updatedAt={row.updated_at} lastOnPage={rows.length === 1} />
                 <AdminLink href={`${path}/${row.id}`} className="admin-product-action"><Pencil size={16} aria-hidden="true" /><span className="sr-only">Edit {row.translations.en.brand_name}</span></AdminLink>
                 {row.status === 'PUBLISHED' && <a href={`/en/products/${encodeURIComponent(row.translations.en.slug)}`} target="_blank" rel="noreferrer" className="admin-product-action"><ArrowUpRight size={17} aria-hidden="true" /><span className="sr-only">View {row.translations.en.brand_name} on website (opens in new tab)</span></a>}
               </div>

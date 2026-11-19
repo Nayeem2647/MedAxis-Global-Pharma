@@ -16,13 +16,21 @@ import { AuditLogModel } from '../src/modules/audit/audit.schema.js';
 import { migrate } from '../src/scripts/migrate.js';
 import { decrypt, encrypt, hashPassword, hashToken } from '../src/shared/utils/crypto.js';
 import { createLogger } from '../src/shared/utils/logger.js';
+import { jpeg } from './fixtures/prescriptions.js';
 import { validEnv } from './helpers/env.js';
+import { createStorageService } from '../src/modules/storage/storage.service.js';
 
 // Every destructive fixture operation is confined to this fresh, uniquely named database.
 const databaseName = `auth_test_${randomUUID().replaceAll('-', '').slice(0, 24)}`;
 const key = Buffer.alloc(32, 7);
 const env = loadEnv({ ...validEnv, TOTP_ENCRYPTION_KEY_BASE64: key.toString('base64'), TOTP_KEY_ID: 'auth-test-v1' });
 const logger = createLogger({ silent: true });
+const avatarStorage = {
+  ...createStorageService(env),
+  uploadAvatar: vi.fn(async (_bytes: Buffer) => `avatars/s3/${randomUUID()}.jpg`),
+  signAvatar: vi.fn(async (key: string) => 'https://private-avatars.example.test/' + key + '?signature=fixture'),
+  remove: vi.fn(async (_kind: string, _key: string) => {}),
+};
 const email = 'admin@example.test';
 const password = 'A test-only password with entropy';
 const recoveryCode = 'test-recovery-code';
@@ -85,6 +93,7 @@ beforeAll(async () => {
   app = createApp({
     env,
     logger,
+    storage: avatarStorage,
     authHooks: {
       onSecurityEvent: (event) => {
         events.push(event);
@@ -121,6 +130,60 @@ afterEach(() => {
 });
 
 describe('Super Admin authentication against MongoDB', () => {
+  it('authorizes avatar access and saves, replaces and removes S3 profile pictures', async () => {
+    await AdminModel.updateOne({ _id: adminId }, { $set: { avatar_url: '' } });
+    const { cookie: full } = await loginBackup();
+    const readProfile = () => request(app).get('/v1/admin/auth/profile').set('Cookie', full);
+    const saveProfile = (body: Record<string, unknown>) =>
+      request(app).patch('/v1/admin/auth/profile').set('Cookie', full).send({ email, phone_number: '', ...body });
+
+    const legacy = await readProfile();
+    expect(legacy.status).toBe(200);
+    expect(legacy.body.data.avatar_url).toBeNull();
+    expect((await request(app).get('/v1/admin/auth/profile')).status).toBe(401);
+
+    const named = await saveProfile({ display_name: 'New name' });
+    expect(named.status).toBe(200);
+    expect(named.body.data).toMatchObject({ display_name: 'New name', avatar_url: null });
+
+    expect((await saveProfile({ display_name: 'New name', avatar_url: 'data:image/jpeg;base64,AAAA' })).status).toBe(422);
+    const picture = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+    const saved = await saveProfile({ display_name: 'New name', avatar_url: picture });
+    expect(saved.status).toBe(200);
+    const old = await AdminModel.findById(adminId).select('+avatar_url +avatar_object_key').lean();
+    expect(old?.avatar_url).toBeUndefined();
+    expect(old?.avatar_object_key).toMatch(/^avatars\/s3\/.+\.jpg$/);
+    expect((await readProfile()).body.data.avatar_url).toBe(saved.body.data.avatar_url);
+    const renamed = await saveProfile({ display_name: 'Another name' });
+    expect(renamed.body.data).toMatchObject({ display_name: 'Another name', avatar_url: saved.body.data.avatar_url });
+    const replacement = await saveProfile({ display_name: 'Another name', avatar_url: picture });
+    expect(replacement.status).toBe(200);
+    expect(replacement.body.data.avatar_url).not.toBe(saved.body.data.avatar_url);
+    expect(avatarStorage.remove).toHaveBeenCalledWith('avatars', old?.avatar_object_key);
+    expect((await saveProfile({ display_name: 'Another name', avatar_url: null })).status).toBe(200);
+    expect((await readProfile()).body.data.avatar_url).toBeNull();
+    expect(avatarStorage.remove).toHaveBeenCalledTimes(2);
+  });
+
+  it('updates profile fields and login email with password confirmation, then rotates password safely', async () => {
+    const { cookie: full } = await loginBackup();
+    const initial = await request(app).get('/v1/admin/auth/profile').set('Cookie', full);
+    expect(initial.status).toBe(200);
+    expect(initial.body.data).toMatchObject({ id: adminId, email, display_name: '', phone_number: '', avatar_url: null });
+    expect(JSON.stringify(initial.body)).not.toContain('password_hash');
+    const body = { email: 'owner@example.test', display_name: 'MedAxis Owner', phone_number: '+880 1234567890', avatar_url: null };
+    expect((await request(app).patch('/v1/admin/auth/profile').set('Cookie', full).send(body)).status).toBe(403);
+    const saved = await request(app).patch('/v1/admin/auth/profile').set('Cookie', full).send({ ...body, current_password: password });
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    expect(saved.body.data).toMatchObject(body);
+    const wrong = await request(app).post('/v1/admin/auth/change-password').set('Cookie', full).send({ current_password: 'wrong', new_password: 'A different long password', confirm_password: 'A different long password' });
+    expect(wrong.status).toBe(403);
+    const changed = await request(app).post('/v1/admin/auth/change-password').set('Cookie', full).send({ current_password: password, new_password: 'A different long password', confirm_password: 'A different long password' });
+    expect(changed.status, JSON.stringify(changed.body)).toBe(200);
+    expect((await request(app).get('/v1/admin/auth/profile').set('Cookie', full)).status).toBe(200);
+    expect((await request(app).post('/v1/admin/auth/login').send({ email: body.email, password })).status).toBe(401);
+    expect((await request(app).post('/v1/admin/auth/login').send({ email: body.email, password: 'A different long password' })).status).toBe(200);
+  });
   it('issues only a five-minute signed pre-auth challenge after password verification', async () => {
     const { response, cookie: challenge } = await preAuth();
     expect(response.body.data.requires_2fa).toBe(true);

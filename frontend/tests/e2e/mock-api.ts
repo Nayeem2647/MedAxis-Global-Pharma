@@ -27,6 +27,8 @@ function workflowFixture(scenario: string): WorkflowFixture {
 }
 const adminCookie = (pair: string, path: string, clear = false) => `${pair}; Path=${path}; HttpOnly; SameSite=Strict; Secure; Max-Age=${clear ? 0 : path.endsWith('/auth') ? 300 : 1800}`;
 const adminSession = (id: string, current: boolean) => ({ id, current, ip_address: '127.0.0.*', geo: { country: 'BD', city: 'Dhaka' }, user_agent: 'Local browser fixture', last_active_at: timestamp, expires_at: new Date(Date.now() + 1800_000).toISOString(), token_hash: 'NEVER_RENDER_ADMIN_HASH' });
+const profiles = new Map<string, { id: string; email: string; display_name: string; phone_number: string; avatar_url: string | null }>();
+const fixtureAvatar = 'https://fixture-avatars.s3.ap-southeast-1.amazonaws.com/avatars/s3/fixture.jpg?X-Amz-Expires=120&X-Amz-Signature=fixture';
 const meta = { timestamp, request_id: '8f9a2b1c-3d4e-4f5a-8b9c-0d1e2f3a4b5c', internal_margin: 'NEVER_RENDER_INTERNAL_MARGIN' };
 const productId = '82f591d0-346b-4cc4-8d67-e25358fa0272';
 const englishId = '92f591d0-346b-4cc4-8d67-e25358fa0272';
@@ -114,7 +116,7 @@ createServer(async (req, res) => {
   if (url.pathname === '/__test__/admin' && req.method === 'POST') {
     let raw = ''; for await (const chunk of req) raw += String(chunk);
     const { email, scenario } = z.object({ email: z.email(), scenario: z.string().default('normal') }).parse(JSON.parse(raw)); const id = randomUUID();
-    admins.set(email, { id, email, scenario, full: `s%3A${id}.FIXTURE-FULL`, pre: `s%3A${id}.FIXTURE-PRE`, verified: false, revoked: false, others: true, calls: [], streams: new Set(), otherStreams: new Set(), connects: 0, disconnects: 0 }); management.set(id,managementFixture()); if (scenario.startsWith('workflow')) workflows.set(id, workflowFixture(scenario)); success(res, { configured: true }); return;
+    admins.set(email, { id, email, scenario, full: `s%3A${id}.FIXTURE-FULL`, pre: `s%3A${id}.FIXTURE-PRE`, verified: false, revoked: false, others: true, calls: [], streams: new Set(), otherStreams: new Set(), connects: 0, disconnects: 0 }); const directoryFixture = managementFixture(); if (scenario === 'dropdown-controls') directoryFixture.resources.categories!.push({ _id: workflowIds.prescription, created_at: timestamp, updated_at: timestamp, translations: { en: { name: 'Additional category', slug: 'additional-category' }, zhCN: { name: '\u6d4b\u8bd5\u5206\u7c7b', slug: 'additional-category-cn' } }, sort_order: 1, is_active: true }); management.set(id,directoryFixture); if (scenario.startsWith('workflow')) workflows.set(id, workflowFixture(scenario)); success(res, { configured: true }); return;
   }
   if (url.pathname === '/__test__/admin') {
     const state = admins.get(url.searchParams.get('email') ?? '');
@@ -129,7 +131,7 @@ createServer(async (req, res) => {
   }
   if (url.pathname.startsWith('/v1/admin/')) {
     const path = url.pathname.slice('/v1/admin/'.length); const rawCookie = req.headers.cookie ?? ''; const pair = (name: string) => rawCookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
-    let input: unknown; let multipart:FormData|undefined; if (req.method === 'POST' || req.method === 'PATCH') { const chunks:Buffer[]=[]; for await (const chunk of req) chunks.push(Buffer.from(chunk)); const bytes=new Uint8Array(Buffer.concat(chunks)); try { if(req.headers['content-type']?.startsWith('multipart/form-data'))multipart=await new Request('http://fixture.test',{method:'POST',headers:{'Content-Type':req.headers['content-type']},body:bytes}).formData();else input=JSON.parse(new TextDecoder().decode(bytes)); } catch { quoteError(res,400,'INVALID_REQUEST');return; } }
+    let input: unknown; let multipart:FormData|undefined; if (req.method === 'POST' || req.method === 'PATCH' || req.method === 'DELETE') { const chunks:Buffer[]=[]; for await (const chunk of req) chunks.push(Buffer.from(chunk)); const bytes=new Uint8Array(Buffer.concat(chunks)); try { if(req.headers['content-type']?.startsWith('multipart/form-data'))multipart=await new Request('http://fixture.test',{method:'POST',headers:{'Content-Type':req.headers['content-type']},body:bytes}).formData();else input=JSON.parse(new TextDecoder().decode(bytes)); } catch { quoteError(res,400,'INVALID_REQUEST');return; } }
     const login = z.object({ email: z.email(), password: z.string() }).safeParse(input);
     const state = path === 'auth/login' && login.success ? admins.get(login.data.email) : [...admins.values()].find((entry) => entry.full === pair('medaxis_admin_session') || entry.full.replace('FIXTURE-FULL', 'FIXTURE-OTHER') === pair('medaxis_admin_session') || entry.pre === pair('pre_auth_session'));
     if (!state) { quoteError(res, 401, 'AUTHENTICATION_REQUIRED'); return; }
@@ -152,20 +154,95 @@ createServer(async (req, res) => {
     if (path === 'auth/logout') { state.revoked = true; for (const stream of state.streams) stream.end(); res.setHeader('Set-Cookie', [adminCookie(`medaxis_admin_session=${state.full}`, '/v1/admin'), adminCookie('medaxis_admin_session=', '/v1/admin', true), adminCookie('pre_auth_session=', '/v1/admin/auth', true)]); success(res, { logged_out: true }); return; }
     if (path === 'auth/revoke-sessions') { const count = state.others ? 1 : 0; state.others = false; for (const stream of state.otherStreams) stream.end(); success(res, { revoked_count: count }); return; }
     if (path === 'auth/sessions') { success(res, [adminSession(state.id, !other), ...(state.others ? [adminSession(englishId, other)] : [])]); return; }
+    if (path === 'auth/profile') {
+      const current = profiles.get(state.id) ?? { id: state.id, email: state.email, display_name: 'Admin', phone_number: '', avatar_url: null };
+      if (req.method === 'PATCH') {
+        const body = z.object({ email: z.email(), display_name: z.string(), phone_number: z.string(), avatar_url: z.string().nullable().optional(), current_password: z.string().optional() }).safeParse(input);
+        if (!body.success || body.data.email !== current.email && body.data.current_password !== 'fixture-password') { quoteError(res, 422, 'VALIDATION_FAILED'); return; }
+        const updated = { id: state.id, email: body.data.email, display_name: body.data.display_name, phone_number: body.data.phone_number, avatar_url: body.data.avatar_url === undefined ? current.avatar_url : body.data.avatar_url ? fixtureAvatar : null };
+        profiles.set(state.id, updated); success(res, updated); return;
+      }
+      success(res, current); return;
+    }
+    if (path === 'auth/change-password') {
+      const body = z.object({ current_password: z.string(), new_password: z.string().min(12), confirm_password: z.string() }).safeParse(input);
+      if (!body.success || body.data.current_password !== 'fixture-password' || body.data.new_password !== body.data.confirm_password) { quoteError(res, 422, 'VALIDATION_FAILED'); return; }
+      state.others = false; success(res, { changed: true }); return;
+    }
+    if (path === 'catalog/translate-indications' && req.method === 'POST') {
+      const body = z.object({ text: z.string().min(1).max(5000) }).safeParse(input);
+      if (!body.success) { quoteError(res, 422, 'VALIDATION_FAILED'); return; }
+      if (!state.scenario.startsWith('generic-translation')) { quoteError(res, 503, 'TRANSLATION_NOT_CONFIGURED'); return; }
+      if (body.data.text.includes('Slow')) await new Promise((resolve) => setTimeout(resolve, 1000));
+      success(res, { translated_text: body.data.text.includes('Updated') ? '\u66f4\u65b0\u540e\u7684\u9002\u5e94\u75c7\u8bf4\u660e\u3002EGFR T790M\u3002' : '\u7ecf\u6838\u5b9e\u7684\u9002\u5e94\u75c7\u8bf4\u660e\u3002EGFR T790M\u3002', source_language: 'en', target_language: 'zh-CN' }); return;
+    }
     const mg=management.get(state.id)!;const mgData=z.record(z.string(),z.unknown()).safeParse(input);const mgBody=mgData.success?mgData.data:{};
+    if (state.scenario === 'manufacturer-logo-down' && path === 'catalog/manufacturers' && req.method === 'POST' && typeof mgBody.logo_data_url === 'string') {
+      quoteError(res, 503, 'MANUFACTURER_LOGO_UPLOAD_FAILED');
+      return;
+    }
     if(path==='auth/2fa/enroll'){state.others=false;success(res,{qr_data_url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',backup_codes:Array.from({length:8},(_,i)=>'BACKUP-ONCE-'+i)});return;}
     const resource=/^(?:catalog|cms)\/(products|manufacturers|generics|categories|banners)(?:\/([a-f0-9-]+))?$/.exec(path);
-    if(resource && !(state.scenario.startsWith('workflow')&&path==='catalog/products'&&req.method==='POST')) {const kind=resource[1]!;const records=mg.resources[kind]!;const id=resource[2];if(req.method==='GET'){if(id){const found=records.find((row)=>row._id===id);if(!found)quoteError(res,404,'RESOURCE_NOT_FOUND');else success(res,{...found,internal_secret:'NEVER_RENDER_MANAGEMENT_SECRET'});return;}let rows=records.filter((row)=>!url.searchParams.has('is_active')||String(row.is_active)===url.searchParams.get('is_active')).filter((row)=>!url.searchParams.has('status')||row.status===url.searchParams.get('status'));const q=url.searchParams.get('q')?.toLowerCase();if(q)rows=rows.filter((row)=>JSON.stringify(row.translations).toLowerCase().includes(q));const pg=Number(url.searchParams.get('page')??1),limit=Number(url.searchParams.get('limit')??20);success(res,rows.slice((pg-1)*limit,pg*limit),pg,limit,rows.length);return;}
-      mg.writes.push({path,body:input});const recordId=id??(typeof mgBody.id==='string'?mgBody.id:randomUUID());const old=records.find((row)=>row._id===recordId);const record:Record<string,unknown>={...old,...mgBody,_id:recordId,created_at:old?.created_at??timestamp,updated_at:new Date().toISOString()};delete record.id;if(record.review_metadata===null)delete record.review_metadata;const translations=z.record(z.string(),z.unknown()).safeParse(record.translations);if(translations.success&&translations.data.zhCN===null)delete translations.data.zhCN;if(translations.success)record.translations=translations.data;const index=records.findIndex((row)=>row._id===recordId);if(index<0)records.push(record);else records[index]=record;success(res,record);return;
+    if(resource && !(state.scenario.startsWith('workflow')&&path==='catalog/products'&&req.method==='POST')) {
+      const kind=resource[1]!; const records=mg.resources[kind]!; const id=resource[2];
+      if(req.method==='GET') {
+        if(id) {
+          const found=records.find((row)=>row._id===id && !row.deleted_at);
+          if(!found)quoteError(res,404,'RESOURCE_NOT_FOUND');else success(res,{...found,internal_secret:'NEVER_RENDER_MANAGEMENT_SECRET'});
+          return;
+        }
+        let rows=records.filter((row)=>!row.deleted_at).filter((row)=>!url.searchParams.has('is_active')||String(row.is_active)===url.searchParams.get('is_active')).filter((row)=>!url.searchParams.has('status')||row.status===url.searchParams.get('status'));
+        const q=url.searchParams.get('q')?.toLowerCase();if(q)rows=rows.filter((row)=>JSON.stringify(row.translations).toLowerCase().includes(q));
+        const pg=Number(url.searchParams.get('page')??1),limit=Number(url.searchParams.get('limit')??20);
+        success(res,rows.slice((pg-1)*limit,pg*limit),pg,limit,rows.length);return;
+      }
+      mg.writes.push({path,body:input});
+      if(req.method==='DELETE' && id && kind!=='banners') {
+        const record=records.find((row)=>row._id===id);
+        if(!record){quoteError(res,404,'RESOURCE_NOT_FOUND');return;}
+        if(record.deleted_at){success(res,{id,deleted:true});return;}
+        if(state.scenario==='delete-conflict' && mg.writes.filter((write)=>write.path===path).length===1)record.updated_at=new Date().toISOString();
+        if(record.updated_at!==mgBody.expected_updated_at){quoteError(res,409,'RESOURCE_STATE_CONFLICT');return;}
+        if(kind!=='products') {
+          const used=mg.resources.products!.some((product)=>!product.deleted_at && (kind==='manufacturers'?product.manufacturer_id===id:kind==='generics'?product.generic_id===id:Array.isArray(product.category_ids)&&product.category_ids.includes(id)));
+          if(used){quoteError(res,422,'VALIDATION_FAILED');return;}
+        }
+        record.deleted_at=new Date().toISOString();if(kind==='products')record.status='ARCHIVED';else record.is_active=false;
+        if(state.scenario==='delete-loss'){quoteError(res,500,'INTERNAL_SERVER_ERROR');return;}
+        success(res,{id,deleted:true});return;
+      }
+      const recordId=id??(typeof mgBody.id==='string'?mgBody.id:randomUUID());const old=records.find((row)=>row._id===recordId);const record:Record<string,unknown>={...old,...mgBody,_id:recordId,created_at:old?.created_at??timestamp,updated_at:new Date().toISOString()};delete record.id;if(record.logo_data_url===null)delete record.logo_data_url;if(record.review_metadata===null)delete record.review_metadata;const translations=z.record(z.string(),z.unknown()).safeParse(record.translations);if(translations.success&&translations.data.zhCN===null)delete translations.data.zhCN;if(translations.success){for(const value of Object.values(translations.data)){if(value&&typeof value==='object')for(const [key,entry]of Object.entries(value))if(entry===null)delete (value as Record<string,unknown>)[key];}record.translations=translations.data;}
+      for(const key of ['video_key','seo_image_key','storage_condition'])if(record[key]===null)delete record[key];const index=records.findIndex((row)=>row._id===recordId);if(index<0)records.push(record);else records[index]=record;success(res,record);return;
     }
-    if(path==='catalog/images'){mg.writes.push({path,body:{multipart:true}});const file=multipart?.get('image');if(!(file instanceof File)){quoteError(res,422,'VALIDATION_FAILED');return;}success(res,{r2_object_key:'products/fixture-upload.png',url:'https://cdn.medaxisglobalpharma.com/products/fixture-upload.png',mime_type:file.type,file_size_bytes:file.size});return;}
+    if(path==='catalog/images'){
+      mg.writes.push({path,body:{multipart:true}});const file=multipart?.get('image');if(!(file instanceof File)){quoteError(res,422,'VALIDATION_FAILED');return;}
+      const key=state.scenario.startsWith('product-form')?'products/s3/'+randomUUID()+'.png':'products/s3/fixture-upload.png';
+      success(res,{object_key:key,url:'https://cdn.medaxisglobalpharma.com/'+key,mime_type:file.type,file_size_bytes:file.size});return;
+    }
+    if(path==='catalog/videos'){
+      mg.writes.push({path,body:{multipart:true}});const file=multipart?.get('video');if(!(file instanceof File)){quoteError(res,422,'VALIDATION_FAILED');return;}
+      const key='products/s3/videos/'+randomUUID()+'.webm';
+      success(res,{object_key:key,url:'https://cdn.medaxisglobalpharma.com/'+key,mime_type:'video/webm',file_size_bytes:file.size});return;
+    }
     if(path==='catalog/import-csv'){const file=multipart?.get('file');if(!(file instanceof File)){quoteError(res,422,'VALIDATION_FAILED');return;}const raw=await file.text();const hash=createHash('sha256').update(raw).digest('hex');const dry=url.searchParams.get('dry_run')==='true';const valid=!raw.includes('invalid-row');if(!dry&&mg.dryHash!==hash){quoteError(res,422,'VALIDATION_FAILED');return;}mg.writes.push({path,body:{dry_run:dry,hash}});if(dry&&valid)mg.dryHash=hash;if(!dry&&valid)mg.commits++;if(!dry&&state.scenario.includes('import-loss')){loseQuotationResponse(res);return;}res.statusCode=dry?200:202;success(res,{dry_run:dry,valid,total_rows:1,valid_rows:valid?1:0,committed:!dry&&valid?1:0,rows:[{row:2,sku:'CSV-FIXTURE',valid,errors:valid?[]:[{field:'manufacturer_slug',issue:'Master not found.'}]}]});return;}
     if(path==='settings'&&!state.scenario.includes('config-down')){if(req.method==='PATCH'){mg.writes.push({path,body:input});for(const [key,value]of Object.entries(mgBody))mg.settings[key]={value,updated_at:new Date().toISOString()};}success(res,mg.settings);return;}
     if(path==='fx-rates'&&req.method==='PATCH'){mg.writes.push({path,body:input});success(res,fixtureFx());return;}
     if(path==='customers'||path.startsWith('customers/')){const customer={_id:workflowIds.manufacturer,full_name:'Customer profile fixture',customer_type:'B2B_WHOLESALE',company_name:'Verified buyer',email:'customer@fixture.example',preferred_locale:'zh-CN',country:'CN',city:'Shanghai',created_at:timestamp,updated_at:timestamp};if(path==='customers')success(res,[customer],Number(url.searchParams.get('page')??1),20,1);else success(res,{customer,history:[{_id:workflowIds.rfq,rfq_number:'RFQ-WORKFLOW-001',inquiry_type:'CART_RFQ',status:'SUBMITTED',created_at:timestamp,quotations:[]}]},Number(url.searchParams.get('page')??1),20,1);return;}
     if(path==='audit-logs'){success(res,[{id:workflowIds.prescription,actor_type:'SUPER_ADMIN',actor_id:state.id,action:'PRODUCT_SAVED',entity_type:'products',entity_id:workflowIds.rfq,request_id:meta.request_id,metadata:{status:'DRAFT',medical_secret:'NEVER_RENDER_AUDIT_SECRET'},created_at:timestamp}],1,20,1);return;}
-    if(path==='quotations/summary'){success(res,{as_of:new Date().toISOString(),window_hours:24,active_quotations:7,accepted_payment_pending:3,ready_to_dispatch:2,expiring_allocations:1});return;}
-    if(path==='quotations'){const quote=workflows.get(state.id)?.quote;success(res,quote?[{...quote.quotation,created_at:timestamp,updated_at:timestamp,version:quote.versions[0]}]:[],1,20,quote?1:0);return;}
+    if(path==='quotations/summary'){
+      const wf=workflows.get(state.id); const current=wf?.quote?.versions.find((version)=>version.id===wf.quote?.quotation.current_version_id);
+      const active=wf?.quote?.quotation.overall_status==='ACTIVE';
+      const pending=!!(active&&current?.status==='ACCEPTED'&&current.reservation_status==='ACTIVE'&&Date.parse(current.reservation_expires_at??'')>Date.now());
+      success(res,{as_of:new Date().toISOString(),window_hours:24,active_quotations:wf?Number(active):7,drafts:Number(active&&current?.status==='DRAFT'),sent:Number(active&&current?.status==='SENT'),accepted_payment_pending:wf?Number(pending):3,ready_to_dispatch:wf?Number(active&&current?.status==='PAYMENT_RECEIVED'&&current.reservation_status==='CONSUMED'&&!!current.payment):2,expiring_allocations:wf?Number(pending&&Date.parse(current?.reservation_expires_at??'')<=Date.now()+86400000):1});return;
+    }
+    if(path==='quotations'){
+      const wf=workflows.get(state.id); const quote=wf?.quote; const current=quote?.versions.find((version)=>version.id===quote.quotation.current_version_id);
+      let rows=quote&&current?[{...quote.quotation,rfq_number:wf!.rfq.rfq_number,customer:current.contact,created_at:timestamp,updated_at:timestamp,version:current}]:[];
+      for(const key of ['status','overall_status','rfq_id']){const value=url.searchParams.get(key);if(value)rows=rows.filter((row)=>key==='status'?row.version.status===value:key==='overall_status'?row.overall_status===value:row.rfq_id===value);}
+      const worklist=url.searchParams.get('worklist');if(worklist)rows=rows.filter((row)=>row.overall_status==='ACTIVE'&&(worklist==='READY_TO_DISPATCH'?row.version.status==='PAYMENT_RECEIVED'&&row.version.reservation_status==='CONSUMED'&&!!row.version.payment:row.version.status==='ACCEPTED'&&row.version.reservation_status==='ACTIVE'&&Date.parse(row.version.reservation_expires_at??'')>Date.now()&&(worklist!=='EXPIRING'||Date.parse(row.version.reservation_expires_at??'')<=Date.now()+86400000)));
+      const term=url.searchParams.get('q')?.toLowerCase();if(term)rows=rows.filter((row)=>[row.quotation_number,row.rfq_number,row.customer.full_name,row.customer.company_name,row.customer.email].some((value)=>value?.toLowerCase().includes(term)));
+      const pg=Number(url.searchParams.get('page')??1),limit=Number(url.searchParams.get('limit')??20);success(res,rows.slice((pg-1)*limit,pg*limit),pg,limit,rows.length);return;
+    }
     const workflow = workflows.get(state.id);
     if (workflow) {
       const wf = workflow; const rfqPath = `rfqs/${workflowIds.rfq}`; const quotePath = `quotations/${workflowIds.quote}`; const body = z.record(z.string(), z.unknown()).safeParse(input); const data = body.success ? body.data : {};

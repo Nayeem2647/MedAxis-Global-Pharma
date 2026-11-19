@@ -19,18 +19,19 @@ import { createStorageService } from '../src/modules/storage/storage.service.js'
 import { generateToken, hashPassword, hashToken } from '../src/shared/utils/crypto.js';
 import { createLogger } from '../src/shared/utils/logger.js';
 import { migrate } from '../src/scripts/migrate.js';
-import { validEnv } from './helpers/env.js';
+import { s3EnvSettings, validEnv } from './helpers/env.js';
 import { createRfqDispatcher } from '../src/modules/rfq/rfq.dispatch.js';
 import { pdf, prescriptionFiles } from './fixtures/prescriptions.js';
 
 const databaseName = `rfq_test_${randomUUID().replaceAll('-', '').slice(0, 24)}`;
 const env = loadEnv({
   ...validEnv,
+  ...s3EnvSettings,
   CLOUDFLARE_TURNSTILE_SECRET: 'test-turnstile-secret',
   WEBHOOK_HMAC_SECRET: 'test-webhook-secret',
   PRESCRIPTION_ENCRYPTION_KEY: 'ab'.repeat(32),
   PRESCRIPTION_KEY_ID: 'test-medical-v1',
-  R2_BUCKET_PRESCRIPTIONS: 'test-private-medical',
+  S3_BUCKET_PRESCRIPTIONS: 'test-private-medical',
   ADMIN_ALERT_EMAIL: 'owner@example.test',
 });
 const logger = createLogger({ silent: true });
@@ -282,9 +283,9 @@ describe('RFQ intake and triage against MongoDB', () => {
       expect(staged!.rfq_id).toBeUndefined();
       expect(staged!.purge_status).toBe('ACTIVE');
       expect(staged!.purge_scheduled_at.getTime() - staged!.uploaded_at.getTime()).toBe(90 * 86_400_000);
-      expect(blobs.get(staged!.r2_storage_key!)).not.toEqual(bytes);
+      expect(blobs.get(staged!.object_key!)).not.toEqual(bytes);
       expect(staged!.mime_type).toBe(mime);
-      expect(JSON.stringify(file.response.body)).not.toMatch(/r2_|https?:|encryption|upload_token/);
+      expect(JSON.stringify(file.response.body)).not.toMatch(/object_key|r2_|https?:|encryption|upload_token/);
       const response = await submit({ ...input(), prescription_ids: [file.id] }, file.cookie);
       expect(response.status, JSON.stringify(response.body)).toBe(201);
       const linked = await PrescriptionModel.findById(file.id).select('+upload_token_hash').lean();
@@ -319,7 +320,7 @@ describe('RFQ intake and triage against MongoDB', () => {
     expect((await submit({ ...body, idempotency_key: randomUUID() }, file.cookie)).status).toBe(422);
     expect(await RfqModel.countDocuments()).toBe(1);
   });
-  it('rejects invalid signatures, unsupported/mismatched MIME and oversized files before R2 or metadata writes', async () => {
+  it('rejects invalid signatures, unsupported/mismatched MIME and oversized files before S3 or metadata writes', async () => {
     for (const { bytes, mime } of [
       { bytes: Buffer.from('<svg>not medical</svg>'), mime: 'image/png' },
       { bytes: Buffer.alloc(5_242_881), mime: 'image/png' },
@@ -359,8 +360,9 @@ describe('RFQ intake and triage against MongoDB', () => {
     }
     expect((await submit(body, file.cookie)).status).toBe(201);
   });
-  it('removes an uploaded R2 object when prescription metadata cannot be saved', async () => {
-    const save = vi.spyOn(PrescriptionModel.prototype, 'save').mockRejectedValueOnce(new Error('test storage failure'));
+  it('removes an uploaded S3 object when prescription metadata is rejected', async () => {
+    const save = vi.spyOn(PrescriptionModel.prototype, 'save')
+      .mockRejectedValueOnce(Object.assign(new Error('rejected document'), { code: 121 }));
     try {
       const response = await request(app)
         .post('/v1/public/prescriptions/upload')

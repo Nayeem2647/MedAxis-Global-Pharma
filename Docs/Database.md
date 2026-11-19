@@ -2,7 +2,7 @@
 
 Version: 1.0 | Release: 1 | Date: 2026-11-13
 
-Sources: [DFD.md](DFD.md), [PRD.md](PRD.md), [Architecture.md](Architecture.md). This is a proposed implementation specification, not an existing database deployment. MongoDB stores business documents; Cloudflare R2 stores files. All ten requested topics apply to this business.
+Sources: [DFD.md](DFD.md), [PRD.md](PRD.md), [Architecture.md](Architecture.md). This is a proposed implementation specification, not an existing database deployment. MongoDB stores business documents; AWS S3 stores files. All ten requested topics apply to this business.
 
 ## 1. Collection List
 
@@ -32,7 +32,7 @@ DFD store IDs are logical groups, not physical collection counts. This design ha
 | auth_attempts | Process 6 operational extension | Atomic brute-force counters/lockouts |
 | platform_settings | Configuration extension | Packaging units, bank instructions, payment/shipping presets |
 
-No separate `rfq_items`, `quotation_items` or product translation collections: these bounded child records are embedded. R2 buckets/prefixes contain prescription ciphertext, product images and quotation/proforma PDFs; R2 is not a MongoDB collection.
+No separate `rfq_items`, `quotation_items` or product translation collections: these bounded child records are embedded. S3 buckets/prefixes contain prescription ciphertext, product images and quotation/proforma PDFs; S3 is outside MongoDB.
 
 ## 2. Schema
 
@@ -95,7 +95,7 @@ db.rfq_idempotency_keys.createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 }
 db.quotation_versions.createIndex({ quotation_id: 1, version_number: 1 }, { unique: true });
 ```
 
-TTL cleanup is asynchronous. Application code rejects expired sessions/keys immediately even if the document still exists. Never TTL-delete prescription metadata before confirming R2 deletion. Never TTL-delete financial records or audit logs.
+TTL cleanup is asynchronous. Application code rejects expired sessions/keys immediately even if the document still exists. Never TTL-delete prescription metadata before confirming S3 deletion. Never TTL-delete financial records or audit logs.
 
 Atlas Search is a separate search-index definition, not a normal B-tree index. Index only catalog name/strength/descriptive fields and materialized generic/manufacturer search labels; update those labels when master names change. Apply PUBLISHED filtering and explicit result projections; keep all commercial/private fields outside the search index.
 
@@ -125,7 +125,7 @@ Cross-document and transition rules belong in transactional services: valid refe
 
 Password is transmitted over TLS and hashed server-side (Argon2id); the client does not submit an Argon2 hash as a credential. Require TOTP for full admin sessions. Enforce five failed attempts per configured lockout window and 30-minute idle sessions; proposed lockout duration is 15 minutes because DFD does not specify duration. Check session revocation/generation and expiry in middleware; TTL is cleanup only.
 
-Medical purge deadline = `min(uploaded_at + 90 days, earliest relevant terminal_at + 14 days)`. Terminal events include delivered, declined, unable to supply/closed and payment expired. Use the quotation terminal event linked to the RFQ rather than expecting `rfqs.status=DELIVERED`. Schedule purge at the deadline; workers must run frequently enough to meet it and alert on overdue failures. An hourly sweep is proposed instead of a daily job that could exceed “within 14 days.” Deletion removes the R2 object, then clears storage/encryption metadata and records a minimal purge receipt. Redact medical information from clarification text/logs as well; raw email bodies are not retained indiscriminately.
+Medical purge deadline = `min(uploaded_at + 90 days, earliest relevant terminal_at + 14 days)`. Terminal events include delivered, declined, unable to supply/closed and payment expired. Use the quotation terminal event linked to the RFQ rather than expecting `rfqs.status=DELIVERED`. Schedule purge at the deadline; workers must run frequently enough to meet it and alert on overdue failures. An hourly sweep is proposed instead of a daily job that could exceed “within 14 days.” Deletion removes the S3 object, then clears storage/encryption metadata and records a minimal purge receipt. Redact medical information from clarification text/logs as well; raw email bodies are not retained indiscriminately.
 
 ## 6. Aggregation
 
@@ -210,9 +210,9 @@ Authenticate token and derive `quotationId`/`versionId` server-side before this 
 
 Single-document changes can use atomic conditional updates without a transaction if no dependent records must commit. FX fetch itself is outside MongoDB; copying selected rate values into an issued snapshot is part of the issue transaction, not a transaction with the FX provider.
 
-R2/email/PDF/SSE are outside database atomicity. Commit outbox work, then workers claim jobs with a lease, perform effects and record results. Recover expired leases, use stable dedupe keys, verify webhook signatures and deduplicate provider events. Email delivery is at least once unless the provider supports idempotency; a crash after send can cause a duplicate. Retry failures up to three times with backoff, then mark DEAD and alert the admin. PDF failure must not undo a committed acceptance.
+S3/email/PDF/SSE are outside database atomicity. Commit outbox work, then workers claim jobs with a lease, perform effects and record results. Recover expired leases, use stable dedupe keys, verify webhook signatures and deduplicate provider events. Email delivery is at least once unless the provider supports idempotency; a crash after send can cause a duplicate. Retry failures up to three times with backoff, then mark DEAD and alert the admin. PDF failure must not undo a committed acceptance.
 
-RFQ uploads use staged encrypted R2 keys before transaction commit; delete abandoned staged uploads after a bounded grace period. An R2 object deletion is retried before metadata is marked PURGED. Release 1 reservation is a commercial allocation flag, not proof of manufacturer inventory: no warehouse stock ledger exists in the source model.
+RFQ uploads use staged encrypted S3 keys before transaction commit; delete abandoned staged uploads after a bounded grace period. An S3 object deletion is retried before metadata is marked PURGED. Release 1 reservation is a commercial allocation flag, not proof of manufacturer inventory: no warehouse stock ledger exists in the source model.
 
 ## 8. Sample Data
 
@@ -574,7 +574,7 @@ const Prescription = new Schema({
   _id: { ...uuid(), default: randomUUID },
   rfq_id: { ...uuid(), ref: 'Rfq' },
   customer_id: { ...uuid(), ref: 'Customer' },
-  r2_storage_key: String,
+  object_key: String,
   mime_type: { type: String, required: true, enum: ['image/jpeg', 'image/png', 'application/pdf'] },
   file_size_bytes: { type: Number, required: true, max: 5242880 },
   encryption: {
@@ -688,7 +688,7 @@ erDiagram
         string _id PK
         string rfq_id FK
         string customer_id FK
-        string r2_storage_key
+        string object_key
         string mime_type
         int file_size_bytes
         object encryption
@@ -859,6 +859,6 @@ Business exclusions: supplier/broker/vendor entities contradict direct manufactu
 | DFD auth processes omit persistent stores | Add explicit admin, session and lockout collections. |
 | DFD claims all balancing checks passed | Treat diagrams as input, not evidence of implemented correctness. DFD itself remains unchanged. |
 
-Before production, business review should settle the proposed item limits, 5 MiB interpretation, lockout duration, dispatch policy for late payment evidence, and retention duration for ordinary commercial/customer/clarification records. Source documents call many commercial records permanent; this design preserves that baseline without inventing a legal retention period. Database/R2 backups must follow the medical purge policy too: track deletion receipts, restrict expired data in restored backups and replay purges before restored systems serve traffic.
+Before production, business review should settle the proposed item limits, 5 MiB interpretation, lockout duration, dispatch policy for late payment evidence, and retention duration for ordinary commercial/customer/clarification records. Source documents call many commercial records permanent; this design preserves that baseline without inventing a legal retention period. Database/S3 backups must follow the medical purge policy too: track deletion receipts, restrict expired data in restored backups and replay purges before restored systems serve traffic.
 
-Implementation verification checklist: concurrent duplicate RFQ creates one result; altered payload/key conflicts; concurrent acceptance creates one reservation/outbox set; revision and acceptance cannot both win; expiry cannot overwrite payment; later FX/product edits leave issued snapshots unchanged; public APIs/PDFs exclude costs; optional prescription never blocks fulfillment; terminal states shorten purge deadlines; R2 failures retry; revoked/expired sessions fail before TTL cleanup; outbox workers recover abandoned leases.
+Implementation verification checklist: concurrent duplicate RFQ creates one result; altered payload/key conflicts; concurrent acceptance creates one reservation/outbox set; revision and acceptance cannot both win; expiry cannot overwrite payment; later FX/product edits leave issued snapshots unchanged; public APIs/PDFs exclude costs; optional prescription never blocks fulfillment; terminal states shorten purge deadlines; S3 failures retry; revoked/expired sessions fail before TTL cleanup; outbox workers recover abandoned leases.

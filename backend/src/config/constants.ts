@@ -106,6 +106,9 @@ export const ADMIN_LOCKOUT_MINUTES = 15;
 export const LOCALE_COOKIE = 'medaxis_locale';
 
 export const ERROR_CODES = Object.freeze({
+  TRANSLATION_NOT_CONFIGURED: 'TRANSLATION_NOT_CONFIGURED',
+  TRANSLATION_UNAVAILABLE: 'TRANSLATION_UNAVAILABLE',
+  TRANSLATION_QUOTA_EXCEEDED: 'TRANSLATION_QUOTA_EXCEEDED',
   MALFORMED_JSON: 'MALFORMED_JSON',
   INVALID_REQUEST: 'INVALID_REQUEST',
   INVALID_PRESCRIPTION_FILE: 'INVALID_PRESCRIPTION_FILE',
@@ -124,6 +127,10 @@ export const ERROR_CODES = Object.freeze({
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  MANUFACTURER_LOGO_UPLOAD_FAILED: 'MANUFACTURER_LOGO_UPLOAD_FAILED',
+  GENERIC_IMAGE_UPLOAD_FAILED: 'GENERIC_IMAGE_UPLOAD_FAILED',
+  CATEGORY_IMAGE_UPLOAD_FAILED: 'CATEGORY_IMAGE_UPLOAD_FAILED',
+  CATALOG_SLUG_CONFLICT: 'CATALOG_SLUG_CONFLICT',
 } as const);
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 
@@ -135,11 +142,13 @@ export interface RoutePattern {
 export const MULTIPART_ROUTES: readonly RoutePattern[] = Object.freeze([
   Object.freeze({ method: 'POST', pattern: /^\/v1\/public\/prescriptions\/upload\/?$/ }),
   Object.freeze({ method: 'POST', pattern: /^\/v1\/admin\/catalog\/import-csv\/?$/ }),
+  Object.freeze({ method: 'POST', pattern: /^\/v1\/admin\/catalog\/videos\/?$/ }),
   Object.freeze({ method: 'POST', pattern: /^\/v1\/admin\/catalog\/images\/?$/ }),
 ]);
 
 export const NON_JSON_RESPONSE_ROUTES: readonly RoutePattern[] = Object.freeze([
   Object.freeze({ method: 'GET', pattern: /^\/v1\/public\/quotation\/pdf\/[^/]+\/?$/ }),
+  Object.freeze({ method: 'GET', pattern: /^\/v1\/public\/media\/(?:products|avatars)\/.+$/ }),
   Object.freeze({ method: 'GET', pattern: /^\/v1\/admin\/prescriptions\/[^/]+\/stream\/?$/ }),
   Object.freeze({ method: 'GET', pattern: /^\/v1\/admin\/stream\/?$/ }),
 ]);

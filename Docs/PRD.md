@@ -657,7 +657,7 @@ erDiagram
         uuid id PK
         uuid rfq_id FK
         uuid customer_id FK
-        string r2_storage_key
+        string object_key
         string encryption_iv
         string mime_type "image/jpeg | image/png | application/pdf"
         integer file_size_bytes

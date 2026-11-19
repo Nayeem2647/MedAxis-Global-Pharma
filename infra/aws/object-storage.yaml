@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private MedAxis S3 storage and CloudFront delivery for catalog images.
+
+Resources:
+  ProductImages:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  Quotes:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  Prescriptions:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  Avatars:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  ImageOriginAccess:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-images'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  ImageDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: MedAxis catalog images
+        Origins:
+          - Id: medaxis-catalog
+            DomainName: !GetAtt ProductImages.RegionalDomainName
+            OriginAccessControlId: !GetAtt ImageOriginAccess.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: medaxis-catalog
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          Compress: true
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  ImageBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ProductImages
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCatalogDistributionRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${ProductImages.Arn}/products/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${ImageDistribution}'
+
+  BackendObjectAccess:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Object permissions for the MedAxis backend runtime.
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CatalogUploads
+            Effect: Allow
+            Action: [s3:PutObject, s3:GetObject]
+            Resource: !Sub '${ProductImages.Arn}/products/s3/*'
+          - Sid: RemoveUnusedManufacturerLogos
+            Effect: Allow
+            Action: s3:DeleteObject
+            Resource: !Sub '${ProductImages.Arn}/products/s3/manufacturers/*'
+          - Sid: PrivateFileOperations
+            Effect: Allow
+            Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
+            Resource:
+              - !Sub '${Quotes.Arn}/quotes/*'
+              - !Sub '${Prescriptions.Arn}/prescriptions/*'
+              - !Sub '${Avatars.Arn}/avatars/*'
+
+Outputs:
+  Region:
+    Value: !Ref AWS::Region
+  ProductBucket:
+    Value: !Ref ProductImages
+  QuoteBucket:
+    Value: !Ref Quotes
+  PrescriptionBucket:
+    Value: !Ref Prescriptions
+  AvatarBucket:
+    Value: !Ref Avatars
+  PrivateAvatarOrigin:
+    Value: !Sub 'https://${Avatars.RegionalDomainName}'
+  PublicImageOrigin:
+    Value: !Sub 'https://${ImageDistribution.DomainName}'
+  BackendPolicyArn:
+    Value: !Ref BackendObjectAccess

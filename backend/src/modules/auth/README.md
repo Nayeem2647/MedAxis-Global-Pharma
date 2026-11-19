@@ -1,6 +1,6 @@
 # Super Admin authentication
 
-The seven endpoints are mounted at `/v1/admin/auth`. All responses use the
+The authentication and profile endpoints are mounted at `/v1/admin/auth`. All responses use the
 standard API envelope and `Cache-Control: no-store`.
 
 | Method / path              | Body                                                  | Successful result                                                                      |
@@ -12,8 +12,11 @@ standard API envelope and `Cache-Control: no-store`.
 | GET `/sessions`            | None                                                  | Active sessions with `current`, masked IP, GeoIP, User-Agent, `last_active_at`, expiry |
 | POST `/revoke-sessions`    | Empty body or `{}`                                    | `revoked_count`; retains the current session                                           |
 | POST `/logout`             | Empty body or `{}`                                    | `logged_out`; clears cookies and revokes the current session                           |
+| GET `/profile`             | None                                                  | Safe account ID, login email, display name, phone and a 120-second signed URL for stored avatars (local development or S3) |
+| PATCH `/profile`           | Name, phone, email, optional JPEG avatar data URL or `null` to remove it; current password when changing email | Saved safe profile; audited |
+| POST `/change-password`    | Current password, new password (at least 12 characters), confirmation | Password changed; other sessions and pending challenges revoked |
 
-The final four endpoints require full admin authentication. Password-only
+All endpoints after MFA verification require full admin authentication. Password-only
 challenges last five minutes, are bound to IP and User-Agent, and cannot be used
 as full sessions. Completing MFA consumes the challenge exactly once. Full
 sessions expire after 30 minutes of inactivity; the guard checks expiration and

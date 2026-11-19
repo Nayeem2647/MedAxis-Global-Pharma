@@ -5,7 +5,7 @@ import { createFxService } from './modules/fx/fx.service.js';
 import { createPdfRuntime } from './modules/pdf/pdf.worker.js';
 import { createAdminStream } from './modules/admin/admin.stream.js';
 import { createNotificationService } from './modules/notification/notification.service.js';
-import { createStorageService } from './modules/storage/storage.service.js';
+import { createStorageService, initializeLocalStorage } from './modules/storage/storage.service.js';
 import { registerJobs } from './jobs/index.js';
 import { EnvValidationError, loadEnv, type AppEnv } from './config/env.js';
 import { getLogger } from './shared/utils/logger.js';
@@ -24,14 +24,15 @@ async function main(): Promise<void> {
 
   const logger = getLogger(env);
 
+  await initializeLocalStorage(env);
   await connectDatabase(env, logger);
 
   const fx = createFxService(env, logger);
   await fx.hydrate();
   if (!env.isTest) await fx.refresh();
-  const pdf = createPdfRuntime(env, logger);
-  const notifications = createNotificationService(env, logger);
   const storage = createStorageService(env);
+  const pdf = createPdfRuntime(env, logger, { storage });
+  const notifications = createNotificationService(env, logger);
   const adminStream = createAdminStream(logger);
   const app = createApp({
     env,
@@ -39,6 +40,7 @@ async function main(): Promise<void> {
     fx,
     pdf,
     adminStream,
+    storage,
     rfq: { hooks: { dispatchNotifications: notifications.dispatch } },
     quotationHooks: {
       dispatchNotifications: async () => {

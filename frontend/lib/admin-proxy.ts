@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { apiUrl } from './api-config';
 import { ApiError, parseApiResponse } from './api-client';
-import { ADMIN_COOKIE, adminCookieHeader, adminFrontendOrigin, adminPrivateHeaders, adminProxyRule, backupBody, expiredAdminCookie, loginBody, loginResult, logoutResult, mappedAdminCookies, mfaResult, revokeResult, sessionsSchema, totpBody } from './admin-contract';
+import { ADMIN_COOKIE, adminCookieHeader, adminFrontendOrigin, adminPasswordBody, adminPrivateHeaders, adminProfileBody, adminProxyRule, backupBody, expiredAdminCookie, forgotPasswordBody, forgotPasswordResult, loginBody, loginResult, logoutResult, mappedAdminCookies, mfaResult, resetPasswordBody, resetPasswordResult, revokeResult, sessionsSchema, totpBody } from './admin-contract';
 
 function failure(status: number, code: string, requestId = crypto.randomUUID(), details?: readonly { field: string; issue: string }[]): Response {
   return Response.json({ success: false, error: { status, code, message: status === 401 ? 'Admin authentication is required.' : status === 403 ? 'This admin action was denied.' : 'The admin request could not be completed.', ...(details?.length ? { details } : {}) }, meta: { request_id: requestId, timestamp: new Date().toISOString() } }, { status, headers: adminPrivateHeaders });
@@ -48,16 +48,16 @@ export async function proxyAdmin(request: Request, segments: readonly string[]):
       const type = request.headers.get('content-type') ?? '';
       if (rule.kind === 'multipart' ? !/^multipart\/form-data\s*;.*boundary=/i.test(type) : !/^application\/json(?:\s*;|$)/i.test(type)) return failure(415, 'UNSUPPORTED_MEDIA_TYPE');
       headers.set('Content-Type', type);
-      body = new Uint8Array(await bodyBytes(request, rule.kind === 'multipart' ? 6 * 1024 * 1024 : 1024 * 1024));
+      body = new Uint8Array(await bodyBytes(request, rule.kind === 'multipart' ? (path === 'catalog/videos' ? 51 : 6) * 1024 * 1024 : 1024 * 1024));
       if (rule.kind !== 'multipart') {
         let input: unknown; try { input = JSON.parse(new TextDecoder().decode(body)); } catch { return failure(400, 'INVALID_REQUEST'); }
-        const schema = path === 'auth/login' ? loginBody : path === 'auth/verify-totp' ? totpBody : path === 'auth/verify-backup-code' ? backupBody : /^auth\//.test(path) ? z.strictObject({}) : null;
+        const schema = path === 'auth/login' ? loginBody : path === 'auth/forgot-password' ? forgotPasswordBody : path === 'auth/reset-password' ? resetPasswordBody : path === 'auth/verify-totp' ? totpBody : path === 'auth/verify-backup-code' ? backupBody : path === 'auth/profile' ? adminProfileBody : path === 'auth/change-password' ? adminPasswordBody : /^auth\//.test(path) ? z.strictObject({}) : null;
         if (schema) { const parsed = schema.safeParse(input); if (!parsed.success) return failure(422, 'VALIDATION_FAILED', undefined, parsed.error.issues.map((issue) => ({ field: issue.path.join('.'), issue: 'Check this field.' }))); }
       }
     }
   } catch (error: unknown) { return error instanceof ApiError ? failure(error.status, error.code) : failure(400, 'INVALID_REQUEST'); }
   const controller = new AbortController(); const abort = () => controller.abort(); request.signal.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(abort, rule.kind === 'sse' ? 55_000 : 25_000);
+  const timeout = setTimeout(abort, rule.kind === 'sse' ? 55_000 : path === 'catalog/videos' ? 50_000 : 25_000);
   const clean = () => { clearTimeout(timeout); request.signal.removeEventListener('abort', abort); };
   let cookieValues: string[] = [];
   try {
@@ -72,7 +72,7 @@ export async function proxyAdmin(request: Request, segments: readonly string[]):
     if (rule.kind === 'sse' && upstream.ok && /^text\/event-stream(?:;|$)/i.test(upstream.headers.get('content-type') ?? '')) { outgoing.set('Content-Type', 'text/event-stream'); outgoing.set('X-Accel-Buffering', 'no'); return pipeResponse(upstream, outgoing, controller, clean); }
     if (rule.kind === 'binary' && upstream.ok && /^(?:application\/pdf|image\/(?:jpeg|png))(?:;|$)/i.test(upstream.headers.get('content-type') ?? '')) { outgoing.set('Content-Type', upstream.headers.get('content-type')!); outgoing.set('Content-Disposition', 'attachment; filename="private-prescription"'); return pipeResponse(upstream, outgoing, controller, clean); }
     if (rule.kind === 'sse' || rule.kind === 'binary') { await parseApiResponse(upstream, z.never()); throw new ApiError('Invalid stream response.', { status: 502, code: 'INVALID_API_RESPONSE' }); }
-    const schema = path === 'auth/login' ? loginResult : /^auth\/verify-/.test(path) ? mfaResult : path === 'auth/sessions' ? sessionsSchema : path === 'auth/logout' ? logoutResult : path === 'auth/revoke-sessions' ? revokeResult : z.unknown();
+    const schema = path === 'auth/login' ? loginResult : path === 'auth/forgot-password' ? forgotPasswordResult : path === 'auth/reset-password' ? resetPasswordResult : /^auth\/verify-/.test(path) ? mfaResult : path === 'auth/sessions' ? sessionsSchema : path === 'auth/logout' ? logoutResult : path === 'auth/revoke-sessions' ? revokeResult : z.unknown();
     const result = await parseApiResponse<unknown>(upstream, schema); outgoing.set('Content-Type', 'application/json'); clean();
     return new Response(JSON.stringify(result), { status: upstream.status, headers: outgoing });
   } catch (error: unknown) {

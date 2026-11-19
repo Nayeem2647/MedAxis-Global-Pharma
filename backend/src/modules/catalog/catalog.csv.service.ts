@@ -130,7 +130,8 @@ export function createCsvImportService(admin: AdminCatalogService, revalidate: R
         );
         if (duplicate)
           throw AppError.validation([{ field: `slug_${duplicate}`, issue: 'Duplicate localized slug in CSV.' }]);
-        const previous = await ProductModel.findOne({ sku: data.sku }).select({ _id: 1 }).lean();
+        const previous = await ProductModel.findOne({ sku: data.sku }).select({ _id: 1, deleted_at: 1 }).lean();
+        if (previous?.deleted_at) throw AppError.validation([{ field: 'sku', issue: 'This SKU belongs to a deleted product. Choose a new SKU.' }]);
         await validateProductReferences(data);
         await validateProductSlugs(data, previous?._id);
         skus.add(data.sku);

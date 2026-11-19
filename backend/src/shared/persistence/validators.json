@@ -2,8 +2,11 @@
   "manufacturers": {
     "bsonType": "object",
     "additionalProperties": false,
-    "required": ["_id", "translations", "country", "is_active", "created_at", "updated_at"],
+    "required": ["_id", "translations", "is_active", "created_at", "updated_at"],
     "properties": {
+      "deleted_at": { "bsonType": "date" },
+      "logo_data_url": { "bsonType": "string", "maxLength": 262144 },
+      "logo_object_key": { "bsonType": "string", "maxLength": 500, "pattern": "^products/(?:manufacturers|(?:local|s3)/(?:manufacturers|legacy))/[a-zA-Z0-9_-]+\\.(?:png|webp)$" },
       "_id": {
         "bsonType": "string",
         "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -113,6 +116,9 @@
     "additionalProperties": false,
     "required": ["_id", "translations", "is_active", "created_at", "updated_at"],
     "properties": {
+      "deleted_at": { "bsonType": "date" },
+      "logo_data_url": { "bsonType": "string", "maxLength": 262144 },
+      "logo_object_key": { "bsonType": "string", "maxLength": 500, "pattern": "^products/(?:local|s3)/generics/[a-zA-Z0-9_-]+\\.(?:png|webp)$" },
       "_id": {
         "bsonType": "string",
         "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -197,7 +203,7 @@
         "items": {
           "bsonType": "string",
           "minLength": 1,
-          "maxLength": 200
+          "maxLength": 5000
         }
       },
       "is_active": {
@@ -216,6 +222,9 @@
     "additionalProperties": false,
     "required": ["_id", "translations", "sort_order", "is_active", "created_at", "updated_at"],
     "properties": {
+      "deleted_at": { "bsonType": "date" },
+      "logo_data_url": { "bsonType": "string", "maxLength": 262144 },
+      "logo_object_key": { "bsonType": "string", "maxLength": 500, "pattern": "^products/(?:local|s3)/categories/[a-zA-Z0-9_-]+\\.(?:png|webp)$" },
       "_id": {
         "bsonType": "string",
         "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -328,6 +337,9 @@
       "updated_at"
     ],
     "properties": {
+      "video_key": { "bsonType": "string", "maxLength": 500, "pattern": "^products/(?:local|s3)/videos/[a-zA-Z0-9_-]+\\.(?:mp4|webm)$" },
+      "seo_image_key": { "bsonType": "string", "maxLength": 500, "pattern": "^products/[a-zA-Z0-9/_-]+\\.(?:jpg|jpeg|png|webp)$" },
+      "deleted_at": { "bsonType": "date" },
       "_id": {
         "bsonType": "string",
         "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -1011,6 +1023,7 @@
         "minLength": 1,
         "maxLength": 200
       },
+      "object_key": { "bsonType": "string", "maxLength": 500, "pattern": "^prescriptions/(?:local|s3)/(?:legacy/)?[a-zA-Z0-9_-]+\\.enc$" },
       "r2_storage_key": {
         "bsonType": "string",
         "minLength": 1,
@@ -2250,6 +2263,10 @@
       "updated_at"
     ],
     "properties": {
+      "display_name": { "bsonType": "string", "maxLength": 120 },
+      "phone_number": { "bsonType": "string", "maxLength": 25 },
+      "avatar_url": { "bsonType": "string", "maxLength": 262144 },
+      "avatar_object_key": { "bsonType": "string", "maxLength": 500, "pattern": "^avatars/(?:local|s3)/(?:legacy/)?[a-zA-Z0-9_-]+\\.(?:jpg|png|webp)$" },
       "_id": {
         "bsonType": "string",
         "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -2322,7 +2339,7 @@
       "updated_at"
     ],
     "properties": {
-      "purpose": { "bsonType": "string", "enum": ["PRE_AUTH", "ADMIN"] },
+      "purpose": { "bsonType": "string", "enum": ["PRE_AUTH", "ADMIN", "PASSWORD_RESET"] },
       "user_agent": { "bsonType": "string", "maxLength": 2000 },
       "geo": {
         "bsonType": "object",

@@ -2,6 +2,10 @@
 
 ## Runtime and private storage
 
+Local development saves quotation PDFs under `backend/uploads/quotes/local/`.
+Retrieval still uses the existing buyer-token endpoint. No cloud buckets or AWS
+credentials are needed; see [local uploads](../storage/README.md).
+
 Use Node.js 22.13 or newer. The runtime engine is declared in `package.json`
 to match the current Puppeteer dependency and PDF verification tooling.
 
@@ -23,10 +27,11 @@ Chromium's Linux system libraries must be available in the deployment image;
 install Puppeteer's browser during deployment or set
 `PUPPETEER_EXECUTABLE_PATH` to a compatible system Chromium executable.
 
-Configure the existing private `R2_BUCKET_QUOTES` and R2 credentials. Public
-URLs and presigned URLs are never returned. PDFs are streamed through the API.
+Configure the private `S3_BUCKET_QUOTES`, `AWS_REGION` and backend runtime role.
+PDFs are streamed through the API after rechecking the quotation token.
 Stored metadata is `quotation_versions.pdf.original` / `.accepted`, containing
-`r2_object_key`, mode and generation time. Separate immutable object names
+`object_key`, mode and generation time. Legacy `r2_object_key` remains readable.
+Separate immutable object names
 and a conditional database write prevent an old render from replacing an
 accepted PDF. Failed/displaced writes attempt orphan cleanup. A missing object
 can be regenerated. A lease recovers abandoned jobs; failures retry with backoff,
@@ -126,7 +131,7 @@ see [the notification and jobs contract](../notification/README.md).
 ## Verification
 
 `npm run typecheck`, `npm run build`, `npm run lint`, `npm test`;
-`npm run test:decisions` uses a random disposable replica-set database, mock R2
+`npm run test:decisions` uses a random disposable replica-set database, mock S3
 and renderer; `npm run test:pdf` uses real headless Chromium and extracts text
 from generated PDFs to check Chinese glyph text, bank instructions, watermark
-and cost isolation. No buyer email or external R2 upload is performed by tests.
+and cost isolation. The tests send no buyer email and perform no external storage upload.

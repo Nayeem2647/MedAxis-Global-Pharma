@@ -13,6 +13,7 @@ import {
 import { AdminUnavailable } from '../../../../../components/admin/AdminFeedback';
 import { AdminLink } from '../../../../../components/admin/AdminShell';
 import { ManagementTable, ManagementPagination } from '../../../../../components/admin/ManagementTable';
+import { AdminMasterList } from '../../../../../components/admin/AdminMasterList';
 import { AdminProductList } from '../../../../../components/admin/AdminProductList';
 import { notFound } from 'next/navigation';
 export default async function ResourceListPage({
@@ -38,6 +39,7 @@ export default async function ResourceListPage({
     return <AdminUnavailable problem={{ status: 422 }} />;
   }
   if (kind.data === 'products') return <AdminProductList query={Object.fromEntries(query)} />;
+  if (kind.data === 'manufacturers' || kind.data === 'generics' || kind.data === 'categories') return <AdminMasterList kind={kind.data} query={Object.fromEntries(query)} />;
   const result = await guardedAdminRead(
     `${resourcePath(kind.data)}?${query}`,
     z.array(resourceSchema(kind.data)).max(100),
@@ -57,7 +59,7 @@ export default async function ResourceListPage({
           <h1>{kind.data}</h1>
         </div>
         <AdminLink className="button primary" href={`${path}/new`}>
-          Create {kind.data === 'banners' ? 'banner' : 'record'}
+          {kind.data === 'banners' ? 'Create banner' : 'Create record'}
         </AdminLink>
       </div>
       <section className="admin-panel">

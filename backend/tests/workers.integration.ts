@@ -30,18 +30,19 @@ import { createLogger } from '../src/shared/utils/logger.js';
 import { migrate } from '../src/scripts/migrate.js';
 import { rfqRecord } from './fixtures/rfq.js';
 import { quotationVersionFixture, pdfFixture } from './fixtures/commercial.js';
-import { validEnv } from './helpers/env.js';
+import { s3EnvSettings, validEnv } from './helpers/env.js';
 
 const databaseName = `worker_test_${randomUUID().replaceAll('-', '').slice(0, 18)}`;
 const env = loadEnv({
   ...validEnv,
+  ...s3EnvSettings,
   RESEND_API_KEY: 'test-resend',
   BREVO_API_KEY: 'test-brevo',
   EMAIL_FROM: 'MedAxis <sender@example.test>',
   EMAIL_REPLY_DOMAIN: 'reply.example.test',
   QUOTATION_TOKEN_ENCRYPTION_KEY: 'de'.repeat(32),
   QUOTATION_TOKEN_KEY_ID: 'test-delivery',
-  R2_BUCKET_PRESCRIPTIONS: 'test-private-medical',
+  S3_BUCKET_PRESCRIPTIONS: 'test-private-medical',
 });
 const logger = createLogger({ silent: true });
 const fetcher = vi.fn<typeof fetch>();
@@ -107,7 +108,7 @@ async function prescription(extra: Record<string, unknown> = {}) {
   return PrescriptionModel.create({
     rfq_id: rfqId,
     customer_id: customerId,
-    r2_storage_key: `prescriptions/${randomUUID()}.enc`,
+    object_key: `prescriptions/s3/${randomUUID()}.enc`,
     mime_type: 'application/pdf',
     file_size_bytes: 100,
     encryption: { algorithm: 'aes-256-gcm', key_id: 'test-v1', iv: 'test-iv', auth_tag: 'test-tag' },
@@ -403,7 +404,7 @@ describe('expiry, reminders and medical purge', () => {
     await QuotationVersionModel.updateOne({ _id: quote.data._id }, { $set: { status: 'PAYMENT_RECEIVED' } });
     expect(await job('RESERVATION_DAY3')).toBe(0);
   });
-  it('deletes R2 first, clears keys only after confirmation, and prevents two workers deleting one leased row twice', async () => {
+  it('deletes from S3 before clearing metadata and prevents two workers deleting one leased row twice', async () => {
     const rx = await prescription();
     let deletionStarted!: () => void;
     let confirmDeletion!: () => void;
@@ -423,7 +424,7 @@ describe('expiry, reminders and medical purge', () => {
     remove.mockImplementation(async () => {
       deletionStarted();
       await confirmation;
-      order.push('R2_CONFIRMED');
+      order.push('S3_CONFIRMED');
     });
     const purge = createPrescriptionPurgeJob(env, logger, storage);
     const runs = [purge(), purge()];
@@ -432,12 +433,12 @@ describe('expiry, reminders and medical purge', () => {
       await Promise.race([
         started,
         settled.then(() => {
-          throw new Error('Purge workers finished before attempting R2 deletion');
+          throw new Error('Purge workers finished before attempting S3 deletion');
         }),
       ]);
       const inFlight = await PrescriptionModel.findById(rx._id).lean();
       expect(inFlight?.purge_status).toBe('DELETING');
-      expect(inFlight?.r2_storage_key).toBe(rx.r2_storage_key);
+      expect(inFlight?.object_key).toBe(rx.object_key);
       expect(inFlight?.encryption).toBeDefined();
       expect(await AuditLogModel.countDocuments({ action_type: 'PRESCRIPTION_PURGED' })).toBe(0);
       expect(order).toEqual([]);
@@ -446,10 +447,10 @@ describe('expiry, reminders and medical purge', () => {
       expect(results.reduce((a, b) => a + b, 0)).toBe(1);
       expect(remove).toHaveBeenCalledTimes(1);
       expect(order).toContain('MONGO_PURGED');
-      expect(order.indexOf('MONGO_PURGED')).toBeGreaterThan(order.indexOf('R2_CONFIRMED'));
+      expect(order.indexOf('MONGO_PURGED')).toBeGreaterThan(order.indexOf('S3_CONFIRMED'));
       const row = await PrescriptionModel.findById(rx._id).lean();
       expect(row?.purge_status).toBe('PURGED');
-      expect(row?.r2_storage_key).toBeUndefined();
+      expect(row?.object_key).toBeUndefined();
       expect(row?.encryption).toBeUndefined();
       expect(await AuditLogModel.countDocuments({ action_type: 'PRESCRIPTION_PURGED' })).toBe(1);
     } finally {
@@ -460,12 +461,12 @@ describe('expiry, reminders and medical purge', () => {
   });
   it('keeps encrypted metadata on deletion failure, retries after restart and alerts for overdue failures', async () => {
     const rx = await prescription({ purge_scheduled_at: new Date(Date.now() - 2 * 3600000) });
-    remove.mockRejectedValueOnce(new Error('R2 unavailable with private diagnostics'));
+    remove.mockRejectedValueOnce(new Error('S3 unavailable with private diagnostics'));
     expect(await createPrescriptionPurgeJob(env, logger, storage)()).toBe(0);
     const failed = await PrescriptionModel.findById(rx._id).lean();
     expect(failed?.purge_status).toBe('PENDING');
     expect(failed?.encryption).toBeDefined();
-    expect(failed?.r2_storage_key).toBeDefined();
+    expect(failed?.object_key).toBeDefined();
     expect(await NotificationLogModel.countDocuments({ 'safe_payload.alert_code': 'PRESCRIPTION_PURGE_OVERDUE' })).toBe(
       1,
     );

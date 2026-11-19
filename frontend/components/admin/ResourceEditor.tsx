@@ -1,6 +1,7 @@
 'use client';
-import { useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import Image from 'next/image';
+import { Factory, ImageIcon, Layers, Pill } from 'lucide-react';
 import { apiRequest } from '../../lib/api-client';
 import { z } from 'zod';
 import {
@@ -10,6 +11,7 @@ import {
   genericBody,
   imageReceipt,
   manufacturerBody,
+  MAX_MANUFACTURER_LOGO_LENGTH,
   productBody,
   readResource,
   resourceName,
@@ -24,17 +26,71 @@ import { useAdminOperation } from '../../hooks/useAdminOperation';
 import { AdminOperationFeedback } from './AdminOperationFeedback';
 import { MasterPicker } from './MasterPicker';
 import { AdminLink } from './AdminShell';
+import { ProductEditor } from './ProductEditor';
+import { productSlug } from '../../lib/product-form';
+import { GenericIndicationsTranslation } from './GenericIndicationsTranslation';
 
-export function ResourceEditor({
+async function encodeMasterImage(file: File) {
+  await validateCatalogImage(file);
+  const bitmap = await createImageBitmap(file);
+  try {
+    const size = 500;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Image preview is unavailable.');
+    const scale = Math.min(size / bitmap.width, size / bitmap.height);
+    const width = bitmap.width * scale;
+    const height = bitmap.height * scale;
+    context.drawImage(bitmap, (size - width) / 2, (size - height) / 2, width, height);
+    const logo = canvas.toDataURL('image/webp', 0.85);
+    if (logo.length > MAX_MANUFACTURER_LOGO_LENGTH) throw new Error('Choose a smaller or simpler image.');
+    return logo;
+  } finally {
+    bitmap.close();
+  }
+}
+
+function savedChineseDescription(record: ResourceRecord | null) {
+  const value = record?.translations.zhCN;
+  return value && 'description' in value ? value.description ?? '' : '';
+}
+
+export function ResourceEditor(props: { kind: ResourceKind; initial: ResourceRecord | null; units: string[] }) {
+  const [sequence, setSequence] = useState(0);
+  const [saved, setSaved] = useState<{ id: string; name: string } | null>(null);
+  const created = (record: ResourceRecord) => {
+    setSaved({ id: record.id, name: resourceName(record) });
+    // A fresh editor resets both native fields and React state after a confirmed create.
+    setSequence((value) => value + 1);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+  const key = `${props.kind}:${props.initial?.id ?? `new-${sequence}`}`;
+  return <>
+    {!props.initial && saved && <div className="admin-feedback admin-created-feedback" role="status">
+      <p><strong>Saved successfully: {saved.name}.</strong> The form is ready for another entry.</p>
+      <AdminLink href={`/admin/catalog/${props.kind}/${saved.id}`} className="button secondary">View saved record</AdminLink>
+    </div>}
+    {props.kind === 'products'
+      ? <ProductEditor key={key} initial={props.initial && 'sku' in props.initial ? props.initial : null} units={props.units} onCreated={created} />
+      : <LegacyResourceEditor key={key} {...props} onCreated={created} />}
+  </>;
+}
+
+function LegacyResourceEditor({
   kind,
   initial,
   units,
+  onCreated,
 }: {
   kind: ResourceKind;
   initial: ResourceRecord | null;
   units: string[];
+  onCreated: (record: ResourceRecord) => void;
 }) {
   const { operation, state } = useAdminOperation();
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [row, setRow] = useState(initial);
   const [zh, setZh] = useState(!!initial?.translations.zhCN);
   const [review, setReview] = useState(!!(initial && 'review_metadata' in initial && initial.review_metadata));
@@ -43,6 +99,41 @@ export function ResourceEditor({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadUnknown, setUploadUnknown] = useState(false);
+  const [selectedLogo, setSelectedLogo] = useState<{ url: string; name: string } | null>();
+  const [logoError, setLogoError] = useState('');
+  const [preparingLogo, setPreparingLogo] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [genericIndications, setGenericIndications] = useState(initial && 'therapeutic_indications' in initial ? initial.therapeutic_indications?.join('\n') ?? '' : '');
+  const [chineseDescription, setChineseDescription] = useState(savedChineseDescription(initial));
+  const [translationBusy, setTranslationBusy] = useState(false);
+  const [translationVersion, setTranslationVersion] = useState(0);
+  const translated = useCallback(() => {
+    const review = formRef.current?.querySelector<HTMLInputElement>('input[data-claims-review]');
+    if (review) review.checked = false;
+  }, []);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const errorFor = (path: string) => fieldErrors[path] ? <p className="form-error" role="alert">{fieldErrors[path]}</p> : null;
+  function checkInput<T>(schema: z.ZodType<T>, input: unknown): T {
+    const result = schema.safeParse(input);
+    if (!result.success) setFieldErrors(Object.fromEntries(result.error.issues.map((issue) => {
+      const path = issue.path.join('.');
+      return [path.startsWith('therapeutic_indications') ? 'therapeutic_indications' : path,
+        path.startsWith('therapeutic_indications') ? 'Use up to 5000 characters in total and at most 100 entries.'
+          : path.endsWith('.slug') ? 'Use a single page slug with words separated by hyphens, or leave it blank to generate one from the name.'
+          : path.endsWith('.name') ? 'Enter the name for this language.' : issue.message];
+    })));
+    return validatedInput(schema, input);
+  }
+  const manufacturer = kind === 'manufacturers';
+  const generic = kind === 'generics';
+  const category = kind === 'categories';
+  const masterForm = manufacturer || generic || category;
+  const masterLabel = manufacturer ? 'Manufacturer' : category ? 'Category' : 'Generic';
+  const imageLabel = manufacturer ? 'Manufacturer logo' : `${masterLabel} picture`;
+  const imageInputId = manufacturer ? 'manufacturer-logo' : `${masterLabel.toLowerCase()}-picture`;
+  const chineseFieldsId = `${masterLabel.toLowerCase()}-chinese-fields`;
+  const savedLogo = row && 'logo_data_url' in row ? row.logo_data_url : undefined;
+  const logoPreview = selectedLogo === undefined ? savedLogo : selectedLogo?.url;
   const product = row && 'sku' in row ? row : null;
   const master = row && 'is_active' in row && 'slug' in row.translations.en ? row : null;
   const banner = row && 'link_path' in row ? row : null;
@@ -59,10 +150,17 @@ export function ResourceEditor({
       const next = await readResource(kind, row.id);
       if (next.updated_at !== row.updated_at) operation.reconcileAdvancedVersion();
       setRow(next);
+      if (generic) {
+        setGenericIndications('therapeutic_indications' in next ? next.therapeutic_indications?.join('\n') ?? '' : '');
+        setChineseDescription(savedChineseDescription(next));
+        setTranslationVersion((old) => old + 1);
+      }
     }
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (preparingLogo || translationBusy) return;
+    setFieldErrors({});
     const form = new FormData(event.currentTarget);
     const optional = (key: string) => String(form.get(key) ?? '').trim() || undefined;
     const checked = (key: string) => form.get(key) === 'on';
@@ -88,6 +186,8 @@ export function ResourceEditor({
             const value = optional(`${lang}_${key}`);
             if (value) result[key] = value;
           }
+          if (masterForm && (result.slug || result.name))
+            result.slug = productSlug(result.slug || result.name || '');
           return result;
         };
         const content = {
@@ -142,24 +242,25 @@ export function ResourceEditor({
           };
           body =
             kind === 'manufacturers'
-              ? validatedInput(manufacturerBody, {
+              ? checkInput(manufacturerBody, {
                   ...base,
-                  country: String(form.get('country')).toUpperCase(),
                   certifications: String(form.get('certifications') ?? '')
                     .split('\n')
                     .map((item) => item.trim())
                     .filter(Boolean),
+                  ...(selectedLogo !== undefined ? { logo_data_url: selectedLogo?.url ?? null } : {}),
                 })
               : kind === 'generics'
-                ? validatedInput(genericBody, {
+                ? checkInput(genericBody, {
                     ...base,
                     therapeutic_indications: String(form.get('therapeutic_indications') ?? '')
                       .split('\n')
                       .map((item) => item.trim())
                       .filter(Boolean),
                   })
-                : validatedInput(categoryBody, {
+                : checkInput(categoryBody, {
                     ...base,
+                    ...(selectedLogo !== undefined ? { logo_data_url: selectedLogo?.url ?? null } : {}),
                     sort_order: Number(form.get('sort_order')),
                   });
         }
@@ -173,10 +274,24 @@ export function ResourceEditor({
       },
       async () => undefined,
       (result) => {
-        setRow(result);
-        if (!row) window.location.assign(`/admin/catalog/${kind}/${result.id}`);
+        if (!row) onCreated(result);
+        else {
+          setRow(result);
+          setSelectedLogo(undefined);
+        }
       },
     );
+  }
+  async function chooseLogo(file: File) {
+    setPreparingLogo(true);
+    setLogoError('');
+    try {
+      setSelectedLogo({ url: await encodeMasterImage(file), name: file.name });
+    } catch {
+      setLogoError('Choose a readable JPEG, PNG or WebP image up to 5 MiB.');
+    } finally {
+      setPreparingLogo(false);
+    }
   }
   async function upload(file: File) {
     if (uploading || uploadUnknown) return;
@@ -187,7 +302,7 @@ export function ResourceEditor({
       const form = new FormData();
       form.set('image', file);
       const result = await adminMultipart('/api/admin/catalog/images', form, imageReceipt);
-      setKeys((current) => [...new Set([...current, result.r2_object_key])].slice(0, 20));
+      setKeys((current) => [...new Set([...current, result.object_key])].slice(0, 20));
       setReceipt(result);
     } catch (error: unknown) {
       setUploadError(
@@ -200,7 +315,9 @@ export function ResourceEditor({
       setUploading(false);
     }
   }
-  const disabled = state.busy || state.blocked || uploading;
+  const disabled = !ready || state.busy || state.blocked || uploading || preparingLogo;
+  const languages: ('en' | 'zhCN')[] = masterForm ? [] : ['en'];
+  if (zh && !masterForm) languages.push('zhCN');
   const translationFields =
     kind === 'banners'
       ? ['title', 'body']
@@ -219,10 +336,10 @@ export function ResourceEditor({
         : ['name', 'slug', 'description', 'seo_title', 'meta_description'];
   return (
     <>
-      <div className="admin-page-heading">
+      <div className={masterForm ? 'admin-page-heading admin-manufacturer-heading' : 'admin-page-heading'}>
         <div>
-          <AdminLink href={`/admin/catalog/${kind}`}>← Browse {kind}</AdminLink>
-          <h1>{row ? `Edit ${resourceName(row)}` : kind === 'products' ? 'Add New Product' : `Create ${kind}`}</h1>
+          {!masterForm && <AdminLink href={`/admin/catalog/${kind}`}>← Browse {kind}</AdminLink>}
+          <h1>{masterForm && (manufacturer ? <Factory size={26} aria-hidden="true" /> : category ? <Layers size={26} aria-hidden="true" /> : <Pill size={26} aria-hidden="true" />)}{row ? `Edit ${resourceName(row)}` : kind === 'products' ? 'Add New Product' : masterForm ? `Add New ${masterLabel}` : `Create ${kind}`}</h1>
         </div>
         {row && (
           <button className="button secondary" disabled={state.busy} onClick={() => void operation.refresh(refresh)}>
@@ -230,9 +347,63 @@ export function ResourceEditor({
           </button>
         )}
       </div>
-      <AdminOperationFeedback state={state} />
-      <form className="stack-form admin-panel" onSubmit={submit}>
+      {!masterForm && <AdminOperationFeedback state={state} />}
+      <form ref={formRef} className={masterForm ? 'stack-form admin-panel admin-manufacturer-form' : 'stack-form admin-panel'} onSubmit={submit} onReset={masterForm ? () => {
+        setSelectedLogo(undefined);
+        setLogoError('');
+        setZh(!!row?.translations.zhCN);
+        setGenericIndications(row && 'therapeutic_indications' in row ? row.therapeutic_indications?.join('\n') ?? '' : '');
+        setChineseDescription(savedChineseDescription(row));
+        setTranslationVersion((old) => old + 1);
+        setFieldErrors({});
+      } : undefined}>
         <fieldset disabled={disabled}>
+          {masterForm && <>
+            <div className="admin-manufacturer-language">English (EN)</div>
+            <div className={generic ? 'admin-generic-basics' : 'admin-manufacturer-basics'}>
+              <div className={generic ? 'admin-manufacturer-fields admin-form-grid' : 'admin-manufacturer-fields'}>
+                <label>{masterLabel} name (EN)
+                  <input name="en_name" required maxLength={200} placeholder={manufacturer ? 'e.g. Beacon Pharmaceuticals' : 'e.g. Osimertinib'} defaultValue={fieldValue('en', 'name')} />
+                  {errorFor('translations.en.name')}
+                </label>
+                {!generic && <div>
+                  <label htmlFor={imageInputId}>{imageLabel} <small>1:1 · 500 × 500 px</small></label>
+                  <div className="admin-manufacturer-file">
+                    <span>{selectedLogo?.name || (logoPreview ? manufacturer ? 'Saved logo' : 'Saved picture' : 'Choose file')}</span>
+                    <label className="admin-manufacturer-browse" htmlFor={imageInputId}>Browse</label>
+                    <input id={imageInputId} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = '';
+                      if (file) void chooseLogo(file);
+                    }} />
+                  </div>
+                  {logoError && <p className="form-error" role="alert">{logoError}</p>}
+                  {preparingLogo && <p role="status">{manufacturer ? 'Preparing logo…' : 'Preparing picture…'}</p>}
+                </div>}
+                {generic && <label>Therapeutic indications (one per line)
+                  <textarea name="therapeutic_indications" rows={6} maxLength={5000} placeholder="Enter verified therapeutic indications. Paragraphs are supported."
+                    value={genericIndications} onChange={(event) => setGenericIndications(event.target.value)} />
+                  <small>Up to 5000 characters in total. Each new line starts another entry.</small>
+                  {errorFor('therapeutic_indications')}
+                </label>}
+              </div>
+              {!generic && <div className="admin-manufacturer-preview">
+                <div className="admin-manufacturer-image">
+                  {logoPreview
+                    ? <Image src={logoPreview} alt={`${imageLabel} preview`} width={220} height={220} unoptimized />
+                    : <ImageIcon size={48} aria-hidden="true" />}
+                </div>
+                {logoPreview && (
+                  <button type="button" className="admin-manufacturer-remove" onClick={() => {
+                    setSelectedLogo(selectedLogo ? undefined : null);
+                    setLogoError('');
+                  }}>
+                    {selectedLogo && savedLogo ? manufacturer ? 'Discard new logo' : 'Discard new picture' : manufacturer ? 'Remove logo' : 'Remove picture'}
+                  </button>
+                )}
+              </div>}
+            </div>
+          </>}
           {kind === 'products' && (
             <>
               <div className="admin-form-grid">
@@ -378,38 +549,6 @@ export function ResourceEditor({
                 />
                 Active
               </label>
-              {kind === 'manufacturers' && (
-                <>
-                  <label>
-                    Country (ISO code)
-                    <input
-                      name="country"
-                      required
-                      pattern="[A-Za-z]{2}"
-                      maxLength={2}
-                      defaultValue={master && 'country' in master ? master.country : ''}
-                    />
-                  </label>
-                  <label>
-                    Actual certifications (one per line)
-                    <textarea
-                      name="certifications"
-                      defaultValue={master && 'certifications' in master ? master.certifications?.join('\n') : ''}
-                    />
-                  </label>
-                </>
-              )}
-              {kind === 'generics' && (
-                <label>
-                  Therapeutic indications (one per line)
-                  <textarea
-                    name="therapeutic_indications"
-                    defaultValue={
-                      master && 'therapeutic_indications' in master ? master.therapeutic_indications?.join('\n') : ''
-                    }
-                  />
-                </label>
-              )}
               {(kind === 'categories' || kind === 'banners') && (
                 <label>
                   Sort order
@@ -460,11 +599,74 @@ export function ResourceEditor({
               )}
             </div>
           )}
-          <label className="admin-check">
-            <input type="checkbox" checked={zh} onChange={(event) => setZh(event.currentTarget.checked)} />
-            Include Simplified Chinese translation
-          </label>
-          {(['en', ...(zh ? (['zhCN'] as const) : [])] as const).map((lang) => (
+          {masterForm && <details className="admin-manufacturer-optional">
+            <summary>Additional details</summary>
+            <div className="admin-form-grid">
+              <label>Slug<input name="en_slug" defaultValue={fieldValue('en', 'slug')} maxLength={200} placeholder="Generated from the name" onBlur={(event) => { event.currentTarget.value = productSlug(event.currentTarget.value); }} />{errorFor('translations.en.slug')}<small>One URL slug, not a list of brand names. Leave blank to generate from the name.</small></label>
+              <label>Description<textarea name="en_description" defaultValue={fieldValue('en', 'description')} maxLength={5000} /></label>
+              <label>SEO title<input name="en_seo_title" defaultValue={fieldValue('en', 'seo_title')} maxLength={200} /></label>
+              <label>Meta description<input name="en_meta_description" defaultValue={fieldValue('en', 'meta_description')} maxLength={500} /></label>
+              {manufacturer && <label>Certifications (one per line)<textarea name="certifications" defaultValue={master && 'certifications' in master ? master.certifications?.join('\n') : ''} /></label>}
+            </div>
+          </details>}
+          {masterForm ? (
+            <section className="admin-manufacturer-chinese" aria-label="Simplified Chinese translation">
+              <div className="admin-manufacturer-chinese-heading">
+                <h2>Simplified Chinese <span lang="zh-CN">简体中文</span></h2>
+                <label className="admin-check">
+                  <input type="checkbox" checked={zh} aria-controls={chineseFieldsId}
+                    onChange={(event) => setZh(event.currentTarget.checked)} />
+                  Include Simplified Chinese translation
+                </label>
+                {!zh && (
+                  <p className="small muted">
+                    {row?.translations.zhCN
+                      ? 'Saving with this option off removes the saved Chinese translation.'
+                      : 'The Chinese catalog uses the English information when this option is off.'}
+                  </p>
+                )}
+              </div>
+              <fieldset className="admin-manufacturer-chinese-fields" id={chineseFieldsId}
+                aria-label={`Chinese ${masterLabel.toLowerCase()} details`} hidden={!zh} disabled={!zh}>
+                <div className="admin-manufacturer-chinese-grid">
+                  <label><span>{masterLabel} name (ZH) <small className="admin-manufacturer-field-required">Required</small></span>
+                    <input name="zhCN_name" required maxLength={200} lang="zh-CN" defaultValue={fieldValue('zhCN', 'name')} />
+                    {errorFor('translations.zhCN.name')}
+                  </label>
+                  <label><span>Page slug <small>Optional</small></span>
+                    <input name="zhCN_slug" maxLength={200} placeholder="Generated from the Chinese name"
+                      onBlur={(event) => { event.currentTarget.value = productSlug(event.currentTarget.value); }}
+                      defaultValue={fieldValue('zhCN', 'slug')} />
+                    <small>One URL slug, not a list of brand names. Leave blank to generate from the Chinese name.</small>
+                    {errorFor('translations.zhCN.slug')}
+                  </label>
+                </div>
+                {generic ? <GenericIndicationsTranslation key={translationVersion} enabled={zh} disabled={disabled} indications={genericIndications} value={chineseDescription}
+                  onChange={setChineseDescription} onBusy={setTranslationBusy} onGenerated={translated} /> : <label><span>Description <small>Optional</small></span>
+                  <textarea name="zhCN_description" rows={4} maxLength={5000} lang="zh-CN"
+                    defaultValue={fieldValue('zhCN', 'description')} />
+                </label>}
+                <details className="admin-manufacturer-chinese-seo">
+                  <summary>Search engine details <small>Optional</small></summary>
+                  <div className="admin-manufacturer-chinese-grid">
+                    <label>SEO title
+                      <input name="zhCN_seo_title" maxLength={200} lang="zh-CN" defaultValue={fieldValue('zhCN', 'seo_title')} />
+                    </label>
+                    <label>Meta description
+                      <textarea name="zhCN_meta_description" rows={2} maxLength={500} lang="zh-CN"
+                        defaultValue={fieldValue('zhCN', 'meta_description')} />
+                    </label>
+                  </div>
+                </details>
+              </fieldset>
+            </section>
+          ) : (
+            <label className="admin-check">
+              <input type="checkbox" checked={zh} onChange={(event) => setZh(event.currentTarget.checked)} />
+              Include Simplified Chinese translation
+            </label>
+          )}
+          {languages.map((lang) => (
             <fieldset className="admin-translation" key={lang}>
               <legend>{lang === 'en' ? 'English' : '简体中文'}</legend>
               <div className="admin-form-grid">
@@ -492,9 +694,16 @@ export function ResourceEditor({
             </fieldset>
           ))}
           <label className="admin-check">
-            <input type="checkbox" required />I verified these details and public-facing claims.
+            <input type="checkbox" data-claims-review required />I verified these details and public-facing claims.
           </label>
-          <button className="button primary">{state.busy ? 'Saving…' : row ? 'Save changes' : 'Create record'}</button>
+          {masterForm && <AdminOperationFeedback state={state} />}
+          {masterForm && state.problem?.code === 'CATALOG_SLUG_CONFLICT' && (
+            <p><AdminLink href={`/admin/catalog/${kind}`}>Open existing {kind}</AdminLink> to edit the saved {masterLabel.toLowerCase()}.</p>
+          )}
+          {masterForm ? <div className="admin-manufacturer-actions">
+            <button type="reset" className="button secondary">Reset</button>
+            <button className="button primary" disabled={translationBusy}>{translationBusy ? 'Translating…' : state.busy ? 'Saving…' : row ? 'Save changes' : 'Submit'}</button>
+          </div> : <button className="button primary">{state.busy ? 'Saving…' : row ? 'Save changes' : 'Create record'}</button>}
         </fieldset>
       </form>
       <p className="small muted">

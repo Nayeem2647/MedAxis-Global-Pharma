@@ -3,6 +3,7 @@ import type { AppEnv } from '../../config/env.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { escapeRegex } from '../../shared/utils/content.js';
 import { UrlRedirectModel } from '../cms/cms.schema.js';
+import { publicImageBaseUrl } from '../storage/storage.service.js';
 import { ProductModel } from './catalog.schema.js';
 import {
   PUBLIC_MASTER_PROJECTION,
@@ -36,7 +37,7 @@ function joins(): PipelineStage[] {
           from: kind === 'manufacturer' ? 'manufacturers' : 'generics',
           localField: `${kind}_id`,
           foreignField: '_id',
-          pipeline: [{ $match: { is_active: true } }, { $project: PUBLIC_MASTER_PROJECTION }],
+          pipeline: [{ $match: { is_active: true, deleted_at: { $exists: false } } }, { $project: PUBLIC_MASTER_PROJECTION }],
           as: `${kind}_profile`,
         },
       },
@@ -48,7 +49,7 @@ function joins(): PipelineStage[] {
         localField: 'category_ids',
         foreignField: '_id',
         pipeline: [
-          { $match: { is_active: true } },
+          { $match: { is_active: true, deleted_at: { $exists: false } } },
           { $project: PUBLIC_MASTER_PROJECTION },
           { $sort: { sort_order: 1, _id: 1 } },
         ],
@@ -60,7 +61,7 @@ function joins(): PipelineStage[] {
 }
 export function createPublicCatalogService(env: AppEnv) {
   async function filters(query: CatalogQuery) {
-    const match: Record<string, unknown> = { status: 'PUBLISHED' };
+    const match: Record<string, unknown> = { status: 'PUBLISHED', deleted_at: { $exists: false } };
     for (const [parameter, kind, field] of [
       ['manufacturer', 'manufacturers', 'manufacturer_id'],
       ['generic', 'generics', 'generic_id'],
@@ -68,7 +69,7 @@ export function createPublicCatalogService(env: AppEnv) {
     ] as const) {
       if (!query[parameter]) continue;
       const record = await masterModel(kind)
-        .findOne({ is_active: true, ...localizedSlug(query.locale, query[parameter]) })
+        .findOne({ is_active: true, deleted_at: { $exists: false }, ...localizedSlug(query.locale, query[parameter]) })
         .select({ _id: 1 })
         .lean();
       match[field] = record?._id ?? '__no_match__';
@@ -79,7 +80,7 @@ export function createPublicCatalogService(env: AppEnv) {
   }
 
   async function list(query: CatalogQuery, extra: Record<string, unknown> = {}) {
-    const match: Record<string, unknown> = { ...(await filters(query)), ...extra, status: 'PUBLISHED' };
+    const match: Record<string, unknown> = { ...(await filters(query)), ...extra, status: 'PUBLISHED', deleted_at: { $exists: false } };
     const prefix: PipelineStage[] = [];
     if (query.q) {
       if (env.isProduction)
@@ -140,7 +141,8 @@ export function createPublicCatalogService(env: AppEnv) {
     ]).option({ maxTimeMS: 10_000 });
     const result = results[0];
     return {
-      products: (result?.products ?? []).map((record) => publicProduct(record, query.locale, env.R2_PUBLIC_BASE_URL)),
+      products: (result?.products ?? []).map((record) =>
+        publicProduct(record, query.locale, publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL)),
       total: result?.total[0]?.count ?? 0,
       facets: {
         dosage_forms: (result?.dosage ?? []).map((facet) => ({ name: facet._id, count: facet.count })),
@@ -167,7 +169,7 @@ export function createPublicCatalogService(env: AppEnv) {
       kind === 'products'
         ? (
             await ProductModel.aggregate<{ _id: string }>([
-              { $match: { status: 'PUBLISHED', ...localizedSlug(targetLocale, targetSlug) } },
+              { $match: { status: 'PUBLISHED', deleted_at: { $exists: false }, ...localizedSlug(targetLocale, targetSlug) } },
               { $project: { _id: 1, manufacturer_id: 1, generic_id: 1, category_ids: 1 } },
               ...joins(),
               { $limit: 1 },
@@ -175,7 +177,7 @@ export function createPublicCatalogService(env: AppEnv) {
             ]).option({ maxTimeMS: 10_000 })
           )[0]
         : await masterModel(kind)
-            .findOne({ is_active: true, ...localizedSlug(targetLocale, targetSlug) })
+            .findOne({ is_active: true, deleted_at: { $exists: false }, ...localizedSlug(targetLocale, targetSlug) })
             .select({ _id: 1 })
             .lean();
     if (!active) throw AppError.notFound();
@@ -184,17 +186,17 @@ export function createPublicCatalogService(env: AppEnv) {
 
   async function product(slug: string, locale: Locale) {
     const rows = await ProductModel.aggregate<JoinedProduct>([
-      { $match: { status: 'PUBLISHED', ...localizedSlug(locale, slug) } },
+      { $match: { status: 'PUBLISHED', deleted_at: { $exists: false }, ...localizedSlug(locale, slug) } },
       { $project: PUBLIC_PRODUCT_PROJECTION },
       ...joins(),
       { $limit: 1 },
     ]);
-    return rows[0] ? publicProduct(rows[0], locale, env.R2_PUBLIC_BASE_URL) : redirect('products', slug, locale);
+    return rows[0] ? publicProduct(rows[0], locale, publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL) : redirect('products', slug, locale);
   }
 
   async function master(kind: MasterKind, slug: string, query: CatalogQuery) {
     const record = await masterModel(kind)
-      .findOne({ is_active: true, ...localizedSlug(query.locale, slug) })
+      .findOne({ is_active: true, deleted_at: { $exists: false }, ...localizedSlug(query.locale, slug) })
       .select(PUBLIC_MASTER_PROJECTION)
       .lean<MasterRecord>();
     if (!record) return redirect(kind, slug, query.locale);
@@ -212,14 +214,14 @@ export function createPublicCatalogService(env: AppEnv) {
     const projection = { _id: 0, 'translations.en.slug': 1, 'translations.zhCN.slug': 1, updated_at: 1 };
     const [products, generics, manufacturers, categories] = await Promise.all([
       ProductModel.aggregate<Pick<JoinedProduct, 'translations' | 'updated_at'>>([
-        { $match: { status: 'PUBLISHED' } },
+        { $match: { status: 'PUBLISHED', deleted_at: { $exists: false } } },
         { $project: { ...projection, _id: 1, manufacturer_id: 1, generic_id: 1, category_ids: 1 } },
         ...joins(),
         { $sort: { _id: 1 } },
         { $project: projection },
       ]).option({ maxTimeMS: 10_000 }),
       ...(['generics', 'manufacturers', 'categories'] as const).map((kind) =>
-        masterModel(kind).find({ is_active: true }).select(projection).sort({ _id: 1 }).lean(),
+        masterModel(kind).find({ is_active: true, deleted_at: { $exists: false } }).select(projection).sort({ _id: 1 }).lean(),
       ),
     ]);
     const pair = (record: { translations: { en: { slug: string }; zhCN?: { slug: string } }; updated_at: Date }) => ({

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { cleanHtml } from '../../shared/utils/content.js';
+import { MAX_MANUFACTURER_LOGO_LENGTH } from './catalog.schema.js';
 
 export const uuid = z.uuid().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+export const catalogDelete = z.object({ expected_updated_at: z.iso.datetime({ offset: true }) }).strict();
 export const slug = z
   .string()
   .trim()
@@ -37,6 +39,8 @@ export const reviewMetadata = z
     reviewer_name: text(),
   })
   .strict();
+export const productImageKey = z.string().max(500).regex(/^products\/(?!(?:local|s3)\/(?:manufacturers|generics|categories)\/)[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/);
+export const productVideoKey = z.string().max(500).regex(/^products\/(?:local|s3)\/videos\/[a-zA-Z0-9_-]+\.(?:mp4|webm)$/);
 export const productFields = z
   .object({
     sku: text().transform((value) => value.toUpperCase()),
@@ -59,10 +63,12 @@ export const productFields = z
         z
           .string()
           .max(500)
-          .regex(/^products\/[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/),
+          .regex(/^products\/(?!(?:local|s3)\/(?:manufacturers|generics|categories)\/)[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/),
       )
-      .max(20)
+      .max(6)
       .optional(),
+    video_key: productVideoKey.nullable().optional(),
+    seo_image_key: productImageKey.nullable().optional(),
     status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']),
     review_metadata: reviewMetadata.optional(),
   })
@@ -71,12 +77,22 @@ export const productCreate = productFields.extend({
   cold_chain_required: z.boolean().default(false),
   status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).default('DRAFT'),
 });
+const productTranslationPatch = productTranslation.partial().extend({
+  description: productTranslation.shape.description.nullable(),
+  seo_title: productTranslation.shape.seo_title.nullable(),
+  meta_description: productTranslation.shape.meta_description.nullable(),
+  indication_summary: productTranslation.shape.indication_summary.nullable(),
+  usage_notes: productTranslation.shape.usage_notes.nullable(),
+  storage_condition: productTranslation.shape.storage_condition.nullable(),
+  image_alt_text: productTranslation.shape.image_alt_text.nullable(),
+});
 export const productPatch = productFields
   .partial()
   .extend({
     review_metadata: reviewMetadata.nullable().optional(),
+    storage_condition: text(200).nullable().optional(),
     translations: z
-      .object({ en: productTranslation.partial().optional(), zhCN: productTranslation.partial().nullable().optional() })
+      .object({ en: productTranslationPatch.optional(), zhCN: productTranslationPatch.nullable().optional() })
       .strict()
       .optional(),
   })
@@ -90,13 +106,22 @@ export const masterBodies = {
   manufacturers: z
     .object({
       ...commonMaster,
-      country: z.string().regex(/^[A-Z]{2}$/),
+      country: z.string().regex(/^[A-Z]{2}$/).optional(),
       certifications: z.array(text()).max(100).optional(),
+      logo_data_url: z.string().max(MAX_MANUFACTURER_LOGO_LENGTH).regex(/^data:image\/(?:webp|png);base64,/).nullable().optional(),
     })
     .strict(),
-  generics: z.object({ ...commonMaster, therapeutic_indications: z.array(text()).max(100).optional() }).strict(),
+  generics: z.object({
+    ...commonMaster,
+    therapeutic_indications: z.array(text(5000)).max(100).refine((items) => items.join('\n').length <= 5000, 'Therapeutic indications must total 5000 characters or fewer.').optional(),
+    logo_data_url: z.string().max(MAX_MANUFACTURER_LOGO_LENGTH).regex(/^data:image\/(?:webp|png);base64,/).nullable().optional(),
+  }).strict(),
   categories: z
-    .object({ ...commonMaster, sort_order: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0) })
+    .object({
+      ...commonMaster,
+      sort_order: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
+      logo_data_url: z.string().max(MAX_MANUFACTURER_LOGO_LENGTH).regex(/^data:image\/(?:webp|png);base64,/).nullable().optional(),
+    })
     .strict(),
 };
 export const catalogQuery = z

@@ -10,16 +10,16 @@ export function plainText(html: string): string {
 }
 const text = z.string().min(1).max(500).transform(plainText);
 const content = z.string().max(5000).transform(plainText);
-const imageUrl = z.url().refine((value) => { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password; }, 'Expected a public HTTPS image URL.');
+const imageUrl = z.url().refine((value) => { const url = new URL(value); return !url.username && !url.password && (url.protocol === 'https:' || publicAssetUrl(value) !== null); }, 'Expected a public image URL.');
 export const alternateSlugsSchema = z.object({ en: slugSchema, zhCN: slugSchema.nullable() });
 export const masterSchema = z.object({
   id: z.uuid(), name: text, slug: slugSchema, alternate_slugs: alternateSlugsSchema,
   description: content.optional(), seo_title: text.optional(), meta_description: text.optional(),
   country: z.string().regex(/^[A-Z]{2}$/).optional(), certifications: z.array(text).max(100).optional(),
-  therapeutic_indications: z.array(text).max(100).optional(),
+  therapeutic_indications: z.array(z.string().min(1).max(5000).transform(plainText)).max(100).optional(),
 });
 const translationFields = {
-  brand_name: text, slug: slugSchema, description: content.optional(), seo_title: text.optional(), meta_description: text.optional(),
+  brand_name: text, slug: slugSchema, description: content.optional(), description_html: z.string().max(5000).optional(), seo_title: text.optional(), meta_description: text.optional(),
   indication_summary: content.optional(), usage_notes: content.optional(), storage_condition: text.optional(), image_alt_text: text.optional(),
 };
 const translationSchema = z.object(translationFields);
@@ -29,6 +29,8 @@ export const homeProductSchema = z.object({
   manufacturer: masterSchema, generic: masterSchema, categories: z.array(masterSchema),
   strength: text, dosage_form: text, pack_size: text, packaging_unit: z.string().min(1).max(40),
   cold_chain_required: z.boolean(), primary_image_url: imageUrl.nullable(), image_urls: z.array(imageUrl).max(20),
+  video_url: z.string().refine((value) => publicVideoUrl(value) !== null).optional(),
+  seo_image_url: imageUrl.optional(),
   review_metadata: z.object({ kind:z.enum(['TECHNICAL','MEDICAL']), reviewed_at:z.iso.datetime(), reviewer_name:text }).optional(),
 }).refine((product) => product.alternate_slugs.en === product.translations.en.slug
   && product.alternate_slugs.zhCN === (product.translations.zhCN?.slug ?? null)
@@ -65,6 +67,18 @@ export async function getHomeData(locale: Locale) {
   };
 }
 
+export function publicVideoUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.search || url.hash || !/^\/(?:v1\/public\/media\/)?products\/(?:local|s3)\/videos\/[a-zA-Z0-9_-]+\.(?:mp4|webm)$/.test(url.pathname)) return null;
+    const origins = ['https://cdn.medaxisglobalpharma.com', process.env.NEXT_PUBLIC_S3_PUBLIC_BASE_URL];
+    if (url.protocol === 'https:' && origins.some((origin) => origin?.replace(/\/$/, '') === url.origin)) return url.href;
+    if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_API_BASE_URL && url.origin === new URL(process.env.NEXT_PUBLIC_API_BASE_URL).origin && /^\/v1\/public\/media\/products\/(?:local|s3)\/videos\//.test(url.pathname)) return url.href;
+    return null;
+  } catch { return null; }
+}
+
 export function publicAssetUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   // Local, public raster assets are served directly; private routes and traversal
@@ -72,7 +86,21 @@ export function publicAssetUrl(value: string | null | undefined): string | null 
   if (/^\/images\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:avif|webp|png|jpe?g)$/.test(value)) return value;
   try {
     const url = new URL(value);
-    const origins = ['https://cdn.medaxisglobalpharma.com', process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL];
-    return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash && origins.includes(url.origin) ? url.href : null;
+    if (url.username || url.password || url.search || url.hash) return null;
+    const origins = ['https://cdn.medaxisglobalpharma.com', process.env.NEXT_PUBLIC_S3_PUBLIC_BASE_URL, process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL];
+    if (url.protocol === 'https:' && origins.some((origin) => origin?.replace(/\/$/, '') === url.origin)) {
+      return url.href;
+    }
+    if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_API_BASE_URL) {
+      const apiOrigin = new URL(process.env.NEXT_PUBLIC_API_BASE_URL).origin;
+      if (
+        url.origin === apiOrigin &&
+        ['http:', 'https:'].includes(url.protocol) &&
+        /^\/v1\/public\/media\/products\/(?:(?:local|s3)\/)?(?:(?:manufacturers|generics|categories|legacy)\/)?[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp)$/.test(url.pathname)
+      ) {
+        return url.href;
+      }
+    }
+    return null;
   } catch { return null; }
 }

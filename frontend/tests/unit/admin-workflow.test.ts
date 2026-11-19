@@ -37,6 +37,34 @@ describe('registered RFQ and quotation adapters', () => {
 });
 
 describe('admin business write recovery', () => {
+  it.each(['GENERIC_IMAGE_UPLOAD_FAILED', 'CATEGORY_IMAGE_UPLOAD_FAILED'])('keeps the form editable after %s without replaying the save', async (code) => {
+    const operation = new AdminOperation();
+    const refresh = vi.fn();
+    const save = vi.fn(async () => { throw new ApiError('Picture unavailable', { status: 503, code, responseValidated: true }); });
+    await operation.run(save, refresh);
+    expect(save).toHaveBeenCalledOnce();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(operation.getSnapshot()).toMatchObject({ busy: false, blocked: false, uncertain: false, problem: null });
+    expect(operation.getSnapshot().notice).toContain('Remove the selected picture');
+  });
+  it('explains duplicate catalog slugs and allows a corrected manual submission without reloading or replaying', async () => {
+    const operation = new AdminOperation();
+    const refresh = vi.fn();
+    await operation.run(async () => { throw new ApiError('Duplicate', {
+      status: 422, code: 'CATALOG_SLUG_CONFLICT', responseValidated: true,
+      details: [{ field: 'translations.en.slug', issue: 'Already used' }, { field: 'translations.zhCN.slug', issue: 'Already used' }],
+    }); }, refresh);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(operation.getSnapshot()).toMatchObject({ blocked: false, uncertain: false, problem: {
+      code: 'CATALOG_SLUG_CONFLICT', fields: ['translations.en.slug', 'translations.zhCN.slug'],
+    } });
+    expect(operation.getSnapshot().notice).toContain('existing record already uses this page slug');
+    const corrected = vi.fn(async () => undefined);
+    await operation.run(corrected, refresh);
+    expect(corrected).toHaveBeenCalledOnce();
+    expect(operation.getSnapshot().problem).toBeNull();
+  });
+
   it('synchronously suppresses duplicate writes and does not report committed writes as failed when refresh breaks', async () => {
     const operation = new AdminOperation(); let done: (() => void) | undefined; const work = vi.fn(() => new Promise<void>((resolve) => { done = resolve; })); const refresh = vi.fn(async () => { throw new Error('lost read'); }); const committed = vi.fn();
     const first = operation.run(work, refresh, committed); await operation.run(work, refresh, committed); expect(work).toHaveBeenCalledOnce(); done?.(); await first; expect(committed).toHaveBeenCalledOnce(); expect(operation.getSnapshot()).toMatchObject({ blocked: true, uncertain: false }); expect(operation.getSnapshot().notice).toContain('Saved.'); await operation.refresh(async () => undefined); expect(operation.getSnapshot().blocked).toBe(false);

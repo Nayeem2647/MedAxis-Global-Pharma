@@ -92,7 +92,7 @@ export async function prescriptionBlob(id: string, signal: AbortSignal): Promise
   if (!valid || !blob.size || blob.size > 5_242_880) throw new ApiError('Invalid prescription file.', { status: 502, code: 'INVALID_API_RESPONSE' }); return blob.type === mime ? blob : blob.slice(0, blob.size, mime);
 }
 
-export interface OperationState { busy: boolean; blocked: boolean; uncertain: boolean; notice: string; problem: { status: number; requestId?: string; fields: string[] } | null }
+export interface OperationState { busy: boolean; blocked: boolean; uncertain: boolean; notice: string; problem: { status: number; code?: string; requestId?: string; fields: string[] } | null }
 /** One synchronous lock per workspace; writes never replay on uncertain delivery. */
 export class AdminOperation {
   private locked = false;
@@ -102,7 +102,7 @@ export class AdminOperation {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   reconcileAdvancedVersion() { if (this.state.uncertain) this.update({ uncertain: false, blocked: false, notice: 'The authoritative version/state advanced. Review it before a distinct action; the original write was not replayed.' }); }
   private update(change: Partial<OperationState>) { this.state = { ...this.state, ...change }; this.listeners.forEach((listener) => listener()); }
-  private problem(error: unknown) { return { status: error instanceof ApiError ? error.status : 503, requestId: error instanceof ApiError && /^[\w-]{1,100}$/.test(error.requestId ?? '') ? error.requestId : undefined, fields: error instanceof ApiError ? error.details.map((detail) => detail.field).filter((field) => /^[\w.[\]-]{1,160}$/.test(field)) : [] }; }
+  private problem(error: unknown) { return { status: error instanceof ApiError ? error.status : 503, code: error instanceof ApiError && error.responseValidated ? error.code : undefined, requestId: error instanceof ApiError && /^[\w-]{1,100}$/.test(error.requestId ?? '') ? error.requestId : undefined, fields: error instanceof ApiError ? error.details.map((detail) => detail.field).filter((field) => /^[\w.[\]-]{1,160}$/.test(field)) : [] }; }
   async run<T>(work: () => Promise<T>, refresh: () => Promise<void>, committed?: (result: T) => void) {
     if (this.locked || this.state.blocked) return;
     this.locked = true; this.update({ busy: true, problem: null, notice: '' });
@@ -111,8 +111,20 @@ export class AdminOperation {
       try { await refresh(); this.update({ notice: 'Saved. Server state refreshed.', blocked: false }); }
       catch (error: unknown) { this.update({ notice: 'Saved. The latest state could not be loaded; use Refresh state.', blocked: true, problem: this.problem(error) }); }
     } catch (error: unknown) {
+      if (error instanceof ApiError && error.responseValidated &&
+          error.status === 503 && ['MANUFACTURER_LOGO_UPLOAD_FAILED', 'GENERIC_IMAGE_UPLOAD_FAILED', 'CATEGORY_IMAGE_UPLOAD_FAILED'].includes(error.code)) {
+        this.update({
+          blocked: false,
+          uncertain: false,
+          notice: error.code === 'MANUFACTURER_LOGO_UPLOAD_FAILED'
+            ? 'Manufacturer was not saved because logo storage is unavailable. Remove the selected logo and submit again, or retry when storage is available.'
+            : `${error.code === 'CATEGORY_IMAGE_UPLOAD_FAILED' ? 'Category' : 'Generic'} was not saved because picture storage is unavailable. Remove the selected picture and submit again, or retry when storage is available.`,
+        });
+        return;
+      }
       const definite = error instanceof ApiError && error.responseValidated && [400, 422].includes(error.status);
-      this.update({ problem: this.problem(error), blocked: !definite, uncertain: !definite, notice: definite ? 'Correct the listed form fields before submitting again.' : 'Delivery was not confirmed. Refreshing server state; this action will not be replayed.' });
+      const duplicateSlug = definite && error instanceof ApiError && error.code === 'CATALOG_SLUG_CONFLICT';
+      this.update({ problem: this.problem(error), blocked: !definite, uncertain: !definite, notice: duplicateSlug ? 'An existing record already uses this page slug. Open that record to edit it, or choose a different slug for a different record.' : definite ? 'Correct the listed form fields before submitting again.' : 'Delivery was not confirmed. Refreshing server state; this action will not be replayed.' });
       if (!definite) {
         try { await refresh(); if (error instanceof ApiError && error.responseValidated && error.status === 409) this.update({ blocked: false, uncertain: false, notice: 'The server rejected a conflict. Review the refreshed version before a manual action.' }); }
         catch { /* Keep the original failure and locked business action. */ }

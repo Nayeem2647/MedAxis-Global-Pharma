@@ -13,6 +13,22 @@ export const loginResult = z.discriminatedUnion('requires_2fa', [
   mfaResult.extend({ requires_2fa: z.literal(false) }),
 ]);
 export const logoutResult = z.object({ logged_out: z.literal(true) });
+export const MAX_ADMIN_AVATAR_LENGTH = 262_144;
+export const adminProfileSchema = z.object({
+  id: z.uuidv4(), email: z.email(), display_name: z.string(), phone_number: z.string(),
+  avatar_url: z.preprocess((value) => value === '' ? null : value, z.url().max(MAX_ADMIN_AVATAR_LENGTH).nullable()),
+});
+export const adminProfileBody = z.strictObject({
+  email: z.email().max(200), display_name: z.string().trim().min(1).max(120), phone_number: z.string().trim().max(25),
+  avatar_url: z.string().min(1).max(MAX_ADMIN_AVATAR_LENGTH).nullable().optional(),
+  current_password: z.string().min(1).max(1024).optional(),
+});
+export const adminPasswordBody = z.strictObject({ current_password: z.string().min(1).max(1024), new_password: z.string().min(12).max(1024), confirm_password: z.string().min(12).max(1024) }).refine((value) => value.new_password === value.confirm_password);
+export const forgotPasswordBody = z.strictObject({ email: z.string().trim().email().max(200) });
+export const forgotPasswordResult = z.object({ requested: z.literal(true) });
+export const resetPasswordBody = z.strictObject({ token: z.string().trim().min(16).max(256), new_password: z.string().min(12).max(1024), confirm_password: z.string().min(12).max(1024) }).refine((value) => value.new_password === value.confirm_password);
+export const resetPasswordResult = z.object({ reset: z.literal(true) });
+export type AdminProfile = z.infer<typeof adminProfileSchema>;
 export const revokeResult = z.object({ revoked_count: z.number().int().nonnegative() });
 export const sessionSchema = z.object({ id: z.uuidv4(), current: z.boolean(), ip_address: z.string().max(100),
   geo: z.object({ country: z.string().max(2).nullable().optional(), city: z.string().max(200).nullable().optional() }),
@@ -78,22 +94,27 @@ export function adminProxyRule(path: string, method: string): AdminProxyRule | n
   if (!/^[a-zA-Z0-9/-]+$/.test(path) || path.includes('//')) return null;
   const json = (query: readonly string[] = []): AdminProxyRule => ({ kind: 'json', query });
   if (path === 'auth/login' && method === 'POST') return { ...json(), anonymous: true };
+  if (/^auth\/(?:forgot|reset)-password$/.test(path) && method === 'POST') return { ...json(), anonymous: true };
   if (/^auth\/verify-(?:totp|backup-code)$/.test(path) && method === 'POST') return { ...json(), preAuth: true };
   if (path === 'auth/sessions' && method === 'GET' || /^auth\/(?:logout|revoke-sessions|2fa\/enroll)$/.test(path) && method === 'POST') return json();
+  if (path === 'auth/profile' && ['GET', 'PATCH'].includes(method) || path === 'auth/change-password' && method === 'POST') return json();
   if (path === 'rfqs' && method === 'GET') return json(['page', 'limit', 'status', 'buyer_type', 'q', 'date_from', 'date_to']);
   if (new RegExp(`^rfqs/${uuid}$`).test(path) && method === 'GET' || new RegExp(`^rfqs/${uuid}/(?:status|items/${uuid})$`).test(path) && method === 'PATCH' || new RegExp(`^rfqs/${uuid}/(?:request-clarification|unable-to-supply|notes)$`).test(path) && method === 'POST') return json();
   if (path === 'fx-rates' && ['GET', 'PATCH'].includes(method) || path === 'settings' && ['GET', 'PATCH'].includes(method)) return json();
   if (path === 'stream' && method === 'GET') return { kind: 'sse', query: [] };
   if (new RegExp(`^prescriptions/${uuid}/stream$`).test(path) && method === 'GET') return { kind: 'binary', query: [] };
   if (path === 'quotations/draft' && method === 'POST' || new RegExp(`^quotations/${uuid}$`).test(path) && method === 'GET' || new RegExp(`^quotations/${uuid}/(?:send|revise|resend)$`).test(path) && method === 'POST' || new RegExp(`^quotations/${uuid}/fulfillment$`).test(path) && method === 'PATCH') return json();
+  if (path === 'catalog/videos' && method === 'POST') return { kind: 'multipart', query: [] };
+  if (path === 'catalog/translate-indications' && method === 'POST') return json();
   if (path === 'catalog/images' && method === 'POST') return { kind: 'multipart', query: [] };
   if (path === 'catalog/import-csv' && method === 'POST') return { kind: 'multipart', query: ['dry_run'] };
   if (path === 'catalog/products' && method === 'GET') return json(['page','limit','q','status','manufacturer_id','generic_id','category_id']);
   if (/^catalog\/(?:manufacturers|generics|categories)$/.test(path) && method === 'GET') return json(['page','limit','q','is_active']);
   if (new RegExp(`^catalog/(?:products|manufacturers|generics|categories)/${uuid}$`).test(path) && method === 'GET') return json();
+  if (new RegExp(`^catalog/(?:products|manufacturers|generics|categories)/${uuid}$`).test(path) && method === 'DELETE') return json();
   if (path === 'cms/banners' && method === 'GET') return json(['page','limit','q','is_active']);
   if (new RegExp(`^cms/banners/${uuid}$`).test(path) && method === 'GET') return json();
-  if (path === 'quotations' && method === 'GET') return json(['page','limit','q','rfq_id','overall_status','status','reservation_before']);
+  if (path === 'quotations' && method === 'GET') return json(['page','limit','q','rfq_id','overall_status','status','reservation_before','worklist']);
   if (path === 'quotations/summary' && method === 'GET') return json(['window_hours']);
   if (new RegExp(`^quotations/${uuid}/draft$`).test(path) && method === 'PATCH') return json();
   if (/^catalog\/(?:products|generics|manufacturers|categories)$/.test(path) && method === 'POST' || new RegExp(`^catalog/products/${uuid}$`).test(path) && method === 'PATCH' || path === 'cms/banners' && method === 'POST') return json();

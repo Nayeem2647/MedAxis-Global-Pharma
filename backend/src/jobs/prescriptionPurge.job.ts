@@ -33,14 +33,15 @@ export function createPrescriptionPurgeJob(env: AppEnv, logger: AppLogger, stora
       if (!row) break;
       const ownership = { _id: row._id, purge_status: 'DELETING' as const, next_retry_at: lease };
       try {
-        if (!row.r2_storage_key) throw new Error('Prescription object reference is missing');
-        await storage.remove('prescriptions', row.r2_storage_key); // Must complete before *any* PURGED metadata write.
+        const key = row.object_key ?? row.r2_storage_key;
+        if (!key || !/^prescriptions\/(?:local|s3)\//.test(key)) throw new Error('Legacy storage requires migration before deletion');
+        await storage.remove('prescriptions', key); // Must complete before *any* PURGED metadata write.
         const committed = await mongoose.connection.transaction(async (session) => {
           const changed = await PrescriptionModel.updateOne(
             ownership,
             {
               $set: { purge_status: 'PURGED', purged_at: new Date() },
-              $unset: { r2_storage_key: 1, encryption: 1, next_retry_at: 1 },
+              $unset: { object_key: 1, r2_storage_key: 1, encryption: 1, next_retry_at: 1 },
             },
             { session },
           );

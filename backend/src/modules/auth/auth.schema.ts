@@ -2,10 +2,17 @@ import { randomUUID } from 'node:crypto';
 import { Schema, model } from 'mongoose';
 import { installPersistenceGuards } from '../../shared/persistence/guards.js';
 
+export const MAX_ADMIN_AVATAR_LENGTH = 262_144;
+export const ADMIN_AVATAR_JPEG_PREFIX = 'data:image/jpeg;base64,';
+
 export interface IAdmin {
   _id: string;
   singleton_key: 'SUPER_ADMIN';
   email: string;
+  display_name?: string;
+  phone_number?: string;
+  avatar_url?: string;
+  avatar_object_key?: string;
   password_hash: string;
   totp_secret_encrypted: string;
   backup_code_hashes: Array<string>;
@@ -43,6 +50,10 @@ export const AdminSchema = new Schema<IAdmin>(
       match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       set: (value: string | undefined) => value?.trim().toLowerCase() || undefined,
     },
+    display_name: { type: String, trim: true, maxlength: 120 },
+    phone_number: { type: String, trim: true, maxlength: 25 },
+    avatar_url: { type: String, trim: true, maxlength: MAX_ADMIN_AVATAR_LENGTH, select: false },
+    avatar_object_key: { type: String, maxlength: 500, select: false },
     password_hash: {
       type: String,
       required: true,
@@ -93,7 +104,7 @@ export interface IAdminSession {
   admin_id: string;
   token_hash: string;
   session_generation: number;
-  purpose: 'PRE_AUTH' | 'ADMIN';
+  purpose: 'PRE_AUTH' | 'ADMIN' | 'PASSWORD_RESET';
   user_agent?: string;
   geo?: { country?: string; city?: string };
   last_seen_at: Date;
@@ -131,7 +142,7 @@ export const AdminSessionSchema = new Schema<IAdminSession>(
       select: false,
     },
     session_generation: { type: Number, required: true, validate: Number.isSafeInteger, min: 0, default: 0 },
-    purpose: { type: String, enum: ['PRE_AUTH', 'ADMIN'], required: true, default: 'ADMIN' },
+    purpose: { type: String, enum: ['PRE_AUTH', 'ADMIN', 'PASSWORD_RESET'], required: true, default: 'ADMIN' },
     user_agent: { type: String, maxlength: 2000 },
     geo: {
       type: new Schema(

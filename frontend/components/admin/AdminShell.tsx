@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Activity, ChevronDown, LayoutDashboard, LogOut, Plus, ShieldCheck, Store } from 'lucide-react';
+import { Activity, ChevronDown, FileText, Layers, LayoutDashboard, LogOut, Pill, Plus, ShieldCheck, Star, Store } from 'lucide-react';
 import { z } from 'zod';
 import { useAdminStream } from '../../hooks/useAdminStream';
 import { notifyAdminSessionChange } from '../../lib/admin-auth-events';
@@ -11,15 +11,16 @@ import { ApiError, apiRequest } from '../../lib/api-client';
 import { ADMIN_IDLE_MS, logoutResult, sessionsSchema, type AdminSession } from '../../lib/admin-contract';
 import { AdminFeedback, feedbackValue, type AdminFeedbackValue } from './AdminFeedback';
 import { AdminTopbar } from './AdminTopbar';
+import { masterLabels, type MasterDirectoryKind } from '../../lib/admin-management';
 
 const LiveContext = createContext<{ revision: number; active: boolean; expire(): void } | null>(null);
-export function AdminLink({ href, children, className, current }: { href: string; children: ReactNode; className?: string; current?: boolean }) {
+export function AdminLink({ href, children, className, current, title }: { href: string; children: ReactNode; className?: string; current?: boolean; title?: string }) {
   // Full document navigation revalidates auth and discards the private Router Cache.
-  return <Link href={href} prefetch={false} className={className} aria-current={current ? 'page' : undefined} onClick={(event) => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); window.location.assign(href); } }}>{children}</Link>;
+  return <Link href={href} prefetch={false} className={className} title={title} aria-current={current ? 'page' : undefined} onClick={(event) => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); window.location.assign(href); } }}>{children}</Link>;
 }
 export function useAdminLive() { const value = useContext(LiveContext); if (!value) throw new Error('Admin live context is required.'); return value; }
 function ProductNavigation({ pathname, active }: { pathname: string; active: boolean }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [count, setCount] = useState<number>();
   useEffect(() => {
     if (!active) return;
@@ -33,17 +34,47 @@ function ProductNavigation({ pathname, active }: { pathname: string; active: boo
     });
     return () => controller.abort();
   }, [active, pathname]);
-  return <div className="admin-product-menu">
-    <button type="button" className="admin-product-toggle" aria-expanded={expanded} aria-controls="admin-product-links" onClick={() => setExpanded((value) => !value)}>
-      <Store size={20} aria-hidden="true"/><span>Manage Product</span><ChevronDown size={18} className="admin-product-chevron" aria-hidden="true"/>
+  return <div className="admin-catalog-menu">
+    <button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-product-links" onClick={() => setExpanded((value) => !value)}>
+      <Store size={20} aria-hidden="true"/><span>Manage Product</span><ChevronDown size={18} className="admin-catalog-chevron" aria-hidden="true"/>
     </button>
-    <ul id="admin-product-links" className="admin-product-links" hidden={!expanded}>
+    <ul id="admin-product-links" className="admin-catalog-links" hidden={!expanded}>
       <li><AdminLink href="/admin/catalog/products" current={pathname === '/admin/catalog/products' || (pathname.startsWith('/admin/catalog/products/') && pathname !== '/admin/catalog/products/new')}><span>Product List</span>{active && count !== undefined && <span className="admin-product-count" aria-label={`${count} products`}>{count}</span>}</AdminLink></li>
       <li><AdminLink href="/admin/catalog/products/new" current={pathname === '/admin/catalog/products/new'}>Add New Product</AdminLink></li>
       <li><AdminLink href="/admin/catalog/import" current={pathname === '/admin/catalog/import'}>Bulk import</AdminLink></li>
     </ul>
   </div>;
 }
+function MasterNavigation({ pathname, kind }: { pathname: string; kind: MasterDirectoryKind }) {
+  const manufacturer = kind === 'manufacturers';
+  const listPath = `/admin/catalog/${kind}`;
+  const createPath = listPath + '/new';
+  const inDirectory = pathname === listPath || pathname.startsWith(listPath + '/');
+  const [expanded, setExpanded] = useState(inDirectory);
+  const linksId = `admin-${masterLabels[kind].toLowerCase()}-links`;
+
+  return <div className={`admin-catalog-menu admin-directory-menu admin-${masterLabels[kind].toLowerCase()}-menu`}>
+    <button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls={linksId} onClick={() => setExpanded((value) => !value)}>
+      {manufacturer ? <Star size={20} fill="currentColor" aria-hidden="true" /> : kind === 'categories' ? <Layers size={20} aria-hidden="true" /> : <Pill size={20} aria-hidden="true" />}
+      <span>{kind === 'categories' ? 'Categories' : `${masterLabels[kind]}s`}</span>
+      <ChevronDown size={18} className="admin-catalog-chevron" aria-hidden="true" />
+    </button>
+    <ul id={linksId} className="admin-catalog-links" hidden={!expanded}>
+      <li><AdminLink href={createPath} current={pathname === createPath}>Add new</AdminLink></li>
+      <li><AdminLink href={listPath} current={inDirectory && pathname !== createPath}>List</AdminLink></li>
+    </ul>
+  </div>;
+}
+
+function QuotationNavigation({ pathname }: { pathname: string }) {
+  const inDirectory = pathname.startsWith('/admin/quotations');
+  const [expanded, setExpanded] = useState(inDirectory);
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  const links = [['/admin/quotations/overview', 'Overview'], ['/admin/quotations', 'All quotations'], ['/admin/quotations/new', 'Create from RFQ'], ['/admin/quotations/follow-ups', 'Follow-ups']];
+  return <div className="admin-catalog-menu admin-directory-menu"><button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-quotation-links" disabled={!ready} onClick={() => setExpanded((value) => !value)}><FileText size={20} aria-hidden="true" /><span>Quotations</span><ChevronDown size={18} className="admin-catalog-chevron" aria-hidden="true" /></button><ul id="admin-quotation-links" className="admin-catalog-links" hidden={!expanded}>{links.map(([href, label]) => <li key={href}><AdminLink href={href} current={pathname === href || href === '/admin/quotations' && inDirectory && !links.some(([route]) => route === pathname)}>{label}</AdminLink></li>)}</ul></div>;
+}
+
 export function AdminShell({ session, children }: { session: AdminSession; children: ReactNode }) {
   const pathname = usePathname(); const [active, setActive] = useState(true); const [revision, setRevision] = useState(0);
   const [remaining, setRemaining] = useState(ADMIN_IDLE_MS); const [problem, setProblem] = useState<AdminFeedbackValue>(); const [notice, setNotice] = useState('');
@@ -88,9 +119,12 @@ export function AdminShell({ session, children }: { session: AdminSession; child
     // Human activity controls the client idle deadline; stream messages never reset it.
   }, []);
   return <LiveContext.Provider value={{ revision, active, expire }}><div className="admin-console"><AdminTopbar session={session} active={active} revision={revision} streamState={state} onLogout={() => void logout()}/><aside className="admin-sidebar"><div className="admin-brand"><span className="brand-mark"><Plus size={25}/></span><span>MedAxis<small>ADMIN CONSOLE</small></span></div><nav aria-label="Admin navigation">
-    <AdminLink href="/admin" current={pathname === '/admin'}><LayoutDashboard size={18}/>Dashboard</AdminLink><AdminLink href="/admin/rfqs" current={pathname === '/admin/rfqs'}><Activity size={18}/>RFQ inbox</AdminLink><AdminLink href="/admin/quotations" current={pathname.startsWith('/admin/quotations')}>Quotations</AdminLink>
+    <AdminLink href="/admin" current={pathname === '/admin'}><LayoutDashboard size={18}/>Dashboard</AdminLink><AdminLink href="/admin/rfqs" current={pathname === '/admin/rfqs'}><Activity size={18}/>RFQ inbox</AdminLink><QuotationNavigation pathname={pathname}/>
     <ProductNavigation pathname={pathname} active={active}/>
-    {[['/admin/catalog/manufacturers','Manufacturers'],['/admin/catalog/generics','Generics'],['/admin/catalog/categories','Categories'],['/admin/catalog/banners','Announcements'],['/admin/customers','Customers'],['/admin/settings','Settings'],['/admin/audit-logs','Audit logs']].map(([href,label])=><AdminLink key={href} href={href} current={pathname===href}>{label}</AdminLink>)}<AdminLink href="/admin/sessions" current={pathname === '/admin/sessions'}><ShieldCheck size={18}/>Sessions</AdminLink></nav>
+    <MasterNavigation pathname={pathname} kind="manufacturers"/>
+    <MasterNavigation pathname={pathname} kind="generics"/>
+    <MasterNavigation pathname={pathname} kind="categories"/>
+    {[['/admin/catalog/banners','Announcements'],['/admin/customers','Customers'],['/admin/settings','Settings'],['/admin/audit-logs','Audit logs']].map(([href,label])=><AdminLink key={href} href={href} current={pathname===href}>{label}</AdminLink>)}<AdminLink href="/admin/sessions" current={pathname === '/admin/sessions'}><ShieldCheck size={18}/>Sessions</AdminLink></nav>
     <div className="admin-sidebar-footer"><label className="admin-sound"><input type="checkbox" checked={sound} disabled={!active} onChange={(event) => void changeSound(event.currentTarget.checked)}/>Sound alerts</label><p className="small">30-minute inactivity limit</p><button type="button" onClick={() => void logout()}><LogOut size={17}/>Sign out</button></div></aside>
     <div className="admin-workspace">
       {remaining <= 120_000 && active && <p className="admin-idle-warning" role="status">You will be signed out after {Math.ceil(remaining / 60_000)} minute(s) without activity.</p>}

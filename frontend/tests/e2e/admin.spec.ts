@@ -8,6 +8,41 @@ async function password(page: Page, email: string) { await page.goto('/admin/log
 async function login(page: Page, email: string, backup = false) { await password(page, email); if (backup) { await page.getByRole('button', { name: 'Use a backup code' }).click(); await page.getByLabel('Backup code', { exact: true }).fill('FIXTURE-BACKUP'); } else await page.getByLabel('Authenticator code', { exact: true }).fill('123456'); await page.getByRole('button', { name: 'Verify and sign in' }).click(); await expect(page).toHaveURL(/\/admin$/); await expect(page.getByRole('heading', { name: 'RFQ operations' })).toBeVisible(); }
 const forbidden = /NEVER_RENDER_ADMIN|token_hash|password_hash|FIXTURE-FULL|FIXTURE-PRE|plausible\.example|PublicShell|CartProvider/;
 
+test('admin profile settings save identity, picture and password', async ({ page, request }) => {
+  await page.route('https://fixture-avatars.s3.ap-southeast-1.amazonaws.com/**', (route) =>
+    route.fulfill({ path: 'public/images/medaxis-logo.png', contentType: 'image/png' }));
+  const email = await configure(request); await login(page, email);
+  await page.locator('.admin-account > summary').click();
+  await page.locator('.admin-account-menu').getByRole('link', { name: 'Settings' }).click();
+  await expect(page.getByRole('heading', { name: 'Profile Information' })).toBeVisible();
+  await expect(page.locator('.admin-account-identity')).toContainText(email);
+  const basic = page.locator('#basic-information');
+  await basic.getByRole('textbox', { name: 'Full Name' }).fill('MedAxis Owner');
+  await basic.getByRole('textbox', { name: 'Phone Number' }).fill('+880 1234567890');
+  await basic.locator('input[name="email"]').fill('owner@example.test');
+  const chooser = page.waitForEvent('filechooser');
+  await basic.getByRole('button', { name: 'Change profile picture' }).click();
+  await (await chooser).setFiles('public/images/medaxis-logo.png');
+  await expect(basic.getByText('Picture ready. Select Save Changes to apply it.')).toBeVisible();
+  const picture = await page.getByRole('img', { name: 'Current profile picture' }).getAttribute('src');
+  expect(picture).toMatch(/^data:image\/jpeg;base64,/);
+  await basic.getByLabel('Current password').fill('fixture-password');
+  await basic.getByRole('button', { name: 'Save Changes' }).click();
+  await expect(basic.getByText('Profile changes saved.')).toBeVisible();
+  await expect(page.locator('.admin-account > summary')).toContainText('MedAxis Owner');
+  await page.reload();
+  await expect(page.locator('#basic-information').getByRole('textbox', { name: 'Full Name' })).toHaveValue('MedAxis Owner');
+  const saved = page.getByRole('img', { name: 'Current profile picture' });
+  await expect(saved).toHaveAttribute('src', /avatars\/s3\/fixture\.jpg\?X-Amz-Expires=120/);
+  await expect.poll(() => saved.evaluate((node) => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  const passwordCard = page.locator('#change-password');
+  await passwordCard.getByLabel('Current Password').fill('fixture-password');
+  await passwordCard.locator('input[name="new_password"]').fill('A longer private password');
+  await passwordCard.getByLabel('Confirm Password').fill('A longer private password');
+  await passwordCard.getByRole('button', { name: 'Save Changes' }).click();
+  await expect(passwordCard.getByText('Password changed. Other sessions have been signed out.')).toBeVisible();
+});
+
 test('password-only/forged state cannot obtain private HTML, data or RSC', async ({ page, request, context }) => {
   const email = await configure(request); await password(page, email);
   const pre = (await context.cookies()).find((value) => value.name === 'pre_auth_session'); expect(pre).toMatchObject({ path: '/api/admin/auth', httpOnly: true, secure: true, sameSite: 'Strict' }); expect(await page.evaluate(() => document.cookie)).not.toContain('pre_auth_session');

@@ -2,15 +2,20 @@ import { randomUUID } from 'node:crypto';
 import { Schema, model } from 'mongoose';
 import { installPersistenceGuards } from '../../shared/persistence/guards.js';
 
+export const MAX_MANUFACTURER_LOGO_LENGTH = 262_144;
+
 export interface IManufacturer {
   _id: string;
   translations: {
     en: { name: string; slug: string; description?: string; seo_title?: string; meta_description?: string };
     zhCN?: { name: string; slug: string; description?: string; seo_title?: string; meta_description?: string };
   };
-  country: string;
+  country?: string;
+  logo_data_url?: string;
+  logo_object_key?: string;
   certifications?: Array<string>;
   is_active: boolean;
+  deleted_at?: Date;
   created_at: Date;
   updated_at: Date;
 }
@@ -59,7 +64,9 @@ export const ManufacturerSchema = new Schema<IManufacturer>(
       ),
       required: true,
     },
-    country: { type: String, required: true, trim: true, maxlength: 2, match: new RegExp('^[A-Z]{2}$') },
+    country: { type: String, trim: true, maxlength: 2, match: /^[A-Z]{2}$/ },
+    logo_data_url: { type: String, maxlength: MAX_MANUFACTURER_LOGO_LENGTH, select: false },
+    logo_object_key: { type: String, maxlength: 500, select: false },
     certifications: {
       type: [{ type: String, required: true, trim: true, maxlength: 200 }],
       required: false,
@@ -69,6 +76,7 @@ export const ManufacturerSchema = new Schema<IManufacturer>(
         message: 'Array length outside contract bounds',
       },
     },
+    deleted_at: { type: Date },
     is_active: { type: Boolean, required: true, default: true },
   },
   {
@@ -94,18 +102,23 @@ export const ManufacturerModel = model<IManufacturer>('Manufacturer', Manufactur
 
 export interface IGeneric {
   _id: string;
+  logo_data_url?: string;
+  logo_object_key?: string;
   translations: {
     en: { name: string; slug: string; description?: string; seo_title?: string; meta_description?: string };
     zhCN?: { name: string; slug: string; description?: string; seo_title?: string; meta_description?: string };
   };
   therapeutic_indications?: Array<string>;
   is_active: boolean;
+  deleted_at?: Date;
   created_at: Date;
   updated_at: Date;
 }
 
 export const GenericSchema = new Schema<IGeneric>(
   {
+    logo_data_url: { type: String, maxlength: MAX_MANUFACTURER_LOGO_LENGTH, select: false },
+    logo_object_key: { type: String, maxlength: 500, select: false, match: /^products\/(?:local|s3)\/generics\/[a-zA-Z0-9_-]+\.(?:png|webp)$/ },
     _id: {
       type: String,
       required: true,
@@ -149,7 +162,7 @@ export const GenericSchema = new Schema<IGeneric>(
       required: true,
     },
     therapeutic_indications: {
-      type: [{ type: String, required: true, trim: true, maxlength: 200 }],
+      type: [{ type: String, required: true, trim: true, maxlength: 5000 }],
       required: false,
       default: undefined,
       validate: {
@@ -157,6 +170,7 @@ export const GenericSchema = new Schema<IGeneric>(
         message: 'Array length outside contract bounds',
       },
     },
+    deleted_at: { type: Date },
     is_active: { type: Boolean, required: true, default: true },
   },
   {
@@ -182,18 +196,23 @@ export const GenericModel = model<IGeneric>('Generic', GenericSchema, 'generics'
 
 export interface ICategory {
   _id: string;
+  logo_data_url?: string;
+  logo_object_key?: string;
   translations: {
     en: { name: string; slug: string; description?: string; seo_title?: string; meta_description?: string };
     zhCN?: { name: string; slug: string; description?: string; seo_title?: string; meta_description?: string };
   };
   sort_order: number;
   is_active: boolean;
+  deleted_at?: Date;
   created_at: Date;
   updated_at: Date;
 }
 
 export const CategorySchema = new Schema<ICategory>(
   {
+    logo_data_url: { type: String, maxlength: MAX_MANUFACTURER_LOGO_LENGTH, select: false },
+    logo_object_key: { type: String, maxlength: 500, select: false, match: /^products\/(?:local|s3)\/categories\/[a-zA-Z0-9_-]+\.(?:png|webp)$/ },
     _id: {
       type: String,
       required: true,
@@ -237,6 +256,7 @@ export const CategorySchema = new Schema<ICategory>(
       required: true,
     },
     sort_order: { type: Number, required: true, validate: Number.isSafeInteger, min: 0, default: 0 },
+    deleted_at: { type: Date },
     is_active: { type: Boolean, required: true, default: true },
   },
   {
@@ -298,10 +318,13 @@ export interface IProduct {
   cold_chain_required: boolean;
   storage_condition?: string;
   image_keys?: Array<string>;
+  video_key?: string;
+  seo_image_key?: string;
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   brand_name?: string;
   generic_name?: string;
   manufacturer?: string;
+  deleted_at?: Date;
   created_at: Date;
   updated_at: Date;
 }
@@ -407,6 +430,8 @@ export const ProductSchema = new Schema<IProduct>(
     packaging_unit: { type: String, required: true, trim: true, maxlength: 40 },
     cold_chain_required: { type: Boolean, required: true, default: false },
     storage_condition: { type: String, required: false, trim: true, maxlength: 200 },
+    video_key: { type: String, maxlength: 500, match: /^products\/(?:local|s3)\/videos\/[a-zA-Z0-9_-]+\.(?:mp4|webm)$/ },
+    seo_image_key: { type: String, maxlength: 500 },
     image_keys: {
       type: [{ type: String, required: true, trim: true, maxlength: 500 }],
       required: false,
@@ -416,6 +441,7 @@ export const ProductSchema = new Schema<IProduct>(
         message: 'Array length outside contract bounds',
       },
     },
+    deleted_at: { type: Date },
     status: {
       type: String,
       required: true,

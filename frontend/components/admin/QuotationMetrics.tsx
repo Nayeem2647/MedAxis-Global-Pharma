@@ -1,33 +1,74 @@
-import type { z } from 'zod';
-import type { summarySchema } from '../../lib/admin-management';
-export function QuotationMetrics({ value }: { value: z.infer<typeof summarySchema> | null }) {
+import type { z } from "zod";
+import type { summarySchema } from "../../lib/admin-management";
+import { quotationDate } from "../../lib/admin-quotations";
+import { AdminLink } from "./AdminShell";
+export function QuotationMetrics({
+  value,
+}: {
+  value: z.infer<typeof summarySchema> | null;
+}) {
+  if (!value)
+    return (
+      <p className="admin-feedback">
+        Quotation summary is unavailable. Refresh to try again.
+      </p>
+    );
+  const cards = [
+    [
+      "Active quotations",
+      value.active_quotations,
+      "?overall_status=ACTIVE",
+      "All open work",
+    ],
+    [
+      "Drafts",
+      value.drafts,
+      "?overall_status=ACTIVE&status=DRAFT",
+      "Review and send",
+    ],
+    [
+      "Sent to customer",
+      value.sent,
+      "?overall_status=ACTIVE&status=SENT",
+      "Waiting for a decision",
+    ],
+    [
+      "Awaiting payment",
+      value.accepted_payment_pending,
+      "?worklist=AWAITING_PAYMENT",
+      "Accepted with an active allocation",
+    ],
+    [
+      "Ready to dispatch",
+      value.ready_to_dispatch,
+      "?worklist=READY_TO_DISPATCH",
+      "Verified payment recorded",
+    ],
+    [
+      "Expiring within 24h",
+      value.expiring_allocations,
+      "?worklist=EXPIRING",
+      "Active payment deadlines",
+    ],
+  ] as const;
   return (
-    <section className="admin-panel">
-      <h2>Global quotation summary</h2>
-      {value ? (
-        <>
-          <div className="admin-rate-grid">
-            {(
-              [
-                ['Active quotations', value.active_quotations],
-                ['Accepted · awaiting payment', value.accepted_payment_pending],
-                ['Paid · ready to dispatch', value.ready_to_dispatch],
-                ['Allocations expiring within 24h', value.expiring_allocations],
-              ] as const
-            ).map(([label, count]) => (
-              <article className="admin-rate" key={label}>
-                <h3>{label}</h3>
-                <strong>{count}</strong>
-              </article>
-            ))}
-          </div>
-          <p className="small muted">
-            Authoritative current-version totals · {value.as_of} · Allocation window {value.window_hours}h
-          </p>
-        </>
-      ) : (
-        <p>Global totals unavailable. No counts are inferred from this page.</p>
-      )}
+    <section aria-label="Quotation summary" className="quotation-summary">
+      <div className="quotation-metrics">
+        {cards.map(([label, count, query, hint]) => (
+          <AdminLink
+            key={label}
+            href={`/admin/quotations${query}`}
+            className="quotation-metric"
+          >
+            <span>{label}</span>
+            <strong>{count ?? "—"}</strong>
+            <small>{hint}</small>
+          </AdminLink>
+        ))}
+      </div>
+      <p className="small muted">
+        All quotations · Updated {quotationDate(value.as_of)} (Dhaka)
+      </p>
     </section>
   );
 }

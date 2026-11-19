@@ -17,11 +17,11 @@ This Data Flow Diagram (DFD) specification maps the precise pathways, transforma
 This document adheres to the **Gane & Sarson / Yourdon-Coad** hybrid software engineering notation:
 * **External Entities (Squares / Rectangles)**: External systems or human actors outside the system boundary that act as sources (producers) or sinks (consumers) of data.
 * **Processes (Rounded Rectangles / Circles)**: Transformations or logic applied to incoming data flows to produce outgoing data flows. Numbered hierarchically (`0.0`, `1.0`, `1.1`, etc.).
-* **Data Stores (Open-ended Rectangles / Parallel Lines `D1, D2, ...`)**: Passive repositories of data at rest (MongoDB Atlas collections and Cloudflare R2 object buckets).
+* **Data Stores (Open-ended Rectangles / Parallel Lines `D1, D2, ...`)**: Passive repositories of data at rest (MongoDB Atlas collections and AWS S3 object buckets).
 * **Data Flows (Directed Arrows `-->`)**: Named data packets in transit between entities, processes, and stores.
 
 ### 1.3 System Boundary & Scope (Release 1)
-* **Inside System Boundary**: Public Next.js frontend, Express.js Layered Monolith API, MongoDB Atlas M10 database, Cloudflare R2 storage, local Puppeteer PDF engine, and `node-cron` internal schedulers.
+* **Inside System Boundary**: Public Next.js frontend, Express.js Layered Monolith API, MongoDB Atlas M10 database, AWS S3 storage, local Puppeteer PDF engine, and `node-cron` internal schedulers.
 * **Outside System Boundary (External Entities)**:
   1. **B2B Wholesale Buyer**: International commercial clinics, pharmacies, distributors.
   2. **B2C Patient / Caregiver**: Global oncology/critical-care patients seeking specialized medicines.
@@ -184,7 +184,7 @@ Level 1 decomposes the MedAxis Global Pharma Monolith into **7 major functional 
 
 ### 3.1 Major Processes
 * **1.0 Manage & Search Multilingual Catalog**: Serves zero-price public catalog, handles SSG/ISR, faceted search, and 301 redirects.
-* **2.0 Ingest & Validate RFQs**: Captures Quick Quotes and Cart RFQs, checks Turnstile, enforces idempotency, snapshots contact info, and streams prescription to encrypted R2 storage.
+* **2.0 Ingest & Validate RFQs**: Captures Quick Quotes and Cart RFQs, checks Turnstile, enforces idempotency, snapshots contact info, and streams prescription to encrypted S3 storage.
 * **3.0 Verify Sourcing & Formulate Fast-Quote**: Formula markup, live/manual FX locking (BD-005), internal cost isolation, token generation, and bilingual PDF generation.
 * **4.0 Review, Negotiate & Atomically Accept Quotation**: Magic Link token authentication, 1-click confirmation modal, atomic acceptance transaction, watermark PDF regeneration, and proforma dispatch.
 * **5.0 Execute Minimal Offline Fulfillment**: Milestone tracking (`Payment Received` $\rightarrow$ `Dispatched` [AWB] $\rightarrow$ `Delivered`), stock allocation guard, and delivery confirmations.
@@ -216,7 +216,7 @@ flowchart TD
     D9[("D9: quotation_internal_costs")]
     D10[("D10: exchange_rates")]
     D11[("D11: audit_logs + notif_logs")]
-    D12[("D12: Cloudflare R2")]
+    D12[("D12: AWS S3")]
     D13[("D13: clarification_messages")]
 
     %% Processes
@@ -366,7 +366,7 @@ Background Jobs
           <mxGeometry x="730" y="440" width="140" height="40" as="geometry"/>
         </mxCell>
 
-        <mxCell id="ds_r2" value="D12: Cloudflare R2" style="shape=partialRectangle;top=0;left=0;right=0;bottom=1;align=center;verticalAlign=middle;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="ds_s3" value="D12: AWS S3" style="shape=partialRectangle;top=0;left=0;right=0;bottom=1;align=center;verticalAlign=middle;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="290" y="455" width="140" height="40" as="geometry"/>
         </mxCell>
 
@@ -374,7 +374,7 @@ Background Jobs
         <mxCell id="f_b_p1" value="Search" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=0;entryX=0;entryY=0.5;" edge="1" parent="1" source="ent_buyer" target="p1"/>
         <mxCell id="f_b_p2" value="Submit RFQ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="ent_buyer" target="p2"/>
         <mxCell id="f_p2_d5" value="Save RFQ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2" target="ds_rfqs"/>
-        <mxCell id="f_p2_d12" value="Encrypted Rx" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2" target="ds_r2"/>
+        <mxCell id="f_p2_d12" value="Encrypted Rx" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2" target="ds_s3"/>
         <mxCell id="f_d5_p3" value="Read RFQ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="ds_rfqs" target="p3"/>
         <mxCell id="f_p3_d8" value="Write Quote" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p3" target="ds_quotes"/>
         <mxCell id="f_d8_p4" value="Read Sent" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="ds_quotes" target="p4"/>
@@ -438,7 +438,7 @@ Decomposes **Process 2.0** into 4 discrete sub-processes:
 * **2.1 Validate Submission & Turnstile**: Verifies Cloudflare bot token and inspects mandatory packaging units.
 * **2.2 Enforce Idempotency & Duplicate Guard**: Evaluates the browser UUID key against `D6: rfq_idempotency_keys` (24h TTL). Returns existing RFQ if duplicate.
 * **2.3 Link Customer Identity & Save Contact Snapshot**: Resolves existing customer using partial email index or creates customer without overwriting existing profiles. Saves submitted contact info as `contact_snapshot`.
-* **2.4 Encrypt & Store Prescription**: Inspects MIME type and size (<=5MB), encrypts via AES-256-GCM, and streams to R2 `prescriptions` bucket.
+* **2.4 Encrypt & Store Prescription**: Inspects MIME type and size (<=5MB), encrypts via AES-256-GCM, and streams to the private S3 prescription bucket.
 
 ```mermaid
 flowchart TD
@@ -447,7 +447,7 @@ flowchart TD
     D5[("D5: rfqs + rfq_items")]
     D6[("D6: rfq_idempotency_keys")]
     D7[("D7: customers")]
-    D12[("D12: Cloudflare R2
+    D12[("D12: AWS S3
 (prescriptions)")]
     EMAIL_SVC["Email Service"]
 
@@ -485,7 +485,7 @@ Decomposes **Process 3.0** into 4 discrete sub-processes:
 * **3.1 Sourcing Review & Partial Availability (MF-06 / MF-09)**: Admin sets availability per item (`AVAILABLE`, `UNAVAILABLE`, `SOURCING`). Can issue Partial Quote or trigger "Unable to Supply" (MF-09).
 * **3.2 Calculate Margin & Lock FX Snapshot (BD-005)**: Applies markup formula (`Cost * (1 + Markup%)`), fetches live/manual rate from `D10`, and permanently locks `locked_fx_rate_*`.
 * **3.3 Isolate Cost & Write Version**: Stores procurement costs in `D9: quotation_internal_costs` (admin only) and writes public quote to `D8: quotation_versions`.
-* **3.4 Generate Bilingual PDF & Token**: Generates 256-bit CSPRNG token, stores SHA-256 hash in `D8`, renders PDF with embedded `Noto Sans SC`, and uploads to R2.
+* **3.4 Generate Bilingual PDF & Token**: Generates 256-bit CSPRNG token, stores SHA-256 hash in `D8`, renders PDF with embedded `Noto Sans SC`, and uploads to S3.
 
 ```mermaid
 flowchart TD
@@ -494,7 +494,7 @@ flowchart TD
     D8[("D8: quotations + versions")]
     D9[("D9: quotation_internal_costs")]
     D10[("D10: exchange_rates")]
-    D12[("D12: Cloudflare R2
+    D12[("D12: AWS S3
 (quotes)")]
     EMAIL_SVC["Email Service"]
 
@@ -542,7 +542,7 @@ flowchart TD
     ADMIN["Super Admin"]
     D8[("D8: quotations + versions")]
     D11[("D11: audit_logs")]
-    D12[("D12: Cloudflare R2")]
+    D12[("D12: AWS S3")]
     EMAIL_SVC["Email Service"]
 
     P41["4.1
@@ -682,7 +682,7 @@ Decomposes **Process 7.0** into 5 discrete sub-processes:
 * **7.1 Refresh Live FX Rates (Hourly)**: Fetches current BDT rates for USD/CNY/EUR from ExchangeRate-API; upserts to `D10`.
 * **7.2 Release Expired Stock Allocations (Daily)**: Finds `Accepted` quotes where `payment_deadline` has passed without payment; sets status to `Payment_Expired`, releases reserved stock.
 * **7.3 Dispatch Day-3 Payment Reminder (Daily)**: Finds `Accepted` quotes where `accepted_at + 3 days = today`; dispatches payment reminder email to buyer and logs to `D11`.
-* **7.4 Purge Medical Prescriptions (Daily)**: Deletes R2 objects where `created_at > 90 days` (general) or `rfq.status = Delivered` and `delivered_at > 14 days` (terminal); appends purge record to `D11`.
+* **7.4 Purge Medical Prescriptions (Daily)**: Deletes S3 objects where `created_at > 90 days` (general) or `rfq.status = Delivered` and `delivered_at > 14 days` (terminal); appends purge record to `D11`.
 * **7.5 Retry Failed Notification Emails (Hourly)**: Queries `D11.notif_logs` for `status=FAILED` entries with `retry_count < 3`; retries with exponential back-off.
 
 `mermaid
@@ -692,7 +692,7 @@ flowchart TD
     D8[("D8: quotations + versions")]
     D10[("D10: exchange_rates")]
     D11[("D11: audit_logs + notif_logs")]
-    D12[("D12: Cloudflare R2")]
+    D12[("D12: AWS S3")]
 
     P71["7.1
 Refresh Live
@@ -722,7 +722,7 @@ Notification Emails"]
     P73 --> |Log Reminder Sent| D11
 
     P74 <--> |Scan Prescriptions Over Threshold| D12
-    P74 --> |Delete Expired R2 Objects| D12
+    P74 --> |Delete Expired S3 Objects| D12
     P74 --> |Append Purge Audit Log| D11
 
     P75 <--> |Query Failed Notif Logs| D11
@@ -779,7 +779,7 @@ The Data Dictionary defines every individual and composite data structure flowin
 | **D9** | `quotation_internal_costs` | `_id` (UUID) | `{ quotation_version_id: 1 }` (UK, Unique Foreign Key), `procurement_cost_bdt`, `markup_percent`, `gross_margin_percent` (Isolated from public data) |
 | **D10** | `exchange_rates` | `currency_code` | `{ currency_code: 1 }` (UK: "USD", "CNY", "EUR"), `rate_to_bdt`, `mode`, `updated_at` |
 | **D11** | `audit_logs` + `notif_logs` | `_id` (UUID) | `{ actor_id: 1, created_at: -1 }`, `{ entity_type: 1, entity_id: 1 }`, `{ next_retry_at: 1, status: 1 }` |
-| **D12** | Cloudflare R2 | `Storage Key` | S3-Compatible Buckets: `prescriptions` (AES-256-GCM encrypted), `quotes` (Dynamic PDFs), `products` (Images) |
+| **D12** | AWS S3 | `Storage Key` | S3-Compatible Buckets: `prescriptions` (AES-256-GCM encrypted), `quotes` (Dynamic PDFs), `products` (Images) |
 | **D13** | `clarification_messages` | `_id` (UUID) | `{ clarification_id: 1 }` (UK), `{ rfq_id: 1, created_at: -1 }`, `{ status: 1 }` where `status` ∈ `[PENDING_BUYER|REPLIED|RESOLVED]` |
 
 ---
@@ -843,7 +843,7 @@ The Data Dictionary defines every individual and composite data structure flowin
 | **D9** | `quotation_internal_costs` | MongoDB Atlas M10 | C: 3.0, R: 3.0/6.0, U: 3.0 | Permanent internal audit record. Strictly restricted to Super Admin. |
 | **D10** | `exchange_rates` | MongoDB Atlas M10 | C: 7.0, R: 3.0, U: 7.0 | Live cache refreshed every 60 minutes; manual overrides persist until updated. |
 | **D11** | `audit_logs` + `notif_logs` | MongoDB Atlas M10 | C: 2.0/4.0/5.0/6.0, R: 6.0/7.0 | Append-only immutable log. Never deleted or modified. |
-| **D12** | Cloudflare R2 | Object Storage | C: 2.0/3.0/4.0, R: 4.0/6.0, D: 7.0 | Prescriptions purged at 90 days or terminal+14 days. PDFs stored permanently. |
+| **D12** | AWS S3 | Object Storage | C: 2.0/3.0/4.0, R: 4.0/6.0, D: 7.0 | Prescriptions purged at 90 days or terminal+14 days. PDFs stored permanently. |
 | **D13** | `clarification_messages` | MongoDB Atlas M10 | C: 4.0, R: 4.0/6.0, U: 4.0 | Retained until parent RFQ is closed or resolved. Email reply webhook (Release 1); in-app buyer interface deferred to Release 2. |
 
 ---

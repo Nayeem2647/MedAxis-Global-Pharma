@@ -7,7 +7,18 @@ export const validEnv = Object.freeze({
   ADMIN_SESSION_SECRET: 'x'.repeat(48),
 });
 
+export const s3EnvSettings = Object.freeze({
+  STORAGE_DRIVER: 's3',
+  AWS_REGION: 'ap-southeast-1',
+  S3_BUCKET_PRODUCTS: 'catalog-images',
+  S3_BUCKET_QUOTES: 'private-quotes',
+  S3_BUCKET_PRESCRIPTIONS: 'private-prescriptions',
+  S3_BUCKET_AVATARS: 'private-avatars',
+  S3_PUBLIC_BASE_URL: 'https://cdn.example.test',
+});
+
 export const productionEnv = Object.freeze({
+  ...s3EnvSettings,
   NODE_ENV: 'production',
   MONGODB_URI: 'mongodb+srv://user:pass@cluster0.example.mongodb.net/medaxis',
   PUBLIC_ORIGIN: 'https://www.medaxisglobalpharma.com',
@@ -17,12 +28,6 @@ export const productionEnv = Object.freeze({
   TOTP_KEY_ID: 'test-totp-v1',
   PRESCRIPTION_ENCRYPTION_KEY: 'a'.repeat(64),
   PRESCRIPTION_KEY_ID: 'key-2026-01',
-  R2_ACCOUNT_ID: 'acct',
-  R2_ACCESS_KEY_ID: 'akid',
-  R2_SECRET_ACCESS_KEY: 'secret',
-  R2_BUCKET_PRODUCTS: 'products',
-  R2_BUCKET_QUOTES: 'quotes',
-  R2_BUCKET_PRESCRIPTIONS: 'prescriptions',
   CLOUDFLARE_TURNSTILE_SECRET: 'ts-secret',
   RESEND_API_KEY: 're_123',
   EMAIL_FROM: 'MedAxis Global Pharma <quotes@medaxisglobalpharma.com>',

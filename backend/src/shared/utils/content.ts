@@ -2,7 +2,7 @@ import sanitizeHtml from 'sanitize-html';
 
 export const cleanHtml = (value: string): string =>
   sanitizeHtml(value, {
-    allowedTags: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'a'],
+    allowedTags: ['p', 'br', 'strong', 'em', 'h3', 'ul', 'ol', 'li', 'a'],
     allowedAttributes: { a: ['href', 'title'] },
     allowedSchemes: ['https', 'http'],
     allowProtocolRelative: false,

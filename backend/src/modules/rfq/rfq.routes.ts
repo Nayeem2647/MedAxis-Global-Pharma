@@ -123,7 +123,7 @@ export function createRfqRouter(env: AppEnv, logger: AppLogger, options: RfqOpti
       const now = new Date();
       const doc = new PrescriptionModel({
         upload_token_hash: hashToken(token),
-        r2_storage_key: object.r2_object_key,
+        object_key: object.object_key,
         encryption: object.encryption,
         mime_type: object.mime_type,
         file_size_bytes: object.file_size_bytes,
@@ -135,7 +135,9 @@ export function createRfqRouter(env: AppEnv, logger: AppLogger, options: RfqOpti
         await doc.save();
       } catch (error) {
         try {
-          await storage.remove('prescriptions', object.r2_object_key);
+          if (error instanceof Error && (error.name === 'ValidationError' || ('code' in error && error.code === 121)))
+            await storage.remove('prescriptions', object.object_key);
+          else logger.error('Prescription write outcome uncertain; uploaded object retained for reconciliation', { request_id: req.requestId });
         } catch {
           logger.error('Prescription upload compensation failed; storage reconciliation required', {
             request_id: req.requestId,
@@ -192,9 +194,10 @@ export function createRfqRouter(env: AppEnv, logger: AppLogger, options: RfqOpti
       purge_status: { $in: ['ACTIVE', 'PENDING'] },
       purge_scheduled_at: { $gt: new Date() },
     }).lean();
-    if (!doc?.r2_storage_key || !doc.encryption) throw AppError.notFound();
+    const key = doc?.object_key ?? doc?.r2_storage_key;
+    if (!doc || !key || !doc.encryption) throw AppError.notFound();
     const plaintext = await storage.downloadPrescription({
-      r2_object_key: doc.r2_storage_key,
+      object_key: key,
       encryption: doc.encryption,
       mime_type: doc.mime_type,
       file_size_bytes: doc.file_size_bytes,

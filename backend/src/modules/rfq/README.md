@@ -98,13 +98,13 @@ replaced without waiting for TTL. Aborted submissions do not consume numbers.
 POST `/v1/public/prescriptions/upload` accepts multipart fields `prescription`
 and `turnstile_token`. Actual JPEG/PNG/PDF signatures are validated and buffers
 must be no larger than 5,242,880 bytes. Invalid/oversized uploads return
-`400 INVALID_PRESCRIPTION_FILE`. The existing R2 service encrypts bytes with
-AES-256-GCM before uploading to the private prescriptions bucket.
+`400 INVALID_PRESCRIPTION_FILE`. The storage service encrypts bytes with
+AES-256-GCM before uploading to the private S3 prescriptions bucket.
 The multipart file MIME must be `image/jpeg`, `image/png` or `application/pdf`
 and match its detected signature; unsupported or mismatched declarations fail
 before any storage write.
 
-Configure R2 credentials/buckets plus `PRESCRIPTION_ENCRYPTION_KEY` and
+Configure the S3 bucket and runtime role plus `PRESCRIPTION_ENCRYPTION_KEY` and
 `PRESCRIPTION_KEY_ID` as described in `../catalog/README.md`. The response is
 201 with `prescription_id`, MIME, size and upload time. It never exposes object
 keys, encryption metadata or public medical URLs.
@@ -120,15 +120,15 @@ are rejected without partial linkage. The same cookie can own multiple uploads.
 
 Initial `purge_scheduled_at` is upload +90 days, `purge_status` is ACTIVE.
 Unable-to-supply/terminal closure uses the earliest of the existing deadline,
-upload +90 days and terminal time +14 days. A failed metadata save compensates
-by deleting the uploaded R2 object. Failed compensation emits a generic alert
-for storage reconciliation without logging medical bytes or storage keys.
+upload +90 days and terminal time +14 days. A confirmed document rejection
+triggers deletion of the uploaded S3 object. When the write result is uncertain,
+the application retains the object and emits a generic alert for reconciliation.
 
 GET `/v1/admin/prescriptions/:id/stream` requires full admin auth. It rejects
 expired/deleting/purged files, decrypts/authenticates bytes, appends an access
 audit before returning them, and sends the actual MIME with `no-store` and
 `nosniff`. Audit failure prevents the medical response. RFQ detail returns only
-safe prescription metadata, never encryption values or R2 URLs.
+safe prescription metadata without encryption values or storage URLs.
 
 ## Admin RFQ endpoints
 
@@ -214,7 +214,7 @@ npm run test:rfq
 RFQ integration tests create and remove only their own `rfq_test_*` database
 using `MONGODB_TEST_URI` or `.env`'s `MONGODB_URI`. They use actual MongoDB
 validators/transactions, real encryption/magic-byte checks, and mocked
-Turnstile/R2/email transports. They test concurrent idempotency, profile safety,
+Turnstile/S3/email transports. They test concurrent idempotency, profile safety,
 China-email rules, staged ownership, rollback, streaming, webhook authentication,
 state transitions, retention, and notification leasing/failure. No actual
 patient document or outbound email is sent during verification.

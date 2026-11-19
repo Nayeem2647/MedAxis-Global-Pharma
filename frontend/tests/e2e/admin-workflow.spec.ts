@@ -4,27 +4,91 @@ import { workflowIds as ids, type rfqFixture, type quotationDetailFixture } from
 const api = 'http://127.0.0.1:4100';
 async function configure(request: APIRequestContext, scenario = 'workflow') { const email = `${randomUUID()}@fixture.example`; await request.post(`${api}/__test__/admin`, { data: { email, scenario } }); return email; }
 async function workflow(request: APIRequestContext, email: string) { return (await (await request.get(`${api}/__test__/admin?${new URLSearchParams({ email, action: 'workflow' })}`)).json()).data as { rfq: ReturnType<typeof rfqFixture>; quote: ReturnType<typeof quotationDetailFixture> | null; writes: { path: string; body: unknown }[]; links: number }; }
-async function login(page: Page, email: string) { await page.goto('/admin/login'); await page.getByLabel('Email', { exact: true }).fill(email); await page.getByLabel('Password', { exact: true }).fill('fixture-password'); await page.getByRole('button', { name: 'Continue to authenticator' }).click(); await page.getByLabel('Authenticator code', { exact: true }).fill('123456'); await page.getByRole('button', { name: 'Verify and sign in' }).click(); await expect(page.getByRole('heading', { name: 'RFQ operations' })).toBeVisible(); }
+async function login(page: Page, email: string) { await page.goto('/admin/login'); await page.getByLabel('Email', { exact: true }).fill(email); await page.getByLabel('Password', { exact: true }).fill('fixture-password'); await page.getByRole('button', { name: 'Continue to authenticator' }).click(); await page.getByLabel('Authenticator code', { exact: true }).fill('123456'); await page.getByRole('button', { name: 'Verify and sign in' }).click(); await expect(page.getByRole('heading', { name: 'RFQ operations' })).toBeVisible({ timeout: 30_000 }); }
 async function openRfq(page: Page) { await page.getByRole('link', { name: 'RFQ-2026-001', exact: true }).click(); await expect(page.getByRole('heading', { name: 'RFQ-WORKFLOW-001', exact: true })).toBeVisible(); }
+async function reviewPricing(page: Page) {
+  if (await page.getByRole('button', { name: 'Continue to shipping', exact: true }).isVisible()) await page.getByRole('button', { name: 'Continue to shipping', exact: true }).click();
+  if (await page.getByRole('button', { name: 'Continue to review', exact: true }).isVisible()) await page.getByRole('button', { name: 'Continue to review', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'I reviewed every line' }).check();
+}
+async function prepareRevision(page: Page) {
+  await page.getByRole('button', { name: 'Prepare revision', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to shipping', exact: true }).click();
+}
 async function fillPricing(page: Page) {
   const lines = page.locator('.admin-pricing-line'); await lines.nth(0).getByRole('button',{name:/^Fixture manufacturer/}).click(); await page.getByLabel('Quote availability line 1').selectOption('AVAILABLE'); await lines.nth(0).getByLabel('Procurement cost per unit (BDT)', { exact: true }).fill('9007199254740993.12345678'); await lines.nth(0).getByLabel('Markup percent', { exact: true }).fill('20.12345678');
-  await lines.nth(1).getByRole('button',{name:/^Fixture manufacturer/}).click(); await page.getByLabel('Quote availability line 2').selectOption('UNAVAILABLE'); await lines.nth(1).getByLabel('Customer note', { exact: true }).fill('Cannot supply this requested specification.'); await lines.nth(1).getByLabel('Custom generic name').fill('Custom ingredient'); await lines.nth(1).getByLabel('Custom dosage form').fill('Tablet'); await lines.nth(1).getByLabel('Custom pack size').fill('10 tablets'); await page.getByRole('checkbox', { name: 'I reviewed every line' }).check();
+  await lines.nth(1).getByRole('button',{name:/^Fixture manufacturer/}).click(); await page.getByLabel('Quote availability line 2').selectOption('UNAVAILABLE'); await lines.nth(1).getByLabel('Customer note', { exact: true }).fill('Cannot supply this requested specification.'); await lines.nth(1).getByLabel('Custom generic name').fill('Custom ingredient'); await lines.nth(1).getByLabel('Custom dosage form').fill('Tablet'); await lines.nth(1).getByLabel('Custom pack size').fill('10 tablets'); await reviewPricing(page);
 }
 
 test('RFQ snapshot, triage, clarification, status, notes and unable-to-supply use registered bodies', async ({ page, request }) => {
+  test.setTimeout(90_000);
   const email = await configure(request); await login(page, email); await openRfq(page);
   const first = page.locator('.admin-line-list > article').first(); await first.getByLabel('Availability', { exact: true }).selectOption('AVAILABLE'); await first.getByLabel('Customer-facing note').fill('Manufacturer confirmed for this enquiry.'); await first.getByRole('button', { name: 'Save line triage' }).click(); await expect.poll(async () => (await workflow(request, email)).rfq.items[0].item_availability_status).toBe('AVAILABLE');
   const note = page.getByRole('group', { name: 'Internal note', exact: true }); await note.getByLabel('Note', { exact: true }).fill('Internal handling instruction'); await note.getByRole('button', { name: 'Add internal note' }).click(); await expect(page.getByText('Internal handling instruction', { exact: true })).toBeVisible();
+  await expect(note.getByLabel('Note', { exact: true })).toHaveValue('');
   const clarify = page.getByRole('group', { name: 'Request clarification', exact: true }); await clarify.getByLabel('Question').fill('Please confirm the destination port.'); await clarify.getByRole('button', { name: 'Request clarification' }).click(); await expect.poll(async () => (await workflow(request, email)).rfq.status).toBe('NEED_CLARIFICATION');
+  await expect(clarify.getByLabel('Question')).toHaveValue('');
   const status = page.getByRole('group', { name: 'Change RFQ status' }); await status.getByLabel('Next status').selectOption('UNDER_REVIEW'); await status.getByRole('button', { name: 'Update status' }).click(); await expect.poll(async () => (await workflow(request, email)).rfq.status).toBe('UNDER_REVIEW');
   const unable = page.getByRole('group', { name: 'Unable to supply', exact: true }); await unable.getByLabel('Supply reason').fill('Requested specification cannot be supplied.'); await unable.getByRole('checkbox').check(); await unable.getByRole('button', { name: 'Confirm unable to supply' }).click(); await expect.poll(async () => (await workflow(request, email)).rfq.status).toBe('CLOSED');
   const result = await workflow(request, email); expect(result.rfq.contact_snapshot.full_name).toBe('Authorized buyer fixture'); expect(result.rfq.items[0].quantity).toBe(2); expect(result.writes.map((write) => write.body)).toEqual([{ item_availability_status: 'AVAILABLE', customer_facing_note: 'Manufacturer confirmed for this enquiry.' }, { body: 'Internal handling instruction' }, { body: 'Please confirm the destination port.', channel: 'EMAIL' }, { status: 'UNDER_REVIEW' }, { unable_to_supply_reason: 'Requested specification cannot be supplied.' }]);
 });
 
+test('quotation menu, customer search, status views and follow-ups open the matching work queue', async ({ page, request }, info) => {
+  test.setTimeout(90_000);
+  const email = await configure(request, 'workflow-sent'); await login(page, email);
+  const navigation = page.getByRole('navigation', { name: 'Admin navigation' });
+  await navigation.getByRole('button', { name: 'Quotations', exact: true }).click();
+  await navigation.getByRole('link', { name: 'Overview', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Quotation overview', exact: true })).toBeVisible();
+  await page.getByRole('region', { name: 'Quotation summary' }).getByRole('link', { name: /^Sent to customer/ }).click();
+  await expect(page).toHaveURL(/overall_status=ACTIVE&status=SENT/);
+  const table = page.getByRole('region', { name: 'Global quotation directory' });
+  await expect(table.getByText('Authorized buyer fixture', { exact: true })).toBeVisible();
+  await page.getByRole('search', { name: 'Search quotations' }).getByRole('searchbox').fill('buyer@fixture.example');
+  await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  await expect(table.getByRole('link', { name: 'View / revise', exact: true })).toBeVisible();
+  const content = await page.content(); expect(content).not.toMatch(/NEVER_RENDER_|internal_costs|procurement_unit_cost_bdt|magic_link_token_hash/);
+  for (const width of [1440, 768, 390, 320]) { await page.setViewportSize({ width, height: 950 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.screenshot({ path: info.outputPath(`quotation-list-${width}.png`), fullPage: true }); }
+  await page.setViewportSize({ width: 1440, height: 950 });
+  await navigation.getByRole('link', { name: 'Follow-ups', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Quotation follow-ups', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No matching quotations' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Quotation views' }).getByRole('link', { name: 'Ready to dispatch', exact: true }).click();
+  await expect(page).toHaveURL(/worklist=READY_TO_DISPATCH/);
+  expect((await workflow(request, email)).writes).toEqual([]);
+});
+
+test('RFQ selection and staged pricing retain exact inputs when navigating back', async ({ page, request }, info) => {
+  const email = await configure(request); await login(page, email); await page.goto('/admin/quotations/new');
+  await expect(page.getByRole('heading', { name: 'Create quotation from RFQ', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Select RFQ', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Continue to shipping', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Select a manufacturer for line 1.' })).toBeVisible();
+  expect((await workflow(request, email)).writes).toEqual([]);
+  await fillPricing(page);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByLabel('Freight amount', { exact: true }).fill('12.12345678');
+  await page.getByRole('button', { name: 'Continue to review', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'I reviewed every line' })).not.toBeChecked();
+  await expect(page.getByText('12.12345678 / 0', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '1 Medicines & pricing', exact: true }).click();
+  await expect(page.locator('.admin-pricing-line').first().getByLabel('Procurement cost per unit (BDT)', { exact: true })).toHaveValue('9007199254740993.12345678');
+  await reviewPricing(page);
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 950 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await page.screenshot({ path: info.outputPath(`quotation-review-${width}.png`), fullPage: true });
+  }
+  await page.getByRole('button', { name: 'Create draft once', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Open saved quotation', exact: true })).toBeVisible();
+  const saved = await workflow(request, email); expect(saved.writes).toHaveLength(1); expect(saved.writes[0].body).toMatchObject({ freight_amount: '12.12345678', items: [{ procurement_cost_bdt: '9007199254740993.12345678' }, { availability_status: 'UNAVAILABLE' }] });
+});
+
 test('uncatalogued product creation prefills medicine requirements without rewriting the RFQ association', async ({ page, request }) => {
   const email = await configure(request); await login(page, email); await openRfq(page); await page.getByRole('button', { name: 'Create catalog product', exact: true }).click(); const create = page.locator('.admin-create-product'); await expect(create.getByLabel('English brand name')).toHaveValue('Custom requirement fixture'); await expect(create.getByLabel('Strength', { exact: true })).toHaveValue('80 mg');
   for (const [label, value] of [['SKU', 'CUSTOM-001'], ['English slug', 'custom-001'], ['Dosage form', 'Tablet'], ['Pack size', '10 tablets']]) await create.getByLabel(label, { exact: true }).fill(value);
-  await create.getByRole('button',{name:/^Fixture manufacturer/}).click();await create.getByRole('button',{name:/^Fixture generic/}).click();await create.getByRole('button',{name:/^Fixture category/}).click();await create.getByRole('button', { name: 'Create catalog draft' }).click(); await expect(create.getByRole('status').filter({ hasText: 'Created draft product:' })).toBeVisible(); const result = await workflow(request, email); expect(result.rfq.items[1].is_uncatalogued).toBe(true); expect(result.rfq.items[1]).not.toHaveProperty('product_id'); expect(result.writes[0].path).toBe('catalog/products'); expect(result.writes[0].body).toMatchObject({ status: 'DRAFT', translations: { en: { brand_name: 'Custom requirement fixture', slug: 'custom-001' } } });
+  for (const [group, value] of [['Manufacturer', 'Fixture manufacturer'], ['Generic', 'Fixture generic'], ['Categories', 'Fixture category']]) { const picker = create.getByRole('group', { name: group, exact: true }); await picker.getByRole('combobox').click(); await picker.getByRole('option', { name: new RegExp(value!) }).click(); } await create.getByRole('heading').click();await create.getByRole('button', { name: 'Create catalog draft' }).click(); await expect(create.getByRole('status').filter({ hasText: 'Created draft product:' })).toBeVisible(); const result = await workflow(request, email); expect(result.rfq.items[1].is_uncatalogued).toBe(true); expect(result.rfq.items[1]).not.toHaveProperty('product_id'); expect(result.writes[0].path).toBe('catalog/products'); expect(result.writes[0].body).toMatchObject({ status: 'DRAFT', translations: { en: { brand_name: 'Custom requirement fixture', slug: 'custom-001' } } });
 });
 
 test('private prescription preview validates binary transport, narrow CSP and revokes its blob on close', async ({ page, request, context }) => {
@@ -36,12 +100,21 @@ test('private prescription preview validates binary transport, narrow CSP and re
 
 test('draft once, exact pricing strings, server preview, issue/resend and superseding revision stay private', async ({ page, request, context }) => {
   const email = await configure(request); const destinations: string[] = []; page.on('request', (value) => destinations.push(value.url())); await login(page, email); await openRfq(page); await page.getByRole('link', { name: 'Prepare Fast Quote' }).click(); await fillPricing(page);
-  await page.getByRole('button', { name: 'Create draft once' }).evaluate((button) => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); }); await expect(page.getByRole('link', { name: 'Open saved quotation' })).toBeVisible(); await expect(page.getByText('USD 34.69135780', { exact: true })).toBeVisible(); const saved = await workflow(request, email); expect(saved.writes.filter((write) => write.path === 'quotations/draft')).toHaveLength(1); expect(saved.writes[0].body).toMatchObject({ rfq_id: ids.rfq, items: [{ rfq_item_id: ids.catalogLine, procurement_cost_bdt: '9007199254740993.12345678', markup_percent: '20.12345678' }, { rfq_item_id: ids.customLine, availability_status: 'UNAVAILABLE', snapshot: { generic_name: 'Custom ingredient' } }] });
-  await page.getByRole('link', { name: 'Open saved quotation' }).click(); const issue = page.getByRole('heading', { name: 'Issue saved draft' }).locator('..'); await issue.getByRole('checkbox', { name: 'I verified these wire details' }).check(); await issue.getByRole('button', { name: 'Issue quotation', exact: true }).click(); const link = page.getByRole('textbox', { name: 'Private customer link', exact: true }); await expect(link).toHaveValue(/\/q\/[a-f0-9]{64}$/); const firstLink = await link.inputValue();
+  await page.getByRole('button', { name: 'Create draft once' }).evaluate((button) => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); }); await expect(page.getByRole('link', { name: 'Open saved quotation' })).toBeVisible(); await expect(page.getByText('USD 34.69135780', { exact: true }).first()).toBeVisible(); const saved = await workflow(request, email); expect(saved.writes.filter((write) => write.path === 'quotations/draft')).toHaveLength(1); expect(saved.writes[0].body).toMatchObject({ rfq_id: ids.rfq, items: [{ rfq_item_id: ids.catalogLine, procurement_cost_bdt: '9007199254740993.12345678', markup_percent: '20.12345678' }, { rfq_item_id: ids.customLine, availability_status: 'UNAVAILABLE', snapshot: { generic_name: 'Custom ingredient' } }] });
+  await page.getByRole('link', { name: 'Open saved quotation' }).click(); const issue = page.getByRole('heading', { name: 'Issue saved draft' }).locator('..'); await issue.getByRole('checkbox', { name: 'I verified these wire details' }).check(); await issue.getByRole('checkbox', { name: 'I reviewed the recipient' }).check(); await issue.getByRole('button', { name: 'Issue quotation', exact: true }).click(); const link = page.getByRole('textbox', { name: 'Private customer link', exact: true }); await expect(link).toHaveValue(/\/q\/[a-f0-9]{64}$/); const firstLink = await link.inputValue();
   await page.getByRole('checkbox', { name: 'Rotate the secret link' }).check(); await page.getByRole('button', { name: 'Resend with new link' }).click(); await expect(link).not.toHaveValue(firstLink); await expect(link).toHaveValue(/\/q\/[a-f0-9]{64}$/);
-  await page.getByRole('button', { name: 'Prepare revision', exact: true }).click(); await page.getByRole('checkbox', { name: 'Issue revised version immediately' }).check(); await page.getByRole('checkbox', { name: 'I reviewed every line' }).check(); await page.getByRole('button', { name: 'Create revised version' }).click(); await expect(page.getByRole('button', { name: 'Version 1 · SUPERSEDED' })).toBeVisible(); await expect(page.getByRole('button', { name: 'Version 2 · SENT' })).toBeVisible(); await expect(link).toHaveValue(/\/q\/[a-f0-9]{64}$/);
+  await prepareRevision(page); await page.getByRole('checkbox', { name: 'Issue revised version immediately' }).check(); await reviewPricing(page); await page.getByRole('button', { name: 'Create revised version' }).click(); await page.getByRole('tab', { name: /^Versions/ }).click(); await expect(page.getByRole('button', { name: 'View version 1', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'View version 2', exact: true })).toBeVisible(); await expect(link).toHaveValue(/\/q\/[a-f0-9]{64}$/);
   const latest = await workflow(request, email); const writes = latest.writes; expect(writes.filter((write) => write.path.endsWith('/send'))).toHaveLength(1); expect(writes.find((write) => write.path.endsWith('/send'))?.body).toMatchObject({ expected_version_id: saved.quote?.quotation.current_version_id, allow_stale_fx: false }); expect(writes.find((write) => write.path.endsWith('/revise'))?.body).toMatchObject({ expected_current_version_id: saved.quote?.quotation.current_version_id, issue_immediately: true });
   expect(await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }))).toEqual({ local: {}, session: {} }); expect(destinations.filter((url) => /plausible|google-analytics/.test(url))).toEqual([]);
+  await page.getByRole('button', { name: 'View version 1', exact: true }).click();
+  await expect(page.getByText('Historical versions are read-only.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Prepare revision', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Resend with new link', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Return to current version', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Prepare revision', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Overview', exact: true }).focus(); await page.keyboard.press('End');
+  await expect(page.getByRole('tab', { name: 'Activity', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Quotation activity', exact: true })).toBeVisible();
   const privateRsc = await context.request.get(`/admin/quotations/${ids.quote}?_rsc=workflow`, { headers: { RSC: '1' } }); expect(privateRsc.headers()['cache-control']).toContain('no-store'); expect(await privateRsc.text()).not.toMatch(/NEVER_RENDER_|magic_link_token_hash|admin_password_hash/);
 });
 
@@ -51,8 +124,8 @@ test('lost draft response discovers the active quotation without creating anothe
 
 test('payment then dispatch then delivery use expected version and server reservation time exactly once', async ({ page, request }) => {
   const email = await configure(request, 'workflow-accepted'); await login(page, email); await page.goto(`/admin/quotations/${ids.quote}`); const before = await workflow(request, email); await page.reload(); expect((await workflow(request, email)).quote?.versions[0].reservation_expires_at).toBe(before.quote?.versions[0].reservation_expires_at); await expect(page.getByLabel('Courier name')).toHaveCount(0);
-  await page.getByLabel('Wire reference').fill('WIRE-VERIFIED-001'); await page.getByRole('checkbox', { name: 'I verified this transition' }).check(); await page.getByRole('button', { name: 'Record payment received' }).click(); await expect(page.getByRole('heading', { name: 'Fulfillment: DISPATCHED' })).toBeVisible(); await page.getByLabel('Courier name').fill('Verified courier'); await page.getByLabel('AWB tracking number').fill('AWB-123'); await page.getByRole('checkbox', { name: 'I verified this transition' }).check(); await page.getByRole('button', { name: 'Record dispatched' }).click(); await expect(page.getByRole('heading', { name: 'Fulfillment: DELIVERED' })).toBeVisible(); await page.getByRole('checkbox', { name: 'I verified this transition' }).check(); await page.getByRole('button', { name: 'Record delivered' }).click(); await expect(page.getByRole('heading', { name: 'Fulfillment: DELIVERED' })).toHaveCount(0);
-  const result = await workflow(request, email); expect(result.quote?.quotation.overall_status).toBe('COMPLETED'); expect(result.writes.map((write) => write.body)).toEqual([{ expected_version_id: before.quote?.quotation.current_version_id, status: 'PAYMENT_RECEIVED', wire_reference: 'WIRE-VERIFIED-001', amount: '34.69135780', currency: 'USD' }, { expected_version_id: before.quote?.quotation.current_version_id, status: 'DISPATCHED', courier_name: 'Verified courier', awb_tracking_number: 'AWB-123' }, { expected_version_id: before.quote?.quotation.current_version_id, status: 'DELIVERED' }]);
+  await page.getByLabel('Wire reference').fill('WIRE-VERIFIED-001'); await page.getByRole('checkbox', { name: 'I verified this transition' }).check(); await page.getByRole('button', { name: 'Record payment received' }).click(); await expect(page.getByRole('heading', { name: 'Fulfillment: DISPATCHED' })).toBeVisible(); await page.getByLabel('Courier name').fill('Verified courier'); await page.getByLabel('AWB tracking number').fill('AWB-123'); await page.getByLabel('Estimated delivery (Dhaka, optional)', { exact: true }).fill('2030-11-21T14:30'); await page.getByRole('checkbox', { name: 'I verified this transition' }).check(); await page.getByRole('button', { name: 'Record dispatched' }).click(); await expect(page.getByRole('heading', { name: 'Fulfillment: DELIVERED' })).toBeVisible(); await page.getByRole('checkbox', { name: 'I verified this transition' }).check(); await page.getByRole('button', { name: 'Record delivered' }).click(); await expect(page.getByRole('heading', { name: 'Fulfillment: DELIVERED' })).toHaveCount(0);
+  const result = await workflow(request, email); expect(result.quote?.quotation.overall_status).toBe('COMPLETED'); expect(result.writes.map((write) => write.body)).toEqual([{ expected_version_id: before.quote?.quotation.current_version_id, status: 'PAYMENT_RECEIVED', wire_reference: 'WIRE-VERIFIED-001', amount: '34.69135780', currency: 'USD' }, { expected_version_id: before.quote?.quotation.current_version_id, status: 'DISPATCHED', courier_name: 'Verified courier', awb_tracking_number: 'AWB-123', estimated_delivery: '2030-11-21T08:30:00.000Z' }, { expected_version_id: before.quote?.quotation.current_version_id, status: 'DELIVERED' }]);
 });
 
 test('expired reservation, conflict recovery and proxy attachment errors are safe', async ({ page, request }) => {
@@ -68,12 +141,12 @@ test('triage and commercial detail fit desktop/tablet/phones with accessible foc
 });
 
 test('uncertain issue 500 preserves bank fields, refreshes state and never automatically issues again', async ({ page, request }) => {
-  const email = await configure(request, 'workflow-send-500'); await login(page, email); await page.goto(`/admin/rfqs/${ids.rfq}/quote`); await fillPricing(page); await page.getByRole('button', { name: 'Create draft once' }).click(); await page.getByRole('link', { name: 'Open saved quotation' }).click(); const issue = page.getByRole('heading', { name: 'Issue saved draft' }).locator('..'); await issue.getByRole('checkbox', { name: 'I verified these wire details' }).check(); await issue.getByRole('button', { name: 'Issue quotation', exact: true }).click();
+  const email = await configure(request, 'workflow-send-500'); await login(page, email); await page.goto(`/admin/rfqs/${ids.rfq}/quote`); await fillPricing(page); await page.getByRole('button', { name: 'Create draft once' }).click(); await page.getByRole('link', { name: 'Open saved quotation' }).click(); const issue = page.getByRole('heading', { name: 'Issue saved draft' }).locator('..'); await issue.getByRole('checkbox', { name: 'I verified these wire details' }).check(); await issue.getByRole('checkbox', { name: 'I reviewed the recipient' }).check(); await issue.getByRole('button', { name: 'Issue quotation', exact: true }).click();
   await expect(page.getByText('Delivery was not confirmed.', { exact: false })).toBeVisible(); await expect(issue.getByRole('button', { name: 'Issue quotation', exact: true })).toBeDisabled(); await page.getByRole('button', { name: 'Refresh state', exact: true }).click(); await expect(page.getByText('Delivery remains uncertain;', { exact: false })).toBeVisible(); await expect(issue.locator('input[name="bank_account_number"]')).toHaveValue('PRIVATE-WIRE-123'); expect((await workflow(request, email)).writes.filter((write) => write.path.endsWith('/send'))).toHaveLength(1);
 });
 
 test('FX/settings read failure preserves existing commercial totals and verified fulfillment', async ({ page, request }) => {
-  const email = await configure(request, 'workflow-config-down-accepted'); await login(page, email); await page.goto(`/admin/quotations/${ids.quote}`); await expect(page.getByText('Pricing configuration or rates are unavailable.', { exact: false })).toBeVisible(); await expect(page.getByText('USD 34.69135780', { exact: true })).toBeVisible(); await page.getByLabel('Wire reference').fill('WIRE-WHILE-FX-DOWN'); await page.getByRole('checkbox', { name: 'I verified this transition' }).check(); await page.getByRole('button', { name: 'Record payment received' }).click(); await expect(page.getByRole('heading', { name: 'Fulfillment: DISPATCHED' })).toBeVisible(); expect((await workflow(request, email)).writes).toHaveLength(1);
+  const email = await configure(request, 'workflow-config-down-accepted'); await login(page, email); await page.goto(`/admin/quotations/${ids.quote}`); await expect(page.getByText('Pricing configuration or rates are unavailable.', { exact: false })).toBeVisible(); await expect(page.getByText('USD 34.69135780', { exact: true }).first()).toBeVisible(); await page.getByLabel('Wire reference').fill('WIRE-WHILE-FX-DOWN'); await page.getByRole('checkbox', { name: 'I verified this transition' }).check(); await page.getByRole('button', { name: 'Record payment received' }).click(); await expect(page.getByRole('heading', { name: 'Fulfillment: DISPATCHED' })).toBeVisible(); expect((await workflow(request, email)).writes).toHaveLength(1);
 });
 
 test('rotated/superseded links fail while customer HTML/DOM/RSC keep prices and exclude admin costs', async ({ page, request, context }) => {
@@ -85,15 +158,15 @@ test('rotated/superseded links fail while customer HTML/DOM/RSC keep prices and 
   try {
     const html = await customer.goto(rotated.pathname); expect(html?.status()).toBe(200); expect(html?.headers()['cache-control']).toContain('no-store'); expect(await html?.text()).not.toMatch(forbidden); await expect(customer.getByText('USD 34.69135780', { exact: true })).toBeVisible(); expect(await customer.locator('body').innerHTML()).not.toMatch(forbidden);
     const rsc = await request.get(rotated.pathname, { headers: { RSC: '1' } }); expect(rsc.headers()['content-type']).toContain('text/x-component'); expect(await rsc.text()).not.toMatch(forbidden); expect(paths.filter((value) => /plausible|google-analytics|\/admin\//.test(value))).toEqual([]); expect(logs.join('\n')).not.toMatch(forbidden);
-    await page.getByRole('button', { name: 'Prepare revision' }).click(); await page.getByRole('checkbox', { name: 'Issue revised version immediately' }).check(); await page.getByRole('checkbox', { name: 'I reviewed every line' }).check(); await page.getByRole('button', { name: 'Create revised version' }).click(); await expect(page.getByRole('button', { name: 'Version 2 · SENT' })).toBeVisible(); expect((await request.get(`${api}/v1/public/quotation/token/${rotated.pathname.split('/').at(-1)}`)).status()).toBe(409);
+    await prepareRevision(page); await page.getByRole('checkbox', { name: 'Issue revised version immediately' }).check(); await reviewPricing(page); await page.getByRole('button', { name: 'Create revised version' }).click(); await page.getByRole('tab', { name: /^Versions/ }).click(); await expect(page.getByRole('button', { name: 'View version 2', exact: true })).toBeVisible(); expect((await request.get(`${api}/v1/public/quotation/token/${rotated.pathname.split('/').at(-1)}`)).status()).toBe(409);
     const publicRsc = await request.get('/en/products/osimert-80mg', { headers: { RSC: '1' } }); expect(await publicRsc.text()).not.toMatch(forbidden);
   } finally { await customer.close(); }
 });
 
 for (const kind of ['send', 'revise'] as const) test(`${kind} conflict refreshes authoritative state without replaying the write`, async ({ page, request }) => {
   const email = await configure(request, kind === 'send' ? 'workflow-issue-conflict' : 'workflow-conflict'); await login(page, email); await page.goto(`/admin/quotations/${ids.quote}`);
-  if (kind === 'send') { await page.getByRole('checkbox', { name: 'I verified these wire details' }).check(); await page.getByRole('button', { name: 'Issue quotation', exact: true }).click(); }
-  else { await page.getByRole('button', { name: 'Prepare revision' }).click(); await page.getByRole('checkbox', { name: 'I reviewed every line' }).check(); await page.getByRole('button', { name: 'Create revised version' }).click(); }
+  if (kind === 'send') { await page.getByRole('checkbox', { name: 'I verified these wire details' }).check(); await page.getByRole('checkbox', { name: 'I reviewed the recipient' }).check(); await page.getByRole('button', { name: 'Issue quotation', exact: true }).click(); }
+  else { await prepareRevision(page); await reviewPricing(page); await page.getByRole('button', { name: 'Create revised version' }).click(); }
   await expect(page.getByText('The server rejected a conflict.', { exact: false }).first()).toBeVisible(); const state = await workflow(request, email); expect(state.writes.filter((write) => write.path.endsWith(`/${kind}`))).toHaveLength(1); expect(state.quote?.versions).toHaveLength(1); await expect(page.getByRole('button', { name: kind === 'send' ? 'Issue quotation' : 'Create revised version', exact: true })).toBeEnabled();
 });
 

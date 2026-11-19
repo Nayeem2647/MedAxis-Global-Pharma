@@ -14,17 +14,20 @@ function configuredOrigin(value, name, httpsOnly = false) {
 
 const apiOrigin = configuredOrigin(process.env.NEXT_PUBLIC_API_BASE_URL, 'NEXT_PUBLIC_API_BASE_URL');
 const assetOrigin = configuredOrigin(process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL, 'NEXT_PUBLIC_R2_PUBLIC_BASE_URL', true);
+const s3AssetOrigin = configuredOrigin(process.env.NEXT_PUBLIC_S3_PUBLIC_BASE_URL, 'NEXT_PUBLIC_S3_PUBLIC_BASE_URL', true);
+const avatarOrigin = configuredOrigin(process.env.NEXT_PUBLIC_S3_AVATAR_ORIGIN, 'NEXT_PUBLIC_S3_AVATAR_ORIGIN', true);
 const plausibleScript = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN && process.env.NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL;
 const plausibleOrigin = plausibleScript && !plausibleScript.startsWith('/') ? configuredOrigin(new URL(plausibleScript).origin, 'NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL', true) : undefined;
 const plausibleApiOrigin = configuredOrigin(process.env.NEXT_PUBLIC_PLAUSIBLE_API_HOST, 'NEXT_PUBLIC_PLAUSIBLE_API_HOST', true);
-const imageOrigins = [...new Set(['https://cdn.medaxisglobalpharma.com', assetOrigin].filter(Boolean))];
+const imageOrigins = [...new Set(['https://cdn.medaxisglobalpharma.com', assetOrigin, s3AssetOrigin, ...(isDev && apiOrigin ? [apiOrigin] : [])].filter(Boolean))];
 // App Router uses inline bootstrap scripts. This static CSP preserves ISR; nonce-based
 // CSP would require dynamic rendering. Production never permits unsafe-eval.
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${plausibleOrigin ? ` ${plausibleOrigin}` : ''}${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${imageOrigins.join(' ')}`,
+  `img-src 'self' data: blob: ${[...imageOrigins, avatarOrigin].filter(Boolean).join(' ')}`,
+  `media-src 'self' blob: ${imageOrigins.join(' ')}`,
   "font-src 'self'",
   `connect-src 'self' https://challenges.cloudflare.com${apiOrigin ? ` ${apiOrigin}` : ''}${plausibleOrigin ? ` ${plausibleOrigin}` : ''}${plausibleApiOrigin ? ` ${plausibleApiOrigin}` : ''}${isDev ? ' ws://localhost:* ws://127.0.0.1:*' : ''}`,
   'frame-src https://challenges.cloudflare.com',
@@ -38,6 +41,8 @@ const csp = [
 
 /** @type {import('next').NextConfig} */
 const config = {
+  distDir: process.env.MEDAXIS_E2E === '1' ? '.next-e2e' : '.next',
+  typescript: { tsconfigPath: process.env.MEDAXIS_E2E === '1' ? 'tsconfig.e2e.json' : 'tsconfig.json' },
   poweredByHeader: false,
   reactStrictMode: true,
   // Private bearer-token paths must not enter Next's development access logs.
@@ -50,7 +55,7 @@ const config = {
   images: {
     remotePatterns: imageOrigins.map((origin) => {
       const url = new URL(origin);
-      return { protocol: 'https', hostname: url.hostname, port: url.port, pathname: '/**', search: '' };
+      return { protocol: url.protocol.slice(0, -1), hostname: url.hostname, port: url.port, pathname: '/**', search: '' };
     }),
   },
   async headers() {

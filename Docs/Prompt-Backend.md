@@ -1,6 +1,6 @@
 # MedAxis Global Pharma — Step-by-Step Backend Implementation Prompts (Release 1)
 
-**Target Stack:** TypeScript (strict ESM `NodeNext`, `src/` -> `dist/`) · Node.js 20+ LTS · Express.js (Layered Monolith) · MongoDB Atlas (Mongoose 8+ with Transactions & Atlas Search) · Cloudflare R2 · Puppeteer · Resend (Brevo fallback) · `node-cron`  
+**Target Stack:** TypeScript (strict ESM `NodeNext`, `src/` -> `dist/`) · Node.js 20+ LTS · Express.js (Layered Monolith) · MongoDB Atlas (Mongoose 8+ with Transactions & Atlas Search) · AWS S3 · Puppeteer · Resend (Brevo fallback) · `node-cron`
 **Canonical Source Specifications (Single Source of Truth):**
 - [PRD.md](PRD.md) — Business rules (`BD-001` to `BD-005`), Release 1 scope, state machines, security & acceptance criteria
 - [Architecture.md](Architecture.md) — Layered monolith structure (`backend/src/`), service design, deployment standards
@@ -30,7 +30,7 @@
 | **Step 1** | TypeScript + Express Bootstrap, Config, MongoDB Connection, Logging & Error Envelope Middleware | Foundation (`/v1` routing, health check) |
 | **Step 2** | Database Layer: 21 Typed Mongoose Models, Index & `$jsonSchema` Migrations, Seed | All 21 collections (`Database.md` / `Database-Schema.md`) |
 | **Step 3** | Super Admin Auth, TOTP 2FA, Backup Codes, Sessions & Brute-Force Guard | Endpoints `#18–24` |
-| **Step 4** | Cloudflare R2 Storage (AES-256-GCM) + Public & Admin Catalog, SEO, CMS & Settings | Endpoints `#01–07`, `#39–44`, `#51–52` |
+| **Step 4** | AWS S3 Storage (AES-256-GCM) + Public & Admin Catalog, SEO, CMS & Settings | Endpoints `#01–07`, `#39–44`, `#51–52` |
 | **Step 5** | Public RFQ Intake (Quick Quote, Cart, Prescriptions), Idempotency & Admin RFQ Queue | Endpoints `#08–11`, `#25–32` |
 | **Step 6** | FX Rate Engine, Fast-Quote Pricing Formula, Cost Isolation & Quotation Versioning | Endpoints `#33–37`, `#45–46` |
 | **Step 7** | Magic Link Buyer Actions, Atomic 1-Click Accept, 3-Step Fulfillment, Puppeteer PDF & SSE | Endpoints `#12–17`, `#38`, `#47–50` |
@@ -60,7 +60,7 @@ Implement **Step 1: TypeScript Project Bootstrap & Core Express Infrastructure**
    - Add `backend/src/types/express.d.ts` augmenting `Express.Request` with `requestId: string`, `clientIp?: string`, and `admin?: { id: string; sessionId: string }`.
 
 2. **Configuration (`backend/src/config/`):**
-   - `env.ts`: Strictly validate all required and optional environment variables at startup using Zod (`NODE_ENV`, `PORT`, `MONGODB_URI`, `PUBLIC_ORIGIN`, `API_ORIGIN`, `ADMIN_SESSION_SECRET`, `PRESCRIPTION_ENCRYPTION_KEY`, `PRESCRIPTION_KEY_ID`, `R2_*`, `CLOUDFLARE_TURNSTILE_SECRET`, `RESEND_API_KEY`, `EXCHANGE_RATE_API_KEY`, `REVALIDATE_WEBHOOK_SECRET`, `WEBHOOK_HMAC_SECRET`, `ADMIN_ALERT_EMAIL`) and export typed `AppEnv`. Fail fast on missing critical secrets in production.
+   - `env.ts`: Strictly validate all required and optional environment variables at startup using Zod (`NODE_ENV`, `PORT`, `MONGODB_URI`, `PUBLIC_ORIGIN`, `API_ORIGIN`, `ADMIN_SESSION_SECRET`, `PRESCRIPTION_ENCRYPTION_KEY`, `PRESCRIPTION_KEY_ID`, `AWS_REGION`, `S3_BUCKET_*`, `S3_PUBLIC_BASE_URL`, `CLOUDFLARE_TURNSTILE_SECRET`, `RESEND_API_KEY`, `EXCHANGE_RATE_API_KEY`, `REVALIDATE_WEBHOOK_SECRET`, `WEBHOOK_HMAC_SECRET`, `ADMIN_ALERT_EMAIL`) and export typed `AppEnv`. Fail fast on missing critical secrets in production.
    - `constants.ts`: Define strongly-typed `as const` Release 1 enums, union types, and limits matching `Database-Schema.md` and `PRD.md` (RFQ statuses `SUBMITTED | UNDER_REVIEW | NEED_CLARIFICATION | QUOTED | CONVERTED | CLOSED | CANCELLED`, Quotation Version statuses `DRAFT | SENT | ACCEPTED | PAYMENT_RECEIVED | DISPATCHED | DELIVERED | DECLINED | SUPERSEDED | VALIDITY_EXPIRED | PAYMENT_EXPIRED`, currencies `USD | EUR | CNY | BDT`, allowed MIME types `['image/jpeg', 'image/png', 'application/pdf']`, max prescription size `5242880` bytes, 5-calendar-day reservation rule, 30-min session idle timeout).
    - `db.ts`: Connect to MongoDB Atlas via Mongoose with replica-set/transaction awareness, retry logging, `checkDatabase()` health probe, and graceful shutdown hooks.
 
@@ -103,7 +103,7 @@ Using `Database.md` (Sections 1–7, 9) and `Database-Schema.md` (full Section 2
 1. **Create All 21 Typed Mongoose Schemas & Interfaces** (organized into `backend/src/modules/<module>/<module>.schema.ts` per `Architecture.md` Section 4):
    - Export TypeScript document interfaces (`IProduct`, `IManufacturer`, `IRfq`, `IQuotationVersion`, etc.) alongside Mongoose `Schema<T>` & `model<T>()`.
    - Catalog/CMS/SEO: `products` (embedded `translations.en` & `translations.zhCN`, `cold_chain_required`, `storage_condition`, `category_ids`, no public price fields), `manufacturers`, `generics`, `categories`, `cms_banners`, `url_redirects`.
-   - Customer/RFQ/Medical: `customers` (normalized lowercase email optional, no password/account fields), `rfqs` (immutable `contact_snapshot`, `has_prescription`, bounded `items` 1..100 with line UUIDs and `item_availability_status`), `rfq_idempotency_keys` (with `expires_at` 24h), `prescriptions` (`purge_status`, `purge_scheduled_at`, encryption IV/authTag/keyId metadata, no plain R2 public URLs), `clarification_messages` (`rfq_id`, `customer_id`, `thread_id`, `provider_event_id`).
+   - Customer/RFQ/Medical: `customers` (normalized lowercase email optional, no password/account fields), `rfqs` (immutable `contact_snapshot`, `has_prescription`, bounded `items` 1..100 with line UUIDs and `item_availability_status`), `rfq_idempotency_keys` (with `expires_at` 24h), `prescriptions` (`purge_status`, `purge_scheduled_at`, encryption IV/authTag/keyId metadata, no public object URLs), `clarification_messages` (`rfq_id`, `customer_id`, `thread_id`, `provider_event_id`).
    - Quotation & FX: `quotations` (`rfq_id`, `current_version_id`, `overall_status`), `quotation_versions` (`magic_link_token_hash`, `locked_fx_rates`, `acceptance_evidence`, `reservation_status`, `reservation_expires_at`, embedded line snapshots, payment/dispatch/delivery sub-objects), `quotation_internal_costs` (strictly isolated procurement cost BDT, markup %, manufacturer attribution, margin), `exchange_rates` (`_id` / `currency_code` `USD | CNY | EUR`, `live_rate_to_bdt`, `manual_rate_to_bdt`, `active_mode`).
    - Auth/Audit/Ops: `admins` (Single Super Admin `singleton_key`, Argon2id `password_hash`, encrypted TOTP secret, bcrypt backup codes), `admin_sessions` (`token_hash`, `revoked_at`, `expires_at`), `auth_attempts` (`scope_key`, `expires_at`), `audit_logs` (append-only, immutable), `notification_logs` (`dedupe_key`, `status`, `retry_count`, `next_retry_at`, `lease_until`, `provider_message_id`), `platform_settings` (`key`, packaging units, wire instructions, payment/shipping presets).
 
@@ -167,18 +167,18 @@ Implement **Step 3: Super Admin Authentication & Security Middleware** in TypeSc
 
 ---
 
-## Step 4 — R2 Encrypted Storage + Public & Admin Catalog, SEO, CMS & Settings (`#01–07`, `#39–44`, `#51–52`)
+## Step 4 — S3 Encrypted Storage + Public & Admin Catalog, SEO, CMS & Settings (`#01–07`, `#39–44`, `#51–52`)
 
-**Goal:** Build Cloudflare R2 file operations (`storage.service.ts`), public zero-price multilingual catalog/SEO/CMS endpoints, admin catalog CRUD + CSV bulk import, slug `301` redirect tracking, and `platform_settings`.
+**Goal:** Build AWS S3 file operations (`storage.service.ts`), public zero-price multilingual catalog/SEO/CMS endpoints, admin catalog CRUD + CSV bulk import, slug `301` redirect tracking, and `platform_settings`.
 
 ### Prompt
 ```text
 Implement **Step 4: Storage Service, Public/Admin Catalog, CMS, Redirects & Platform Settings** in TypeScript inside `backend/src/` matching `PRD.md` (Sections 1.3 A1/A7, 3.1), `Architecture.md` (Sections 3.1, 3.7, 3.9), `Database-Schema.md`, and `API-Spec.md` Endpoints `#01–07`, `#39–44`, `#51–52`:
 
-1. **Cloudflare R2 Storage Service (`backend/src/modules/storage/storage.service.ts`):**
-   - Configure `@aws-sdk/client-s3` (S3-compatible endpoint for Cloudflare R2) managing the 3 logical buckets/prefixes: `products`, `quotes`, and `prescriptions`.
+1. **AWS S3 Storage Service (`backend/src/modules/storage/storage.service.ts`):**
+   - Configure `@aws-sdk/client-s3` with backend IAM credentials and four buckets: `products`, `quotes`, `prescriptions`, and `avatars`.
    - Implement public image upload helper for admin catalog management.
-   - Implement AES-256-GCM encryption/decryption & magic-byte validation (`file-type`) helper for prescription buffers (max `5,242,880` bytes, `image/jpeg | image/png | application/pdf` only), storing `iv`, `auth_tag`, `key_id`, `r2_object_key` cleanly without exposing any public bucket URL.
+   - Implement AES-256-GCM encryption/decryption & magic-byte validation (`file-type`) helper for prescription buffers (max `5,242,880` bytes, `image/jpeg | image/png | application/pdf` only), storing `iv`, `auth_tag`, `key_id`, `object_key` cleanly without exposing any public bucket URL.
 
 2. **Public Catalog, SEO & CMS (`backend/src/modules/catalog/` & `cms/`):**
    - **Zero Public Pricing Invariant:** Every public catalog query and TypeScript response DTO MUST use explicit field allowlisting/projection and MUST NEVER expose prices, FX rates, internal costs, or admin notes.
@@ -216,7 +216,7 @@ Implement **Step 5: RFQ Intake, Prescription Encryption Upload, Webhook Threadin
    - `validators/rfq.validator.ts`: Typed Zod schemas for Quick Quote, Cart RFQ, and line availability updates.
 
 2. **Public RFQ & Prescription Endpoints:**
-   - **`POST /v1/public/prescriptions/upload` (#10):** `multipart/form-data` (`multer` memoryStorage max 5 MiB), verify Turnstile, inspect magic bytes via `file-type` (`image/jpeg`, `image/png`, `application/pdf` -> else `400 INVALID_PRESCRIPTION_FILE`), encrypt buffer with AES-256-GCM, upload ciphertext to R2 `prescriptions` bucket, save `prescriptions` metadata (`purge_status: 'ACTIVE'`, initial `purge_scheduled_at = now + 90 days`), return `201` with `prescription_id`.
+   - **`POST /v1/public/prescriptions/upload` (#10):** `multipart/form-data` (`multer` memoryStorage max 5 MiB), verify Turnstile, inspect magic bytes via `file-type` (`image/jpeg`, `image/png`, `application/pdf` -> else `400 INVALID_PRESCRIPTION_FILE`), encrypt buffer with AES-256-GCM, upload ciphertext to the private S3 prescription bucket, save `prescriptions` metadata (`purge_status: 'ACTIVE'`, initial `purge_scheduled_at = now + 90 days`), return `201` with `prescription_id`.
    - **`POST /v1/public/rfq/quick-quote` (#08) & `POST /v1/public/rfq/cart` (#09):**
      - Validate `idempotency_key` (UUIDv4), Turnstile token, `items` (1..100; uncatalogued items require `is_uncatalogued: true` and `custom_medicine_name` per `MF-01`), and `contact` fields.
      - Enforce **BD-002 (China Email Primary)**: if `locale === 'zh-CN'` (or buyer indicates Mainland China delivery) and normalized email is missing/empty, reject with `422 VALIDATION_FAILED`.
@@ -236,7 +236,7 @@ Implement **Step 5: RFQ Intake, Prescription Encryption Upload, Webhook Threadin
    - **`POST /v1/admin/rfqs/:id/request-clarification` (#29):** Record outbound clarification message in `clarification_messages`, transition RFQ to `NEED_CLARIFICATION`, enqueue `clarification-request` email.
    - **`POST /v1/admin/rfqs/:id/unable-to-supply` (#30):** Close RFQ (`CLOSED` with `unable_to_supply_reason` — `MF-09`), schedule earliest medical prescription purge (`min(uploaded_at+90d, now+14d)`), audit log, enqueue `unable-to-supply` email.
    - **`POST /v1/admin/rfqs/:id/notes` (#31):** Append private internal admin sourcing notes.
-   - **`GET /v1/admin/prescriptions/:id/stream` (#32):** Verify admin auth, download ciphertext from R2, decrypt with AES-256-GCM, stream binary with `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and write `audit_logs` access record.
+   - **`GET /v1/admin/prescriptions/:id/stream` (#32):** Verify admin auth, download ciphertext from S3, decrypt with AES-256-GCM, stream binary with `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and write `audit_logs` access record.
 ```
 
 ### Verification Gate
@@ -307,7 +307,7 @@ Implement **Step 7: Magic Link Decisions, Atomic Acceptance, PDF Worker, Fulfill
    - Render server-side HTML template embedding self-hosted `Noto Sans SC` WOFF2 font (`backend/public/fonts/`) for crisp English & Simplified Chinese (`zh-CN`) characters.
    - **Strict Cost Isolation:** TypeScript input interface accepts ONLY `quotation_versions` + `platform_settings` wire details + MedAxis Global Pharma branding; never import or query `quotation_internal_costs` or private admin notes.
    - Support two modes: `ORIGINAL_QUOTE` (`SENT`) and `ACCEPTED_QUOTE` / `PROFORMA` (adds prominent **"ACCEPTED / PROFORMA INVOICE"** watermark + acceptance timestamp + official bank wire transfer instructions).
-   - Upload rendered PDF bytes to Cloudflare R2 `quotes` bucket and record R2 object key on `quotation_versions`.
+   - Upload rendered PDF bytes to AWS S3 `quotes` bucket and record the S3 object key on `quotation_versions`.
 
 2. **Public Magic Link Endpoints (`TOKEN_AUTH`, rate limit 30 probes/min/IP, response headers `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow, noarchive`, `Cache-Control: no-store`):**
    - Resolve `SHA-256(token)` -> `quotation_versions` + parent `quotations`. Invalid token returns `404 RESOURCE_NOT_FOUND` (never leak hashes, buyer info, or costs).
@@ -324,7 +324,7 @@ Implement **Step 7: Magic Link Decisions, Atomic Acceptance, PDF Worker, Fulfill
    - **`POST /v1/public/quotation/request-revision/:token` (#14):** Save buyer modification notes into `clarification_messages`, write audit log, notify admin.
    - **`POST /v1/public/quotation/request-refresh/:token` (#15):** Allowed on expired versions (`VALIDITY_EXPIRED | PAYMENT_EXPIRED`); logs refresh request and notifies admin.
    - **`POST /v1/public/quotation/decline/:token` (#16):** Atomic guard on `SENT` -> `DECLINED` with structured reason, schedule earliest prescription purge (`terminal_at + 14 days`), update parent quotation/RFQ summary, audit + notify admin.
-   - **`GET /v1/public/quotation/pdf/:token` (#17):** Proxy PDF stream from R2 (or generate on-demand fallback if async worker not finished), returning `application/pdf` with `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: no-referrer`.
+   - **`GET /v1/public/quotation/pdf/:token` (#17):** Proxy PDF stream from S3 (or generate on-demand fallback if async worker not finished), returning `application/pdf` with `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: no-referrer`.
 
 3. **Admin Fulfillment, Customers, Audit & Live SSE (`ADMIN_AUTH`):**
    - **`PATCH /v1/admin/quotations/:id/fulfillment` (#38):** Enforce linear Release 1 transitions:
@@ -376,7 +376,7 @@ Implement **Step 8: Durable Notification Service, `node-cron` Background Workers
      - 09:00: `SENT` quotes expiring within 24h -> enqueue `expiry-reminder` (`dedupe_key` prevents duplicate daily sends).
      - 10:00: `ACCEPTED` quotes >= 3 days without payment -> enqueue Day-3 payment reminder.
    - `fxRateRefresh.job.ts` (every 1 hour): Refresh `exchange_rates` with `0.1..10000` sanity check.
-   - `prescriptionPurge.job.ts` (hourly sweep per `Database.md` Section 5): Find `prescriptions` with `purge_scheduled_at <= now` and `purge_status !== 'PURGED'` (`min(uploaded_at + 90 days, terminal_at + 14 days)`). Delete R2 object **first**; only upon confirmed R2 deletion update metadata to `PURGED` and clear encryption/object key fields. Alert admin if overdue purge retries fail.
+   - `prescriptionPurge.job.ts` (hourly sweep per `Database.md` Section 5): Find `prescriptions` with `purge_scheduled_at <= now` and `purge_status !== 'PURGED'` (`min(uploaded_at + 90 days, terminal_at + 14 days)`). Delete the S3 object **first**; only upon confirmed S3 deletion update metadata to `PURGED` and clear encryption/object key fields. Alert admin if overdue purge retries fail.
 
 3. **Full Release 1 Backend Verification Suite (`backend/tests/*.test.ts`):**
    - Write typed Vitest + Supertest tests covering all PRD Section 8 acceptance scenarios:
@@ -384,9 +384,9 @@ Implement **Step 8: Durable Notification Service, `node-cron` Background Workers
      - 2FA Auth + Brute-force lockout + Session revocation.
      - Zero price/internal cost leakage across public catalog, Magic Link viewer, and PDF output.
      - RFQ idempotency replay & conflict (`409`), China `zh-CN` email requirement (`BD-002`).
-     - Atomic Accept vs Expiry vs Revision concurrency guards, and background worker state/purge tests (with mocked Resend/R2/Turnstile adapters).
+     - Atomic Accept vs Expiry vs Revision concurrency guards, and background worker state/purge tests (with mocked Resend/S3/Turnstile adapters).
 ```
 
 ### Verification Gate
 - `npm run typecheck`, `npm run build`, `npm run lint`, and `npm test` all pass **100%** with zero skipped critical assertions.
-- Verify no worker runs duplicated notifications when `dedupe_key` already succeeded, and `prescriptionPurge` deletes R2 object before marking MongoDB `PURGED`.
+- Verify no worker runs duplicated notifications when `dedupe_key` already succeeded, and `prescriptionPurge` deletes the S3 object before marking MongoDB `PURGED`.

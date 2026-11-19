@@ -97,6 +97,7 @@ export function SettingsManager({ initial, initialFx }: { initial: AdminSettings
         </button>
       </div>
       <AdminOperationFeedback state={state} />
+      <AdminLink className="button secondary" href="/admin/settings/profile">Profile, login email & password</AdminLink>
       <AdminLink href="/admin/settings/security">Authenticator & session security</AdminLink>
       <p className="small muted">
         Settings stay inside the authenticated console. Published forms receive no private settings response.

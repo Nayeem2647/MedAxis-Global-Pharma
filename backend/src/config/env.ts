@@ -59,6 +59,14 @@ const baseSchema = z.object({
 
   PRESCRIPTION_ENCRYPTION_KEY: optionalString,
   PRESCRIPTION_KEY_ID: optionalString,
+  STORAGE_DRIVER: z.enum(['s3', 'local']).default('local'),
+  LOCAL_STORAGE_DIR: optionalString,
+  AWS_REGION: optionalString,
+  S3_BUCKET_PRODUCTS: optionalString,
+  S3_BUCKET_QUOTES: optionalString,
+  S3_BUCKET_PRESCRIPTIONS: optionalString,
+  S3_BUCKET_AVATARS: optionalString,
+  S3_PUBLIC_BASE_URL: optionalUrl,
   R2_ACCOUNT_ID: optionalString,
   R2_ACCESS_KEY_ID: optionalString,
   R2_SECRET_ACCESS_KEY: optionalString,
@@ -67,6 +75,7 @@ const baseSchema = z.object({
   R2_BUCKET_PRESCRIPTIONS: optionalString,
   R2_PUBLIC_BASE_URL: optionalUrl,
   CLOUDFLARE_TURNSTILE_SECRET: optionalString,
+  DEEPL_API_KEY: z.preprocess(emptyToUndefined, z.string().trim().min(1).max(300).regex(/^[a-zA-Z0-9:._-]+$/).optional()),
   RESEND_API_KEY: optionalString,
   BREVO_API_KEY: optionalString,
   EMAIL_FALLBACK_ENABLED: booleanFromString.default(false),
@@ -94,15 +103,11 @@ const baseSchema = z.object({
   ADMIN_ALERT_EMAIL: z.preprocess(emptyToUndefined, z.string().email().optional()),
 });
 
+const S3_BUCKETS = ['S3_BUCKET_PRODUCTS', 'S3_BUCKET_QUOTES', 'S3_BUCKET_PRESCRIPTIONS', 'S3_BUCKET_AVATARS'] as const;
+
 const PRODUCTION_REQUIRED = [
   'PRESCRIPTION_ENCRYPTION_KEY',
   'PRESCRIPTION_KEY_ID',
-  'R2_ACCOUNT_ID',
-  'R2_ACCESS_KEY_ID',
-  'R2_SECRET_ACCESS_KEY',
-  'R2_BUCKET_PRODUCTS',
-  'R2_BUCKET_QUOTES',
-  'R2_BUCKET_PRESCRIPTIONS',
   'CLOUDFLARE_TURNSTILE_SECRET',
   'RESEND_API_KEY',
   'EMAIL_FROM',
@@ -115,6 +120,22 @@ const PRODUCTION_REQUIRED = [
 const KEY_PATTERN = /^([0-9a-fA-F]{64}|[A-Za-z0-9+/]{43}=)$/;
 
 const schema = baseSchema.superRefine((env, ctx) => {
+  if (env.NODE_ENV === 'production' && env.STORAGE_DRIVER === 'local') {
+    ctx.addIssue({ code: 'custom', path: ['STORAGE_DRIVER'], message: 'local storage is for development/test only' });
+  }
+  if (env.STORAGE_DRIVER === 's3') {
+    for (const key of ['AWS_REGION', ...S3_BUCKETS, 'S3_PUBLIC_BASE_URL'] as const) {
+      if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'is required when STORAGE_DRIVER=s3' });
+    }
+  }
+  const buckets = S3_BUCKETS.map((key) => env[key]).filter(Boolean);
+  if (env.STORAGE_DRIVER === 's3' && new Set(buckets).size !== buckets.length)
+    ctx.addIssue({ code: 'custom', path: ['S3_BUCKET_PRODUCTS'], message: 'use separate buckets for catalog and private files' });
+  if (env.STORAGE_DRIVER === 's3' && env.S3_PUBLIC_BASE_URL) {
+    const url = URL.parse(env.S3_PUBLIC_BASE_URL);
+    if (!url || url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash)
+      ctx.addIssue({ code: 'custom', path: ['S3_PUBLIC_BASE_URL'], message: 'must be an HTTPS origin without credentials or a path' });
+  }
   if (env.EMAIL_FALLBACK_ENABLED && !env.BREVO_API_KEY)
     ctx.addIssue({
       code: 'custom',

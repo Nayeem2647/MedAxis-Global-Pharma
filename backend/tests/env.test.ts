@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EnvValidationError, loadEnv, type RawEnvInput } from '../src/config/env.js';
-import { productionEnv, validEnv } from './helpers/env.js';
+import { productionEnv, s3EnvSettings, validEnv } from './helpers/env.js';
 
 describe('loadEnv', () => {
   it('loads a valid development/test environment with defaults', () => {
@@ -10,6 +10,7 @@ describe('loadEnv', () => {
     expect(env.isProduction).toBe(false);
     expect(env.DB_REQUIRE_REPLICA_SET).toBe(false);
     expect(env.TRUST_CLOUDFLARE_HEADERS).toBe(false);
+    expect(env.STORAGE_DRIVER).toBe('local');
   });
 
   it.each(['MONGODB_URI', 'PUBLIC_ORIGIN', 'API_ORIGIN', 'ADMIN_SESSION_SECRET'])(
@@ -44,6 +45,17 @@ describe('loadEnv', () => {
   });
 
   describe('production', () => {
+    it('accepts AWS S3 without R2 credentials and requires isolation of private buckets', () => {
+      const source: RawEnvInput = {
+        ...productionEnv,
+        ...s3EnvSettings,
+        S3_PUBLIC_BASE_URL: 'https://assets.example.com',
+      };
+      expect(loadEnv(source).S3_BUCKET_AVATARS).toBe('private-avatars');
+      expect(() => loadEnv({ ...source, S3_BUCKET_PRESCRIPTIONS: undefined })).toThrow(/S3_BUCKET_PRESCRIPTIONS/);
+      expect(() => loadEnv({ ...source, S3_BUCKET_QUOTES: source.S3_BUCKET_PRODUCTS })).toThrow(/separate buckets/);
+    });
+
     it('accepts a complete production environment and enables strict defaults', () => {
       const env = loadEnv({ ...productionEnv });
       expect(env.isProduction).toBe(true);
@@ -54,7 +66,6 @@ describe('loadEnv', () => {
     it.each([
       'PRESCRIPTION_ENCRYPTION_KEY',
       'PRESCRIPTION_KEY_ID',
-      'R2_SECRET_ACCESS_KEY',
       'CLOUDFLARE_TURNSTILE_SECRET',
       'RESEND_API_KEY',
       'EXCHANGE_RATE_API_KEY',
@@ -82,6 +93,10 @@ describe('loadEnv', () => {
       expect(() => loadEnv({ ...productionEnv, PRESCRIPTION_ENCRYPTION_KEY: 'not-a-key' })).toThrow(
         /PRESCRIPTION_ENCRYPTION_KEY/,
       );
+    });
+
+    it('rejects local storage in production', () => {
+      expect(() => loadEnv({ ...productionEnv, STORAGE_DRIVER: 'local' })).toThrow(/development\/test only/);
     });
   });
 

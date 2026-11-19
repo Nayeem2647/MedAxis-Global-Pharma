@@ -8,6 +8,7 @@ export interface IPrescription {
   customer_id?: string;
   upload_token_hash?: string;
   r2_storage_key?: string;
+  object_key?: string;
   mime_type: 'image/jpeg' | 'image/png' | 'application/pdf';
   file_size_bytes: number;
   encryption?: { algorithm: 'aes-256-gcm'; key_id: string; iv: string; auth_tag: string };
@@ -46,6 +47,7 @@ export const PrescriptionSchema = new Schema<IPrescription>(
       match: new RegExp('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'),
     },
     upload_token_hash: { type: String, match: /^[a-f0-9]{64}$/, select: false },
+    object_key: { type: String, maxlength: 500, match: /^prescriptions\/(?:local|s3)\/(?:legacy\/)?[a-zA-Z0-9_-]+\.enc$/ },
     r2_storage_key: {
       type: String,
       required: false,

@@ -41,6 +41,15 @@ as `bank_details` in the draft/send payload.
 
 ## Draft and pricing contract
 
+The authenticated quotation directory supports literal search across quotation/RFQ
+references and the current version's customer name, company and email. Its explicit
+projection returns only the customer name/company/email and commercial summary;
+internal cost records, bank instructions and token material remain excluded.
+`worklist=AWAITING_PAYMENT|READY_TO_DISPATCH|EXPIRING` uses the same conditions as
+the summary counts. Worklists require an ACTIVE parent and EXPIRING includes only
+unexpired accepted allocations due within 24 hours. Draft and sent summary counts
+also use the active parent's current version. These reads do not write or notify.
+
 `POST /v1/admin/quotations/draft` takes `rfq_id`, `billing_currency`, `items`,
 `freight_amount`, `insurance_amount`, `shipping_terms`, optional `bank_details`
 and optional `internal_procurement_notes`. Money, cost and percent inputs are

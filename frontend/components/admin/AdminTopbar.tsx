@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Image from 'next/image';
 import { ArrowUpRight, ChevronDown, Globe, MessageSquareText, Search, ShoppingCart } from 'lucide-react';
 import { ApiError, apiRequest } from '../../lib/api-client';
-import { adminRfqsSchema, type AdminSession } from '../../lib/admin-contract';
+import { adminProfileSchema, adminRfqsSchema, type AdminProfile, type AdminSession } from '../../lib/admin-contract';
 import { summarySchema } from '../../lib/admin-management';
 import type { StreamState } from '../../lib/admin-stream';
 import { AdminLink } from './AdminShell';
@@ -13,10 +13,14 @@ const menuItems = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/rfqs', label: 'RFQ inbox' },
   { href: '/admin/quotations', label: 'Quotations' },
+  { href: '/admin/quotations/overview', label: 'Quotation overview' },
+  { href: '/admin/quotations/new', label: 'Create quotation from RFQ' },
+  { href: '/admin/quotations/follow-ups', label: 'Quotation follow-ups' },
   { href: '/admin/catalog/products', label: 'Product List' },
   { href: '/admin/catalog/products/new', label: 'Add New Product' },
   { href: '/admin/catalog/import', label: 'Bulk import' },
   { href: '/admin/catalog/manufacturers', label: 'Manufacturers' },
+  { href: '/admin/catalog/manufacturers/new', label: 'Add new manufacturer' },
   { href: '/admin/catalog/generics', label: 'Generics' },
   { href: '/admin/catalog/categories', label: 'Categories' },
   { href: '/admin/catalog/banners', label: 'Announcements' },
@@ -37,6 +41,7 @@ export function AdminTopbar({ session, active, revision, streamState, onLogout }
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [counts, setCounts] = useState<{ rfqs?: number; quotations?: number }>({});
+  const [account, setAccount] = useState<AdminProfile | null>(null);
   const search = useRef<HTMLFormElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const profile = useRef<HTMLDetailsElement>(null);
@@ -71,6 +76,13 @@ export function AdminTopbar({ session, active, revision, streamState, onLogout }
     return () => controller.abort();
   }, [active, revision]);
 
+  useEffect(() => {
+    if (!active) return;
+    const load = () => { void apiRequest('/v1/admin/auth/profile', adminProfileSchema).then((result) => setAccount(result.data)).catch(() => {}); };
+    load(); window.addEventListener('admin-profile-updated', load);
+    return () => window.removeEventListener('admin-profile-updated', load);
+  }, [active]);
+
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (active && results[0]) window.location.assign(results[0].href);
@@ -102,13 +114,13 @@ export function AdminTopbar({ session, active, revision, streamState, onLogout }
       <details ref={profile} className="admin-account" onBlur={(event) => {
         if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
       }} onKeyDown={(event) => { if (event.key === 'Escape' && profile.current) { profile.current.open = false; profile.current.querySelector('summary')?.focus(); } }}>
-        <summary aria-label="Admin account menu"><ChevronDown size={15} className="admin-account-chevron" aria-hidden="true" /><span className="admin-account-name"><strong>Admin</strong><small>Administrator</small></span><span className="admin-account-avatar"><Image src="/images/medaxis-logo.png" alt="MedAxis" width={48} height={48} priority unoptimized /></span></summary>
+        <summary aria-label="Admin account menu"><ChevronDown size={15} className="admin-account-chevron" aria-hidden="true" /><span className="admin-account-name"><strong>{account?.display_name || 'Admin'}</strong><small>Administrator</small></span><span className="admin-account-avatar"><Image src={account?.avatar_url || '/images/medaxis-logo.png'} alt="Admin profile" width={48} height={48} loading="eager" unoptimized /></span></summary>
         <div className="admin-account-menu">
           <div className="admin-account-identity">
-            <span className="admin-account-avatar"><Image src="/images/medaxis-logo.png" alt="" width={48} height={48} unoptimized /></span>
-            <div><strong>Admin</strong><span>MedAxis administrator</span><span className="sr-only">Current session: {session.ip_address}</span></div>
+            <span className="admin-account-avatar"><Image src={account?.avatar_url || '/images/medaxis-logo.png'} alt="" width={48} height={48} unoptimized /></span>
+            <div><strong>{account?.display_name || 'Admin'}</strong><span>{account?.email || 'MedAxis administrator'}</span><span className="sr-only">Current session: {session.ip_address}</span></div>
           </div>
-          <AdminLink href="/admin/settings">Settings</AdminLink>
+          <AdminLink href="/admin/settings/profile">Settings</AdminLink>
           <button type="button" className="admin-account-logout" disabled={!active} onClick={onLogout}>Logout</button>
         </div>
       </details>

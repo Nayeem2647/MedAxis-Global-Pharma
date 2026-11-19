@@ -4,8 +4,12 @@ import {
   adminMultipart,
   auditRecord,
   bannerBody,
+  categoryBody,
+  catalogDeleteBody,
+  catalogDeleteReceipt,
   csvColumns,
   csvReport,
+  genericBody,
   fxBody,
   imageReceipt,
   productBody,
@@ -39,6 +43,38 @@ const product = {
 };
 beforeEach(() => vi.restoreAllMocks());
 describe('registered management boundaries', () => {
+  it('accepts full therapeutic indication paragraphs and restricts translation to the registered action', () => {
+    const body = { translations: { en: { name: 'Osimertinib', slug: 'osimertinib' } }, is_active: true, therapeutic_indications: ['Verified medicine information. '.repeat(50)] };
+    expect(genericBody.parse(body).therapeutic_indications?.[0]?.length).toBeGreaterThan(200);
+    expect(genericBody.safeParse({ ...body, therapeutic_indications: ['x'.repeat(5001)] }).success).toBe(false);
+    expect(genericBody.safeParse({ ...body, therapeutic_indications: ['x'.repeat(2500), 'y'.repeat(2500)] }).success).toBe(false);
+    expect(adminProxyRule('catalog/translate-indications', 'POST')).not.toBeNull();
+    expect(adminProxyRule('catalog/translate-indications', 'GET')).toBeNull();
+  });
+  it.each(['products', 'manufacturers', 'generics', 'categories'])('allows deletion of an identified %s record only', (kind) => {
+    expect(adminProxyRule(`catalog/${kind}/${ids.rfq}`, 'DELETE')).not.toBeNull();
+    expect(adminProxyRule(`catalog/${kind}`, 'DELETE')).toBeNull();
+    expect(adminProxyRule(`catalog/${kind}/invalid`, 'DELETE')).toBeNull();
+    expect(adminProxyRule(`catalog/${kind}/${ids.rfq}/extra`, 'DELETE')).toBeNull();
+  });
+  it('requires a valid expected timestamp and verifies the delete receipt', () => {
+    expect(catalogDeleteBody.safeParse({}).success).toBe(false);
+    expect(catalogDeleteBody.safeParse({ expected_updated_at: 'invalid' }).success).toBe(false);
+    expect(catalogDeleteBody.safeParse({ expected_updated_at: '2026-11-19T00:00:00.000Z', deleted_at: 'now' }).success).toBe(false);
+    expect(catalogDeleteBody.parse({ expected_updated_at: '2026-11-19T00:00:00.000Z' })).toHaveProperty('expected_updated_at');
+    expect(catalogDeleteReceipt.parse({ id: ids.rfq, deleted: true }).deleted).toBe(true);
+    expect(catalogDeleteReceipt.safeParse({ id: ids.rfq, deleted: false }).success).toBe(false);
+    expect(adminProxyRule(`cms/banners/${ids.rfq}`, 'DELETE')).toBeNull();
+  });
+  it.each(['generics', 'categories'] as const)('allows %s pictures, explicit removal and omission without clearing other fields', (kind) => {
+    const schema = kind === 'categories' ? categoryBody : genericBody;
+    const base = { translations: { en: { name: 'Image record', slug: 'image-record' } }, is_active: true, ...(kind === 'categories' ? { sort_order: 7 } : { therapeutic_indications: ['Supplied indication'] }) };
+    const image = 'data:image/webp;base64,AAAA';
+    expect(schema.parse({ ...base, logo_data_url: image })).toMatchObject({ ...base, logo_data_url: image });
+    expect(schema.parse({ ...base, logo_data_url: null }).logo_data_url).toBeNull();
+    expect(schema.parse(base)).not.toHaveProperty('logo_data_url');
+    expect(schema.safeParse({ ...base, logo_data_url: 'https://attacker.test/image.png' }).success).toBe(false);
+  });
   it.each([
     'catalog/products',
     'catalog/manufacturers',
@@ -133,12 +169,13 @@ describe('registered management boundaries', () => {
   });
   it('validates image receipts and signatures without allowing arbitrary asset origins', async () => {
     const receipt = {
-      r2_object_key: 'products/actual.png',
-      url: 'https://cdn.medaxisglobalpharma.com/products/actual.png',
+      object_key: 'products/s3/actual.png',
+      url: 'https://cdn.medaxisglobalpharma.com/products/s3/actual.png',
       mime_type: 'image/png',
       file_size_bytes: 8,
     };
     expect(imageReceipt.safeParse(receipt).success).toBe(true);
+    expect(imageReceipt.safeParse({ ...receipt, object_key: 'products/actual.png' }).success).toBe(false);
     expect(imageReceipt.safeParse({ ...receipt, url: 'https://evil.test/file.png' }).success).toBe(false);
     await expect(validateCatalogImage(new File(['<html>'], 'spoof.png', { type: 'image/png' }))).rejects.toBeInstanceOf(
       ApiError,

@@ -18,6 +18,10 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
+        MEDAXIS_E2E: '1',
+        NEXT_PUBLIC_ADMIN_REQUIRE_2FA: 'true',
+        NEXT_PUBLIC_S3_PUBLIC_BASE_URL: 'https://cdn.medaxisglobalpharma.com',
+        NEXT_PUBLIC_S3_AVATAR_ORIGIN: 'https://fixture-avatars.s3.ap-southeast-1.amazonaws.com',
         NEXT_PUBLIC_API_BASE_URL: 'http://127.0.0.1:4100',
         API_INTERNAL_BASE_URL: 'http://127.0.0.1:4100',
         ADMIN_FRONTEND_ORIGIN: 'http://127.0.0.1:3100',

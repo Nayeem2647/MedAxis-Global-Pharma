@@ -41,10 +41,10 @@ The auth integration suite additionally creates and removes its own unique
 `auth_test_*` database on the same server. Its fixtures never touch the configured
 application database. See `../modules/auth/README.md` for its focused command.
 The catalog suite uses a separate `catalog_test_*` database with the same cleanup
-boundary. Run it alone with `npm run test:catalog`; its R2/webhook transports are
+boundary. Run it alone with `npm run test:catalog`; its S3/webhook transports are
 mocked. See `../modules/catalog/README.md` for API payloads and configuration.
 The RFQ suite uses a separate `rfq_test_*` database. Run `npm run test:rfq`;
-Turnstile/R2/email transports are mocked while MongoDB transactions and medical
+Turnstile/S3/email transports are mocked while MongoDB transactions and medical
 encryption run normally. See `../modules/rfq/README.md` for schema changes,
 staging ownership, payloads and deployment configuration.
 
@@ -98,7 +98,7 @@ intake/issuance/revision boundaries. Step 6 implements exact totals, bank
 instruction verification, FX freshness and immutable issue-time snapshots;
 see [the quotation service contract](../modules/quotation/README.md). Payment,
 dispatch and buyer decision prerequisites belong in their respective services.
-TTL is asynchronous cleanup. Prescription content verification, R2 deletion and
+TTL is asynchronous cleanup. Prescription content verification, S3 deletion and
 purge scheduling also belong in their application services.
 
 Money and FX persist as Decimal128. API boundaries must use decimal strings;

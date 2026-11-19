@@ -1,6 +1,6 @@
 # MedAxis Global Pharma frontend — Release 1, Steps 1–7
 
-Next.js 15.5 App Router, strict TypeScript, Tailwind CSS 4, next-intl, and the Express `/v1` REST API. The Next.js 15 template's TypeScript settings are retained, with `allowJs: false` and explicit `noImplicitAny: true`. Next 15 retains the requested Edge `middleware.ts` convention. No database or R2 SDK is used by this application.
+Next.js 15.5 App Router, strict TypeScript, Tailwind CSS 4, next-intl, and the Express `/v1` REST API. The Next.js 15 template's TypeScript settings are retained, with `allowJs: false` and explicit `noImplicitAny: true`. Next 15 retains the requested Edge `middleware.ts` convention. The frontend accesses storage through Express or the configured asset origins.
 
 ## Run locally
 
@@ -14,7 +14,7 @@ npm run dev
 
 On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`, and `Copy-Item .env.example .env.local`. Set `NEXT_PUBLIC_API_BASE_URL` to the Express **origin**, such as `http://localhost:4000`, without `/v1`; all client paths include the version. There is no hardcoded API fallback. Express must allow the frontend origin in its credentialed CORS configuration. Server-side admin callers must explicitly forward their incoming session cookie; `credentials: 'include'` alone does not forward browser cookies during server rendering.
 
-`API_INTERNAL_BASE_URL` optionally overrides the origin only on the server. `NEXT_PUBLIC_SITE_URL` sets absolute canonical/sitemap URLs. `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` allows an additional public HTTPS asset origin in both Next Image and CSP. Configure public variables before building; they are embedded in the browser bundle. Keep `REVALIDATE_WEBHOOK_SECRET` private and identical to Express.
+`API_INTERNAL_BASE_URL` optionally overrides the origin only on the server. `NEXT_PUBLIC_SITE_URL` sets absolute canonical/sitemap URLs. Local development serves uploaded images through `NEXT_PUBLIC_API_BASE_URL` at `/v1/public/media`; no S3/R2 variables are needed. See [local upload setup](../backend/src/modules/storage/README.md). The legacy S3/R2 public origin variables are only for deployments using cloud storage. Configure public variables before building because they are embedded in the browser bundle. Keep `REVALIDATE_WEBHOOK_SECRET` private and identical to Express.
 
 ## Verify
 
@@ -29,7 +29,7 @@ npm run test:e2e
 Playwright starts isolated Next.js and mock Express servers on ports 3100 and 4100; it needs no database, account, or staging backend. Tests and their configurations are included in typechecking. `npm run lint` is also available.
 
 An installed Chrome/Edge can be used by setting `PLAYWRIGHT_CHANNEL=chrome` or `msedge` instead of downloading Chromium.
-After a production build, set `E2E_PRODUCTION=1` to run the same suite against `next start`.
+Test servers use `.next-e2e`, separate from the normal development server's `.next` directory. Build production test fixtures with `MEDAXIS_E2E=1`, then set `E2E_PRODUCTION=1` to run the same suite against `next start`.
 That build must use the fixture origins/public variables in `playwright.config.ts` (including API `http://127.0.0.1:4100` and the browser fixture site key). Run `tests/e2e/mock-api.ts` while building catalog pages, then stop that helper before Playwright starts its own server. This fixture build is for local tests only; production requires the real API/site key.
 
 ## Foundation contracts
@@ -50,7 +50,7 @@ That build must use the fixture origins/public variables in `playwright.config.t
 - `CartProvider` exposes catalog/custom additions, quantity updates, removal, clearing, drawer state, hydration readiness and a distinct-line badge count. It reads a validated, versioned `medaxis_rfq_cart` localStorage value after hydration; the server and initial browser render both start empty. Writes wait for hydration. Corrupt storage is discarded; blocked storage still permits an in-memory list. Storage events synchronize other tabs. Duplicate product/unit lines merge, and the backend's 100-line limit is respected. Cart data contains no pricing or patient/contact information.
 - The homepage reads `/v1/public/products?locale=...&page=1&limit=6` and `/v1/public/cms/banners?locale=...` through runtime-validated public DTOs that strip unrecognized fields, including prices. The current backend has no featured selector: the first published catalog page supplies the preview, manufacturer/category names and generic ingredients. Catalog and CMS requests use their existing revalidation tags. Backend outages show a localized fallback while the shell and custom requirement entry remain usable.
 - Header navigation links to the implemented product listing, manufacturer/ingredient directories and services. Product, manufacturer, ingredient and category links open their actual localized detail/hub routes. Quick Quote and the RFQ list share the Step 4 submission form; the separate **Add to RFQ list** action still only saves medicine requirements locally. A successful submission displays the actual backend RFQ reference.
-- WhatsApp defaults to the owner-supplied `+8801560066410` and can be overridden with `NEXT_PUBLIC_WHATSAPP_NUMBER`. The owner's WeChat QR is included at `public/images/wechat-contact.jpeg` and displayed in both languages, with WeChat first in Chinese. It is served as the original JPEG without image optimization or recompression, with a full-size link. `NEXT_PUBLIC_WECHAT_QR_URL` can override it using a local `/images/` raster asset or the configured public CDN/R2 origin. Configure `NEXT_PUBLIC_WECHAT_ID` and `NEXT_PUBLIC_CONTACT_EMAIL` when available; no text identifier is inferred from the QR. Chinese contact UI explains email delivery for secure quotation links.
+- WhatsApp defaults to the owner-supplied `+8801560066410` and can be overridden with `NEXT_PUBLIC_WHATSAPP_NUMBER`. The owner's WeChat QR is included at `public/images/wechat-contact.jpeg` and displayed in both languages, with WeChat first in Chinese. It is served as the original JPEG without image optimization or recompression, with a full-size link. `NEXT_PUBLIC_WECHAT_QR_URL` can override it using a local `/images/` raster asset or the configured public CDN origin. Configure `NEXT_PUBLIC_WECHAT_ID` and `NEXT_PUBLIC_CONTACT_EMAIL` when available; no text identifier is inferred from the QR. Chinese contact UI explains email delivery for secure quotation links.
 - Plausible is disabled until `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` and `NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL` are supplied from the site's installation settings. Use the current queued `plausible.init()` script with its [documented transformRequest hook](https://plausible.io/docs/script-extensions); `data-domain`/`data-api` attributes are also emitted. The optional `NEXT_PUBLIC_PLAUSIBLE_API_HOST` configures a separate collector and CSP origin. Only public locale layouts load the script; `/q`, `/admin` and APIs never mount it. The tracker explicitly projects same-origin public pageviews to event name, clean URL and configured domain. Custom events, event properties, referrers, unknown metadata, private paths and query/hash data are dropped. No cart contents or form values are passed to analytics. Tests intercept the configured fixture domain rather than sending live analytics.
 - Footer utility pages (`privacy` and `terms`) are `noindex, nofollow`, linked with `nofollow`, and excluded from the sitemap. Modals use native dialog focus containment, Escape/backdrop closing and focus restoration. The mobile navigation and homepage are checked at 320px as well as desktop widths.
 
@@ -98,7 +98,7 @@ const { data } = await apiRequest('/v1/public/products?locale=en', dto, {
 - `apiQuotationPdf` shares status-aware JSON errors, bounded GET retries and cancellation with the API client. MIME and `%PDF-` bytes are checked before a blob download; temporary URLs are revoked and filenames contain only the supplied version. JSON before-stream failures and proxy HTML never become documents. MicroMessenger hides direct download and displays English/Chinese “··· → Open in Browser” guidance.
 - There is a backend contract limitation: revision/refresh lack idempotency and receipt lookup. A local Edge fault experiment observed one JavaScript fetch reaching the upstream twice after a bare TCP reset. Disabling client retries does not guarantee exactly-once delivery at the browser/network layer. The UI blocks deliberate resends after uncertainty; backend deduplication plus a safe receipt/status contract is needed for an end-to-end exactly-once guarantee. Browser recovery tests use an interrupted HTTP body to isolate application retry behavior.
 - All contact, document, decision and challenge state stays in memory. No private fields go to browser storage, analytics, social metadata or application logs. Keep an uncertain decision page open and confirm it with the team before sending again; the viewer deliberately does not persist private recovery data across a forced reload.
-- Step 5 checks: strict typecheck/build, 234 frontend unit tests, all 57 browser checks (45 existing regressions plus 12 private quotation checks) and 10 backend decision/PDF unit checks pass. The actual backend customer DTO serializer and frontend network-envelope adapter reject poisoned internal fields while retaining customer prices/bank details. Normal/error HTML and standalone RSC responses retain private headers; private contact QR requests omit referrers and the original JPEG SHA-256 stays unchanged. Both languages were checked at 1440/768/390/320px with screenshots and keyboard controls. Browser checks use controlled REST/PDF transports, not live MongoDB/R2/Puppeteer delivery. Real backend delivery verification remains pending authorization/environment setup. No extra verification document is created.
+- Step 5 checks: strict typecheck/build, 234 frontend unit tests, all 57 browser checks (45 existing regressions plus 12 private quotation checks) and 10 backend decision/PDF unit checks pass. The actual backend customer DTO serializer and frontend network-envelope adapter reject poisoned internal fields while retaining customer prices/bank details. Normal/error HTML and standalone RSC responses retain private headers; private contact QR requests omit referrers and the original JPEG SHA-256 stays unchanged. Both languages were checked at 1440/768/390/320px with screenshots and keyboard controls. Browser checks use controlled REST/PDF transports, not live MongoDB/object storage/Puppeteer delivery. Real backend delivery verification remains pending authorization/environment setup. No extra verification document is created.
 
 ## Admin transport and RFQ/FX console — Step 6
 
@@ -121,6 +121,55 @@ const { data } = await apiRequest('/v1/public/products?locale=en', dto, {
 - Draft creation is one-shot. Saved DRAFT pricing is read-only because no draft-update API exists; unresolved sourcing cannot be issued and the editor explains this limitation before saving. Send/revise/resend use authoritative expected-version IDs. Revision explicitly chooses immediate issue, and the backend supersedes the old SENT version. Returned same-site `/q/[token]` links appear only in transient authenticated copy UI and never enter storage/logs/analytics. RFQ references provide detail navigation; this does not claim a global quote/expiry queue.
 - A shared synchronous workspace lock suppresses double submits. These admin writes have no automatic retry. Definite validation errors retain editable inputs; 409 triggers an authoritative refresh before a deliberate action. Uncertain writes reconcile by reads, with no replay. An advanced quotation version/status permits a distinct next action; unresolved resend/note/catalog delivery remains blocked for team reconciliation. Keep an unresolved page open: private intent recovery is deliberately not persisted across reloads. A confirmed write whose follow-up read fails is still reported as saved.
 - Fulfillment submits discriminated payment/dispatch/delivery bodies with the expected version. Wire amount/currency, shipment data, reservation expiry and all transitions remain server-authoritative. No dispatch control appears before payment; expired reservations cannot record payment; delivered documents have no duplicate delivery action. There is no payment gateway or browser recalculation of locked commercial values.
-- TypeScript remains strict with no emitting build or suppressed errors. `allowImportingTsExtensions` is enabled under `noEmit` solely for direct typed fixture imports in Node's strip-types test server; the selected Next template settings remain intact. Step 7's local checks pass: typecheck/build, lint (zero errors; two existing tooling warnings), 292 frontend unit tests, all 77 production Edge browser checks (including 10 new workflow checks), and 25 backend quotation/decision unit tests. Browser tests use controlled REST/PDF/session fixtures, not live MongoDB/R2 delivery. Real database/deployed-proxy verification remains pending, as do saved-draft edits, complete master pickers and global quotation/summary reads. No separate verification report is created.
+- TypeScript remains strict with no emitting build or suppressed errors. `allowImportingTsExtensions` is enabled under `noEmit` solely for direct typed fixture imports in Node's strip-types test server; the selected Next template settings remain intact. Step 7's local checks pass: typecheck/build, lint (zero errors; two existing tooling warnings), 292 frontend unit tests, all 77 production Edge browser checks (including 10 new workflow checks), and 25 backend quotation/decision unit tests. Browser tests use controlled REST/PDF/session fixtures, not live MongoDB/object storage delivery. Real database/deployed-proxy verification remains pending, as do saved-draft edits, complete master pickers and global quotation/summary reads. No separate verification report is created.
 - Verification follow-up passes all 292 frontend unit tests, all 392 backend unit tests and all 83 production Edge browser checks, including 16 workflow checks. Both projects pass typechecking/lint (the frontend retains its two existing tooling warnings). New backend tests execute the real triage, issue/resend, calculator, crypto/token resolver and fulfillment services with persistence/outbox isolated: they check issue-time FX recapture, unchanged locked rates on resend, old-token rejection, status/version/reservation predicates and no side effects after a lost compare-and-set. Browser coverage adds rotated-token 404, superseded-token 409, customer HTML/DOM/RSC cost exclusion, issue/revise conflicts, double submits, committed response loss, the real 20-second payment timeout and another admin's completed payment without replay or implicit dispatch. This still does not prove MongoDB transaction atomicity. The owner-supplied Atlas host matched existing configuration and passed an authenticated read-only ping; automatic approval review rejected the remote integration command because a supplied host alone did not explicitly authorize schema/index/data creation and test database drop. No remote mutation was executed. Before-migration database-name guards were added to the existing RFQ/quotation/decision integration suites; their isolated create/write/drop run awaits explicit owner authorization. Deployed proxy checks remain deferred because there is no staging deployment. No separate verification report was created.
 
+
+## Medicine directory dropdowns
+
+Product medicine details use searchable dropdowns for one manufacturer, one
+generic and multiple categories. Each dropdown loads active entries only when
+opened, searches English and Chinese names on the server, and paginates the full
+directory. Selected category names appear inside the closed dropdown, with
+removable tags below it. Arrow keys and Enter
+choose an option; Escape, Tab or an outside click closes the dropdown without
+discarding selections. Existing record names are resolved separately, so a search
+failure or an empty result never clears a saved association. Form submissions
+continue to send directory IDs through the existing catalog contract.
+
+## Catalog form saving
+
+Catalog and announcement creation stays on its Add New page after a confirmed
+save. A fresh editor clears text, translations, media previews, selections,
+schedules, validation and verification state for another independent entry.
+The success notice links to the saved record. Editing retains the saved record
+and its values; validation failures and uncertain write outcomes preserve the
+current form. This lifecycle is shared by products, manufacturers, generics,
+categories and announcements. Existing quotation workflows keep their existing
+detail navigation and financial state handling.
+RFQ internal-note and clarification message composers also clear their inputs
+after a confirmed write; saved triage and status editing controls retain values.
+
+## Organized quotation management
+
+The Quotations sidebar contains Overview, All quotations, Create from RFQ and
+Follow-ups. Directory search includes customer name/company/email and RFQ/quotation
+references. Status views, exact server monetary strings and Dhaka deadlines are
+shared across these pages. Summary cards open server-filtered work queues;
+follow-ups are read-only until an explicit action is taken on the quotation.
+
+Quotation preparation has medicines/pricing, shipping/terms and review/save steps.
+Inputs remain in memory while moving between steps. Required fields are checked
+before advancing, and returning to edit requires a fresh final review. Original
+RFQ quantities/packaging and existing optimistic version/timestamp checks remain
+in force. Saving does not send; optional immediate issuance of a revision remains
+an explicit choice.
+
+Details use Overview, Medicines & pricing, Customer & delivery, Versions and
+Activity tabs. History shows saved version milestones; historical versions expose
+no mutation actions. Send requires recipient/total/currency/validity and bank
+confirmation. Draft totals remain provisional until issuance locks current FX.
+Shipment datetime input and displayed deadlines use Asia/Dhaka; transport remains
+ISO UTC. Private links remain memory-only, and customer pages still exclude
+procurement costs and markup. No automatic reminder or new notification is sent
+by browsing these screens.

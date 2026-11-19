@@ -63,7 +63,7 @@ flowchart TD
     end
 
     subgraph EXT["🌐 External Services"]
-        R2["Cloudflare R2\nImages · PDFs · Prescriptions"]
+        S3["AWS S3\nImages · PDFs · Prescriptions"]
         EMAIL["Resend / Brevo\nQQ Mail + 163 Mail Delivery"]
         FXAPI["ExchangeRate-API\nLive BDT Rates — 1hr cache"]
     end
@@ -72,11 +72,11 @@ flowchart TD
     CF --> FRONTEND
     FRONTEND -->|REST API Calls| BACKEND
     BACKEND -->|Read and Write| DB
-    BACKEND -->|Store Files| R2
+    BACKEND -->|Store Files| S3
     BACKEND -->|Send Emails| EMAIL
     BACKEND -->|Fetch Live Rates| FXAPI
     CRON -->|Scheduled Tasks| DB
-    CRON -->|Purge Files| R2
+    CRON -->|Purge Files| S3
     CRON -->|Retry Emails| EMAIL
 ```
 
@@ -178,7 +178,7 @@ flowchart TD
 flowchart TD
     subgraph ROUTE["Route Layer — catalog.routes.js / rfq.routes.js / ..."]
         R1["POST /v1/public/rfq/quick-quote"]
-        R2["POST /v1/public/quotation/accept/:token"]
+        ACCEPT_QUOTATION["POST /v1/public/quotation/accept/:token"]
         R3["GET  /v1/admin/rfqs"]
         R4["POST /v1/admin/quotations/:id/send"]
     end
@@ -204,7 +204,7 @@ flowchart TD
         S4["notification.service.js — Email Dispatch + Log"]
         S5["pdf.service.js — Puppeteer Async Worker"]
         S6["fx.service.js — Live Rate Fetch + Cache + Validate"]
-        S7["storage.service.js — R2 Upload + AES-256 Encrypt"]
+        S7["storage.service.js — S3 Upload + AES-256 Encrypt"]
         S8["auth.service.js — TOTP + Session + Brute-Force Guard"]
     end
 
@@ -230,7 +230,7 @@ flowchart TD
     CTRL --> SVC
     SVC --> REPO
     REPO --> DATA
-    SVC -->|File Ops| R2_BOX["Cloudflare R2"]
+    SVC -->|File Ops| OBJECT_STORAGE["AWS S3"]
     SVC -->|Email| EMAIL_BOX["Resend / Brevo"]
     SVC -->|FX Rates| FX_BOX["ExchangeRate-API"]
 ```
@@ -337,7 +337,7 @@ flowchart LR
     %% ── External Services ───────────────────────────────────
     subgraph EXT["🌐 External Services"]
         direction TB
-        R2["☁️ Cloudflare R2\nImages · PDFs · Prescriptions\nAES-256 Encrypted"]
+        S3["☁️ AWS S3\nImages · PDFs · Prescriptions\nAES-256 Encrypted"]
         EMAIL_SVC["📧 Resend / Brevo\nQQ Mail · 163 Mail\nMagic Links · Notifications"]
         FXAPI["💹 ExchangeRate-API\nBDT · USD · CNY · EUR"]
     end
@@ -351,7 +351,7 @@ flowchart LR
     GW --> MOD_CAT & MOD_RFQ & MOD_QUOT & MOD_ML & MOD_FULFILL & MOD_NOTIF & MOD_FX & MOD_PDF & MOD_AUTH
 
     CAT -->|"read/write"| DB_PROD
-    CAT -->|"store images"| R2
+    CAT -->|"store images"| S3
     CAT --> DB_SEARCH
 
     RFQ -->|"idempotency + save"| DB_RFQ
@@ -378,7 +378,7 @@ flowchart LR
     FX -->|"fetch live"| FXAPI
     FX -->|"lock snapshot"| DB_QUOT
 
-    PDF -->|"upload PDF"| R2
+    PDF -->|"upload PDF"| S3
 
     AUTH -->|"session"| DB_CUST
     AUTH -->|"write"| DB_AUDIT
@@ -387,7 +387,7 @@ flowchart LR
 
     CRON -->|"expire reservations"| DB_QUOT
     CRON -->|"retry queue"| DB_NOTIF
-    CRON -->|"purge files"| R2
+    CRON -->|"purge files"| S3
     CRON -->|"remind buyers"| EMAIL_SVC
 ```
 
@@ -422,7 +422,7 @@ A **Layered Monolith** is the correct architectural choice at this stage because
 | **Frontend** | Next.js 14+ (App Router) | SSR/SSG for SEO (crawlable product catalog), `[locale]` routing for `/en` & `/zh-CN`, built-in image optimization |
 | **Backend** | Express.js (Node.js 20+ LTS, TypeScript) | Lightweight, strongly-typed, excellent ecosystem for the monolith module pattern |
 | **Database** | MongoDB Atlas | Flexible schema for multi-language product data, Atlas Search for catalog, Atlas Transactions for atomic Accept |
-| **File Storage** | Cloudflare R2 | S3-compatible, GFW-safe (not blocked in China), cheap egress, signed URLs for prescriptions |
+| **File Storage** | AWS S3 | CloudFront for public catalog images, short-lived S3 links for avatars, and authorized streaming for private documents |
 | **CDN** | Cloudflare (Global + Near-China Edge) | GFW-safe, Hong Kong/Singapore PoPs, Turnstile bot protection |
 | **Email** | Resend or Brevo (Sendinblue) | SPF/DKIM/DMARC support, good QQ Mail & 163 Mail deliverability, React Email templates |
 | **FX Rate** | ExchangeRate-API or Open Exchange Rates | Reliable, cheap, supports BDT, cached in-memory (1-hour TTL) |
@@ -449,7 +449,7 @@ A **Layered Monolith** is the correct architectural choice at this stage because
 | **Full-text search** | Use **MongoDB Atlas Search** with a custom index on `brand_name`, `generic_name`, `manufacturer`, `therapeutic_category`, and translations. Supports fuzzy matching (typo tolerance), Chinese text tokenization, and faceted filtering — no Elasticsearch cluster. |
 | **SSR/SSG for SEO** | Next.js `generateStaticParams` for SSG of Product/Generic/Manufacturer/Category pages at build time. `revalidate` ISR (Incremental Static Regeneration) on content change — pages rebuild when admin updates a product. |
 | **301 Redirect Engine** | On slug change, write to `URL_REDIRECT` MongoDB collection. Next.js Edge Middleware checks redirects with an in-memory LRU cache (1-hour TTL, ~500 items max). No separate Cloudflare KV infrastructure needed at launch. |
-| **Image optimization** | Product images uploaded to **Cloudflare R2**, served via Cloudflare CDN with WebP/AVIF conversion. Next.js `<Image>` component with explicit `width`/`height` for CLS prevention. |
+| **Image optimization** | Product images uploaded to **AWS S3**, served via CloudFront. Next.js `<Image>` component with explicit `width`/`height` for CLS prevention. |
 
 ---
 
@@ -488,10 +488,10 @@ A **Layered Monolith** is the correct architectural choice at this stage because
 
 | Concern | Approach |
 |---|---|
-| **Technology** | **Puppeteer** (headless Chromium) running inside the monolith as an async worker. Renders a server-side HTML quotation template with self-hosted `Noto Sans SC` WOFF2 font. Outputs PDF buffer stored to **Cloudflare R2**. |
+| **Technology** | **Puppeteer** (headless Chromium) running inside the monolith as an async worker. Renders a server-side HTML quotation template with self-hosted `Noto Sans SC` WOFF2 font. Outputs PDF buffer stored to **AWS S3**. |
 | **Chinese font** | Self-host `Noto Sans SC` WOFF2 in the backend `public/fonts/` folder. Puppeteer loads it via `@font-face` in the HTML template — guarantees pixel-perfect Chinese character rendering. |
 | **Performance & Safety** | PDF generation is **asynchronous** with strict process isolation. Puppeteer runs inside a pooled browser instance (`--no-sandbox`, `--disable-dev-shm-usage`, `--disable-gpu`) with a 15-second timeout to prevent OOM/memory leaks on Railway. Magic Link downloads stream via Express proxy with `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: no-referrer`. |
-| **Accepted Watermark Regeneration** | Upon customer acceptance, the PDF worker re-renders the quotation template with an official **"ACCEPTED / PROFORMA INVOICE"** watermark, official bank wire transfer instructions, and updates the R2 object for ongoing compliance download. |
+| **Accepted Watermark Regeneration** | Upon customer acceptance, the PDF worker re-renders the quotation template with an official **"ACCEPTED / PROFORMA INVOICE"** watermark, official bank wire transfer instructions, and stores a new S3 PDF for the accepted variant for ongoing compliance download. |
 | **WeChat browser guard** | Frontend Next.js client component detects WeChat UA string (`MicroMessenger`). If detected: hides PDF download button, shows toast: *"To download PDF, tap ··· → Open in Browser."* |
 | **Cost isolation** | PDF HTML template is a separate server render that **explicitly excludes** `procurement_cost`, `markup_percent`, and `internal_cost_data`. Verified by acceptance test. |
 
@@ -558,10 +558,10 @@ A **Layered Monolith** is the correct architectural choice at this stage because
 
 | Concern | Approach |
 |---|---|
-| **Provider** | **Cloudflare R2** — 3 buckets: `products` (images), `quotes` (PDFs), `prescriptions` (encrypted). |
+| **Provider** | **AWS S3** — four private buckets for catalog images, quotes, encrypted prescriptions, and avatars. |
 | **Prescription encryption** | AES-256-GCM server-side before upload. Encryption key in environment variable (Cloudflare Secret). Admin download triggers server-side decrypt + stream. |
-| **Access control** | Signed R2 URLs generated server-side only after verified admin session. URL expiry: 15 minutes. No public bucket policy. |
-| **Enhanced Privacy Purge** | `node-cron` daily: queries prescriptions where `created_at < 90 days ago` OR where associated RFQ/Quote has reached any terminal state (`DELIVERED`, `Declined`, `Closed`, `Payment_Expired`) over 14 days ago. Permanently deletes R2 object and sets `purged_at` timestamp, preventing indefinite retention of medical files from unfulfilled inquiries. |
+| **Access control** | Catalog images use CloudFront with origin access control. Admin avatars use signed S3 URLs valid for two minutes. The API authorizes and streams private documents. |
+| **Enhanced Privacy Purge** | `node-cron` daily: queries prescriptions where `created_at < 90 days ago` OR where associated RFQ/Quote has reached any terminal state (`DELIVERED`, `Declined`, `Closed`, `Payment_Expired`) over 14 days ago. Deletes the S3 object and sets `purged_at` timestamp, preventing indefinite retention of medical files from unfulfilled inquiries. |
 | **File validation** | Server-side: check MIME type with `file-type` npm package (not just extension). Max 5MB at Express multipart middleware level. |
 
 ---
@@ -696,7 +696,7 @@ medaxis-global-pharma/
 │       │   │   └── fx.schema.ts
 │       │   │
 │       │   ├── storage/
-│       │   │   └── storage.service.ts # R2 upload, signed URL, AES-256
+│       │   │   └── storage.service.ts # S3 upload, avatar signing, AES-256
 │       │   │
 │       │   ├── pdf/
 │       │   │   └── pdf.service.ts     # Puppeteer async PDF worker
@@ -845,7 +845,7 @@ ADMIN (2FA session required)
                         ┌───────────────────────┼─────────────────┐
                         │                       │                 │
              ┌──────────▼───────┐  ┌────────────▼──┐  ┌──────────▼──────┐
-             │  MongoDB Atlas   │  │ Cloudflare R2  │  │  Resend / Brevo │
+             │  MongoDB Atlas   │  │ AWS S3  │  │  Resend / Brevo │
              │  M10 (Singapore) │  │  (File Store)  │  │  (Email Service)│
              │  Atlas Search    │  │  Products/PDFs │  │  QQ + 163 Mail  │
              │  Transactions    │  │  Prescriptions │  │  deliverability │
@@ -859,7 +859,7 @@ ADMIN (2FA session required)
 | **Next.js Frontend** | **Vercel** | Edge network, ISR on-demand revalidation (`/api/revalidate`), `next-intl` with `alternateLinks: false`. |
 | **Express.js Backend** | **Railway** | Node.js 20 LTS. `app.set('trust proxy', 1)` configured for accurate IP extraction via `cf-connecting-ip`. |
 | **MongoDB Database** | **Atlas M10 (Singapore)** | Singapore AWS region (minimal latency to Mainland China & Bangladesh). Automated daily encrypted snapshots with PITR. |
-| **File Storage** | **Cloudflare R2** | S3-compatible, GFW-resilient, AES-256 encrypted prescriptions bucket, signed URLs. |
+| **File Storage** | **AWS S3** | CloudFront catalog delivery, private documents and signed avatar URLs. |
 | **Edge & Bot Defense** | **Cloudflare** | Turnstile bot protection on forms; custom SSL/TLS Full (Strict) behind Vercel. |
 | **Analytics** | **Plausible Analytics** | Lightweight, cookie-free, 100% GFW-safe (no Google Analytics). `/q/*` excluded from tracking. |
 | **Uptime & Alerting** | **Uptime Kuma** | Probes every 60s. Immediate Telegram & Email alerts to Super Admin upon downtime. |
@@ -877,6 +877,6 @@ ADMIN (2FA session required)
 | **Q1** | Frontend (Next.js) ও Backend (Express.js) কি একই **monorepo** (Turborepo/pnpm workspace), নাকি আলাদা আলাদা repo? | CI/CD pipeline, shared type definitions |
 | **Q2** | Admin panel কি Next.js-এরই একটি route হবে (`/admin/*`), নাকি আলাদা subdomain (`admin.medaxisglobalpharma.com`)? | Auth cookie scope, CORS, session security |
 | **Q3** | Real-time admin notification — **SSE** (Server-Sent Events, one-way push) চলবে, নাকি simple **30-second polling** prefer করো? | Backend connection load, infrastructure cost |
-| **Q4** | Product images কি admin **R2-তে আপলোড** করবে (via admin panel), নাকি **external URL** দিয়ে link করবে? | Storage bucket setup, image optimization |
+| **Q4** | Product images কি admin **S3-তে আপলোড** করবে (via admin panel), নাকি **external URL** দিয়ে link করবে? | Storage bucket setup, image optimization |
 | **Q5** | Email provider: **Resend** (simpler API, newer) নাকি **Brevo** (larger company, more features)? | Email integration, pricing |
 

@@ -1,13 +1,17 @@
 import { z } from 'zod';
 import { apiRequest, parseApiResponse, ApiError, type ApiMeta } from './api-client';
 import { bankInputSchema, currencies, decimalInput, pricingSchema } from './admin-workflow';
-import { publicAssetUrl } from './public-catalog';
+import { publicVideoUrl, publicAssetUrl } from './public-catalog';
 
 const text = (max = 200) => z.string().trim().min(1).max(max);
 const uuid = z.uuidv4();
 const date = z.iso.datetime({ offset: true });
+export const catalogDeleteBody = z.strictObject({ expected_updated_at: date });
+export const catalogDeleteReceipt = z.strictObject({ id: uuid, deleted: z.literal(true) });
 export const resourceKinds = ['products', 'manufacturers', 'generics', 'categories', 'banners'] as const;
 export type ResourceKind = (typeof resourceKinds)[number];
+export const masterLabels = { manufacturers: 'Manufacturer', generics: 'Generic', categories: 'Category' } as const;
+export type MasterDirectoryKind = keyof typeof masterLabels;
 const slug = text().regex(/^[\p{L}\p{N}\p{M}]+(?:-[\p{L}\p{N}\p{M}]+)*$/u);
 const commonTranslation = {
   slug,
@@ -58,7 +62,9 @@ export const productBody = z.strictObject({
         .max(500)
         .regex(/^products\/[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/),
     )
-    .max(20),
+    .max(6),
+  video_key: z.string().max(500).regex(/^products\/(?:local|s3)\/videos\/[a-zA-Z0-9_-]+\.(?:mp4|webm)$/).nullable().optional(),
+  seo_image_key: z.string().max(500).regex(/^products\/[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/).nullable().optional(),
   status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']),
   review_metadata: reviewSchema.nullable().optional(),
 });
@@ -70,18 +76,23 @@ const masterBase = {
   }),
   is_active: z.boolean(),
 };
+export const MAX_MANUFACTURER_LOGO_LENGTH = 262_144;
+const manufacturerLogo = z.string().max(MAX_MANUFACTURER_LOGO_LENGTH).regex(/^data:image\/(?:webp|png);base64,/);
 export const manufacturerBody = z.strictObject({
   ...masterBase,
-  country: z.string().regex(/^[A-Z]{2}$/),
+  country: z.string().regex(/^[A-Z]{2}$/).optional(),
   certifications: z.array(text()).max(100).optional(),
+  logo_data_url: manufacturerLogo.nullable().optional(),
 });
 export const genericBody = z.strictObject({
   ...masterBase,
-  therapeutic_indications: z.array(text()).max(100).optional(),
+  therapeutic_indications: z.array(text(5000)).max(100).refine((items) => items.join('\n').length <= 5000, 'Therapeutic indications must total 5000 characters or fewer.').optional(),
+  logo_data_url: manufacturerLogo.nullable().optional(),
 });
 export const categoryBody = z.strictObject({
   ...masterBase,
   sort_order: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  logo_data_url: manufacturerLogo.nullable().optional(),
 });
 export function safeBannerPath(path: string) {
   try {
@@ -134,8 +145,12 @@ export const masterRecord = z
     }),
     is_active: z.boolean(),
     country: z.string().length(2).optional(),
+    logo_data_url: z.union([manufacturerLogo, z.url().refine((value) => publicAssetUrl(value) !== null)]).optional(),
+    logo_url: z.url().refine((value) => publicAssetUrl(value) !== null).optional(),
+    product_count: z.number().int().nonnegative().optional(),
+    rfq_count: z.number().int().nonnegative().optional(),
     certifications: z.array(text()).optional(),
-    therapeutic_indications: z.array(text()).optional(),
+    therapeutic_indications: z.array(text(5000)).max(100).optional(),
     sort_order: z.number().int().nonnegative().optional(),
   })
   .transform(({ _id, ...value }) => ({ id: _id, ...value }));
@@ -209,8 +224,16 @@ export async function resourceList(kind: ResourceKind, query: URLSearchParams, s
   const result = await apiRequest(`${resourcePath(kind)}?${query}`, z.array(resourceSchema(kind)).max(100), { signal });
   return { items: result.data, pagination: requirePagination(result.meta) };
 }
+export const MAX_PRODUCT_IMAGES = 6;
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+export const videoReceipt = z.object({
+  object_key: z.string().regex(/^products\/(?:local|s3)\/videos\/[a-zA-Z0-9_-]+\.(?:mp4|webm)$/),
+  url: z.url().refine((value) => publicVideoUrl(value) !== null),
+  mime_type: z.enum(['video/mp4', 'video/webm']),
+  file_size_bytes: z.number().int().positive().max(MAX_VIDEO_BYTES),
+});
 export const imageReceipt = z.object({
-  r2_object_key: z.string().regex(/^products\/[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/),
+  object_key: z.string().regex(/^products\/(?:local|s3)\/[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp)$/),
   url: z.url().refine((value) => publicAssetUrl(value) !== null),
   mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp']),
   file_size_bytes: z.number().int().positive().max(5_242_880),
@@ -258,7 +281,7 @@ export async function adminMultipart<T>(
   schema: { parse(value: unknown): T },
   signal?: AbortSignal,
 ) {
-  if (!/^\/api\/admin\/catalog\/(?:images|import-csv)(?:\?dry_run=(?:true|false))?$/.test(path))
+  if (!/^\/api\/admin\/catalog\/(?:images|videos|import-csv)(?:\?dry_run=(?:true|false))?$/.test(path))
     throw new Error('Invalid multipart target.');
   const response = await fetch(path, {
     method: 'POST',
@@ -484,6 +507,7 @@ export const quotationQuery = z.strictObject({
     ])
     .optional(),
   reservation_before: date.optional(),
+  worklist: z.enum(['AWAITING_PAYMENT', 'READY_TO_DISPATCH', 'EXPIRING']).optional(),
 });
 export const auditRecord = z.object({
   id: uuid,
@@ -514,6 +538,8 @@ export const quotationRow = z
     _id: uuid,
     quotation_number: text(),
     rfq_id: uuid,
+    rfq_number: text().optional(),
+    customer: z.object({ full_name: text(), company_name: text().optional(), email: z.email().optional() }).optional(),
     current_version: z.number().int().positive(),
     current_version_id: uuid,
     overall_status: z.enum(['ACTIVE', 'COMPLETED', 'DECLINED', 'EXPIRED']),
@@ -533,6 +559,8 @@ export const summarySchema = z.object({
   as_of: date,
   window_hours: z.number().int().min(1).max(168),
   active_quotations: z.number().int().nonnegative(),
+  drafts: z.number().int().nonnegative().optional(),
+  sent: z.number().int().nonnegative().optional(),
   accepted_payment_pending: z.number().int().nonnegative(),
   ready_to_dispatch: z.number().int().nonnegative(),
   expiring_allocations: z.number().int().nonnegative(),

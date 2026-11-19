@@ -64,7 +64,7 @@ export function createPublicQuotationRouter(
     const resolved = await service.resolve(token);
     service.usable(resolved.version);
     let artifact = await pdf.get(resolved.version._id);
-    // Acceptance, token rotation and supersession may occur while Chromium/R2 is busy.
+    // Acceptance, token rotation and supersession may occur during rendering or object retrieval.
     let current = await service.resolve(token);
     service.usable(current.version);
     if (isAccepted(current.version.status) !== (artifact.mode !== 'ORIGINAL_QUOTE')) {

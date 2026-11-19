@@ -59,7 +59,7 @@ or logged. Successful/dead jobs erase the delivery envelope. Token rotation or
 revision invalidates pending/retrying/processing old work. An external send
 already in progress cannot be recalled; the old link still fails authorization.
 The email includes the private PDF proxy link and commercial summary, not an
-R2 URL or an internal-cost attachment. Missing verified wire instructions block
+object storage URL or an internal-cost attachment. Missing verified wire instructions block
 an acceptance email and raise an operator alert.
 
 ## Templates
@@ -88,7 +88,7 @@ All cron tasks use Asia/Dhaka and noOverlap:
 | quotationExpiry.job.ts   | Daily 00:00         | Current SENT + past validity -> VALIDITY_EXPIRED; expire wrapper, audit and shorten retention.                                                           |
 | expiryReminder.job.ts    | Daily 09:00 / 10:00 | Quotes expiring in 24h / Day-3 unpaid reservations; dedupe by version, reminder kind and Dhaka date.                                                     |
 | fxRateRefresh.job.ts     | Every hour          | Existing exact FX refresh with 0.1–10000 sanity validation.                                                                                              |
-| prescriptionPurge.job.ts | Every hour          | Claim due medical objects, delete R2 first, then transactionally erase protected metadata and append a purge receipt.                                    |
+| prescriptionPurge.job.ts | Every hour          | Claim due medical objects, delete from S3 first, then transactionally erase protected metadata and append a purge receipt.                                    |
 
 Expiry uses conditional version and current-wrapper writes with snapshot reads
 and majority writes. It cannot overwrite payment, acceptance or a new revision.
@@ -98,7 +98,7 @@ The purge worker also enforces the hard upload+90-day cap. `next_retry_at`
 doubles as a reclaimable DELETING lease; deletion failures keep the key and
 encryption metadata, back off and alert on repeated/overdue failures. Confirmed
 deletion precedes the atomic PURGED/receipt write. A failed receipt commit can
-safely retry the idempotent R2 deletion. Required UUID/date/MIME/size metadata
+safely retry the idempotent S3 deletion. Required UUID/date/MIME/size metadata
 remains as the canonical minimal receipt; keys and encryption material are gone.
 
 Sweeps use bounded batches (200 expiry candidates, 500 reminder candidates,
@@ -129,7 +129,7 @@ creates and drops only its own randomly named test database.
   upsert and whole-batch rollback are tested separately in the catalog suite.
 - `workers.integration.ts` covers competing claims, abandoned leases, provider
   fallback, retry exhaustion, current-token checks, threaded replies, daily
-  dedupe, expiry/payment/acceptance races and R2-before-metadata ordering/recovery.
+  dedupe, expiry/payment/acceptance races and S3-before-metadata ordering/recovery.
 - `notification.test.ts` checks every core template in both locales, injection
   resistance, trusted headers, provider errors and test-disabled cron registration.
 - Real PDF tests check English/Chinese text, actual custom Noto font glyph use,
@@ -146,6 +146,6 @@ their API inputs, localized catalog/sitemap data, redirect metadata, private
 response headers and PDF artifacts. It does not claim a frontend or real
 Mainland China network acceptance test.
 
-Resend, Brevo, Turnstile and R2 adapters are mocked in tests. Chromium is real;
-no customer email or external R2 upload is sent during verification. Live DNS
+Resend, Brevo, Turnstile and S3 adapters are mocked in tests. Chromium is real;
+no customer email or external S3 upload is sent during verification. Live DNS
 authentication and inbox placement are deployment checks rather than mock-test claims.

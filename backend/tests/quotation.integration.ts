@@ -193,6 +193,97 @@ afterAll(async () => {
 });
 
 describe('FX rates and quotation lifecycle against MongoDB', () => {
+  it('searches current customer snapshots and RFQ references without exposing internal pricing', async () => {
+    const created = await draft();
+    for (const q of ['Test Buyer', 'buyer@example.test', rfq.rfq_number]) {
+      const response = await request(app).get('/v1/admin/quotations').query({ q }).set('Cookie', cookie);
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0]).toMatchObject({
+        _id: created.quotation_id,
+        rfq_number: rfq.rfq_number,
+        customer: { full_name: 'Test Buyer', email: 'buyer@example.test' },
+        version: { status: 'DRAFT', total_amount: '6.35' },
+      });
+      expect(JSON.stringify(response.body.data)).not.toMatch(
+        /procurement|markup|margin|token|bank_details|Private sourcing/,
+      );
+    }
+    const literal = await request(app).get('/v1/admin/quotations').query({ q: '.*' }).set('Cookie', cookie);
+    expect(literal.body.data).toEqual([]);
+    const summary = await request(app).get('/v1/admin/quotations/summary').set('Cookie', cookie);
+    expect(summary.body.data).toMatchObject({
+      active_quotations: 1,
+      drafts: 1,
+      sent: 0,
+      accepted_payment_pending: 0,
+      ready_to_dispatch: 0,
+      expiring_allocations: 0,
+    });
+    for (const worklist of ['AWAITING_PAYMENT', 'READY_TO_DISPATCH', 'EXPIRING']) {
+      const response = await request(app).get('/v1/admin/quotations').query({ worklist }).set('Cookie', cookie);
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
+    }
+  });
+
+  it('keeps payment and dispatch work queues consistent with summary counts and reservation deadlines', async () => {
+    const { quotation_id: id, version } = await draft();
+    const get = (path: string) => request(app).get(`/v1/admin/quotations${path}`).set('Cookie', cookie);
+    // Set lifecycle states directly to exercise read boundaries without issuing notifications.
+    const deadline = new Date(Date.now() + 3600000);
+    await QuotationVersionModel.updateOne(
+      { _id: version.id },
+      {
+        $set: {
+          status: 'ACCEPTED',
+          accepted_at: new Date(),
+          reservation_status: 'ACTIVE',
+          reservation_expires_at: deadline,
+        },
+      },
+    );
+    expect((await get('/summary')).body.data).toMatchObject({
+      accepted_payment_pending: 1,
+      ready_to_dispatch: 0,
+      expiring_allocations: 1,
+    });
+    for (const worklist of ['AWAITING_PAYMENT', 'EXPIRING'])
+      expect((await get(`?worklist=${worklist}`)).body.data.map((row: { _id: string }) => row._id)).toEqual([id]);
+    await QuotationVersionModel.updateOne(
+      { _id: version.id },
+      { $set: { reservation_expires_at: new Date(Date.now() - 1000) } },
+    );
+    expect((await get('?worklist=AWAITING_PAYMENT')).body.data).toEqual([]);
+    expect((await get('/summary')).body.data).toMatchObject({ accepted_payment_pending: 0, expiring_allocations: 0 });
+    await QuotationVersionModel.updateOne(
+      { _id: version.id },
+      {
+        $set: {
+          status: 'PAYMENT_RECEIVED',
+          reservation_status: 'CONSUMED',
+          payment: {
+            reference: 'verified-wire',
+            amount: bsonDecimal('6.35'),
+            currency: 'USD',
+            received_at: new Date(),
+            recorded_by: adminId,
+          },
+        },
+      },
+    );
+    expect((await get('?worklist=READY_TO_DISPATCH')).body.data.map((row: { _id: string }) => row._id)).toEqual([id]);
+    expect((await get('/summary')).body.data.ready_to_dispatch).toBe(1);
+    await QuotationModel.updateOne({ _id: id }, { $set: { overall_status: 'COMPLETED' } });
+    expect((await get('?worklist=READY_TO_DISPATCH')).body.data).toEqual([]);
+    expect((await get('/summary')).body.data).toMatchObject({
+      active_quotations: 0,
+      drafts: 0,
+      sent: 0,
+      ready_to_dispatch: 0,
+    });
+  });
+
   it('calculates a draft on the server, isolates internal costs and rejects a second active quotation', async () => {
     const created = await draft();
     expect(created.version.total_amount).toBe('6.35');

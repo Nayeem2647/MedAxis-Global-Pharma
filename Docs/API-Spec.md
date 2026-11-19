@@ -604,7 +604,7 @@ These endpoints capture structured demand from B2B wholesale buyers and B2C pati
 * **Authentication:** PUBLIC
 * **Content-Type:** multipart/form-data
 * **File Constraints:** Restricted to image/jpeg, image/png, application/pdf. Maximum size: **5,242,880 bytes (5 MiB)**. Magic byte inspection enforced.
-* **Encryption Policy:** Stored encrypted at rest via AES-256-GCM in Cloudflare R2 prescriptions bucket. Encryption keys are managed outside MongoDB; only IV, Auth Tag, and Key ID are stored in MongoDB metadata.
+* **Encryption Policy:** Stored in the private S3 prescription bucket after application encryption with AES-256-GCM. Encryption keys are managed outside MongoDB. MongoDB keeps the object key and the IV, auth tag, and key ID.
 
 #### Form Data Fields:
 * prescription (binary file): The document buffer.
@@ -653,6 +653,8 @@ These routes are implemented behind the existing ADMIN_AUTH and same-origin boun
 | ID | Method | Path | Contract |
 |---|---|---|---|
 | **53** | POST | /v1/admin/catalog/images | Authenticated multipart image upload; JPEG/PNG/WebP up to 5 MiB. |
+| — | POST | /v1/admin/catalog/translate-indications | ADMIN_AUTH; strict `{text}` English input, 1–5000 characters; server-only DeepL to Simplified Chinese. Returns `{translated_text,source_language:"en",target_language:"zh-CN"}`. No persistence; no automatic retry; 20 calls/minute. |
+| — | POST | /v1/admin/catalog/videos | ADMIN_AUTH; one multipart `video`, actual MP4/WebM, up to 52,428,800 bytes; receipt `{object_key,url,mime_type,file_size_bytes}`. Optional product `video_key` stores its key. |
 | **54** | GET | /v1/admin/catalog/products | Array of allowlisted product records, including DRAFT/ARCHIVED; page,limit,q,status,manufacturer_id,generic_id,category_id. |
 | **55** | GET | /v1/admin/catalog/products/:id | Same product DTO; UUID; no query keys. |
 | **56** | GET | /v1/admin/catalog/manufacturers | Paginated master records; page,limit,q,is_active=true\|false. |
@@ -661,10 +663,11 @@ These routes are implemented behind the existing ADMIN_AUTH and same-origin boun
 | **59** | GET | /v1/admin/catalog/generics/:id | Generic DTO; actual therapeutic_indications. |
 | **60** | GET | /v1/admin/catalog/categories | Paginated master records; page,limit,q,is_active=true\|false. |
 | **61** | GET | /v1/admin/catalog/categories/:id | Category DTO; actual sort_order. |
+| — | DELETE | /v1/admin/catalog/{products\|manufacturers\|generics\|categories}/:id | ADMIN_AUTH; strict JSON `{ expected_updated_at: ISO timestamp }`, no query keys; `{ id, deleted: true }`. Stale record returns 409. Masters used by non-deleted products return 422. Sets `deleted_at` and ARCHIVED/inactive; excludes deleted entries from admin/public reads while retaining history and images. Repeated completed deletion has no additional audit event. |
 | **62** | GET | /v1/admin/cms/banners | Paginated active/inactive/scheduled records; page,limit,q,is_active. |
 | **63** | GET | /v1/admin/cms/banners/:id | Bilingual banner DTO including scheduling/link_path; no query keys. |
-| **64** | GET | /v1/admin/quotations | Paginated current-version summaries; page,limit,q (business reference),rfq_id,overall_status,status,reservation_before (ISO timestamp). No contact/cost/token fields. |
-| **65** | GET | /v1/admin/quotations/summary | Global authoritative active_quotations,accepted_payment_pending,ready_to_dispatch,expiring_allocations; as_of and window_hours (1–168; default 24). Counts join only each active parent's current version. Pending/expiring require an ACTIVE unexpired ACCEPTED reservation; dispatch-ready requires PAYMENT_RECEIVED, payment data and CONSUMED reservation. |
+| **64** | GET | /v1/admin/quotations | Paginated current-version summaries; page,limit,q (literal quotation/RFQ reference or customer name/company/email),rfq_id,overall_status,status,reservation_before (ISO timestamp),worklist (AWAITING_PAYMENT,READY_TO_DISPATCH,EXPIRING). Includes rfq_number and a minimal current-version customer snapshot (full_name, optional company_name/email) for authenticated admin use. No internal costs, bank details or token fields. Worklists include only ACTIVE parents; EXPIRING uses a fixed 24-hour payment deadline window. |
+| **65** | GET | /v1/admin/quotations/summary | Global authoritative active_quotations,drafts,sent,accepted_payment_pending,ready_to_dispatch,expiring_allocations; as_of and window_hours (1–168; default 24). Counts join only each active parent's current version. Pending/expiring require an ACTIVE unexpired ACCEPTED reservation; dispatch-ready requires PAYMENT_RECEIVED, payment data and CONSUMED reservation. |
 | **66** | PATCH | /v1/admin/quotations/:id/draft | Full registered pricing body plus required expected_current_version_id and expected_updated_at. Only an unlocked current DRAFT may change. Preserves version identity/number, recalculates draft preview/costs atomically, audits the edit, advances updated_at. Stale timestamp/version, issuance or terminal state returns 409; never edits SENT prices/locked FX. |
 
 | **67** | POST | /v1/admin/cms/banners | Bilingual banner create/update; id optional, exact translation/schedule/link fields. |
@@ -673,4 +676,4 @@ Collection limits are 1–100 (default 20), pages 1–100000. Unknown/repeated q
 
 Product reads/writes additionally support optional `review_metadata:{kind:TECHNICAL|MEDICAL,reviewed_at:ISO timestamp,reviewer_name:string}`. PATCH may explicitly clear it with null. Review dates cannot be future dates; no automatic review date or clinical qualification is inferred from updated_at. This metadata records an actual human review and does not certify a reviewer's credentials. No prescription_required field is added. BSON persistence uses a strict optional review_metadata object with a date; migration is required before deployment, not performed by Next.js.
 
-Authenticated catalog image upload is POST /v1/admin/catalog/images, multipart `image`, JPEG/PNG/WebP ≤5,242,880 bytes; result `{r2_object_key,url,mime_type,file_size_bytes}`. Persist the returned product image key; never expose storage credentials. CMS writes remain POST /v1/admin/cms/banners with the documented id/translation/schedule fields. CSV uses only the existing synchronous dry-run/commit contract; no job endpoint exists. All new reads and draft edits must pass the same cookie/BFF/Origin enforcement as existing admin routes.
+Authenticated catalog image upload is POST /v1/admin/catalog/images, multipart `image`, JPEG/PNG/WebP ≤5,242,880 bytes; result `{object_key,url,mime_type,file_size_bytes}`. Persist the returned key in `image_keys`. S3 writes use the backend role. Manufacturer saves that fail at the logo upload return `503 MANUFACTURER_LOGO_UPLOAD_FAILED` before any manufacturer data is written. CMS writes remain POST /v1/admin/cms/banners with the documented id/translation/schedule fields. CSV uses only the existing synchronous dry-run/commit contract; no job endpoint exists. All new reads and draft edits must pass the same cookie/BFF/Origin enforcement as existing admin routes.

@@ -41,14 +41,12 @@ export function createPdfRuntime(
     const variant = accepted ? 'accepted' : 'original';
     const path = `pdf.${variant}`;
     const artifact = version.pdf?.[variant];
-    if (
-      artifact &&
-      typeof artifact === 'object' &&
-      'r2_object_key' in artifact &&
-      typeof artifact.r2_object_key === 'string'
-    ) {
+    const savedKey = artifact && typeof artifact === 'object'
+      ? ('object_key' in artifact ? artifact.object_key : 'r2_object_key' in artifact ? artifact.r2_object_key : undefined)
+      : undefined;
+    if (typeof savedKey === 'string') {
       try {
-        return { bytes: await storage.download('quotes', artifact.r2_object_key), mode };
+        return { bytes: await storage.download('quotes', savedKey), mode };
       } catch {
         /* Regenerate a missing private object without exposing its key. */
       }
@@ -71,7 +69,7 @@ export function createPdfRuntime(
     });
     if (!bytes.subarray(0, 5).equals(Buffer.from('%PDF-')) || bytes.length > 25 * 1024 * 1024)
       throw AppError.unavailable('Invalid PDF output.');
-    const key = `quotes/${versionId}/${variant}-${randomUUID()}.pdf`;
+    const key = `quotes/${env.STORAGE_DRIVER === 'local' ? 'local' : 's3'}/${versionId}/${variant}-${randomUUID()}.pdf`;
     await storage.upload('quotes', key, bytes, 'application/pdf');
     try {
       const updated = await QuotationVersionModel.updateOne(
@@ -80,13 +78,14 @@ export function createPdfRuntime(
           status: accepted ? { $in: ['ACCEPTED', 'PAYMENT_RECEIVED', 'DISPATCHED', 'DELIVERED'] } : 'SENT',
           [path]: artifact ?? { $exists: false },
         },
-        { $set: { [path]: { r2_object_key: key, generated_at: new Date(), mode } } },
+        { $set: { [path]: { object_key: key, generated_at: new Date(), mode } } },
       );
       if (!updated.matchedCount) {
         throw AppError.conflict('Quotation or PDF changed during rendering.');
       }
     } catch (error) {
-      await storage.remove('quotes', key).catch(() => logger.warn('Unable to remove abandoned quote PDF'));
+      if (error instanceof AppError && error.status === 409)
+        await storage.remove('quotes', key).catch(() => logger.warn('Unable to remove abandoned quote PDF'));
       throw error;
     }
     return { bytes, mode };

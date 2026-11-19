@@ -9,11 +9,13 @@ import { adminBoundary } from '../../shared/middleware/adminBoundary.js';
 import { sendPaginated, sendSuccess } from '../../shared/utils/response.js';
 import { adminCatalogQuery, createAdminCatalogReads } from './catalog.admin.reads.js';
 import type { Revalidate } from '../../shared/utils/revalidate.js';
-import { createStorageService, MAX_FILE_BYTES } from '../storage/storage.service.js';
+import { MAX_FILE_BYTES, MAX_VIDEO_BYTES, publicImageBaseUrl, type StorageService } from '../storage/storage.service.js';
 import { createAdminCatalogService } from './catalog.admin.service.js';
+import { createIndicationsTranslator } from './catalog.translation.js';
 import { createCsvImportService } from './catalog.csv.service.js';
 import { createPublicCatalogService } from './catalog.public.service.js';
 import {
+  catalogDelete,
   catalogQuery,
   localeQuery,
   productCreate,
@@ -76,17 +78,30 @@ export function createPublicCatalogRouter(env: AppEnv) {
   return router;
 }
 
-export function createAdminCatalogRouter(env: AppEnv, revalidate: Revalidate) {
+export function createAdminCatalogRouter(env: AppEnv, revalidate: Revalidate, storage: StorageService) {
   const router = Router();
-  const service = createAdminCatalogService(revalidate);
+  const service = createAdminCatalogService(env, revalidate, storage);
   const importCsv = createCsvImportService(service, revalidate);
-  const storage = createStorageService(env);
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_FILE_BYTES, files: 1, fields: 1, parts: 2 },
   });
   router.use(adminBoundary(env), adminAuth(env));
-  const reads = createAdminCatalogReads();
+  const translateIndications = createIndicationsTranslator(env);
+  const translationLimit = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false,
+    handler: (_req, _res, next) => next(AppError.tooManyRequests(60)) });
+  router.post('/translate-indications', translationLimit, async (req, res) => {
+    z.object({}).strict().parse(req.query);
+    sendSuccess(res, await translateIndications(req.body));
+  });
+  const reads = createAdminCatalogReads(publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL);
+  for (const kind of ['products', 'manufacturers', 'generics', 'categories'] as const) {
+    router.delete('/' + kind + '/:id', async (req, res) => {
+      z.object({}).strict().parse(req.query);
+      const input = catalogDelete.parse(req.body);
+      sendSuccess(res, await service.deleteRecord(req, kind, uuid.parse(req.params.id), input.expected_updated_at));
+    });
+  }
   router.get('/products', async (req, res) => {
     const query = adminCatalogQuery.omit({ is_active: true }).parse(req.query);
     const result = await reads.products(query);
@@ -112,6 +127,12 @@ export function createAdminCatalogRouter(env: AppEnv, revalidate: Revalidate) {
   });
   router.patch('/products/:id', async (req, res) => {
     sendSuccess(res, await service.saveProduct(req, productPatch.parse(req.body), uuid.parse(req.params.id)));
+  });
+  const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_VIDEO_BYTES, files: 1, fields: 0, parts: 1 } });
+  router.post('/videos', videoUpload.single('video'), async (req, res) => {
+    z.object({}).strict().parse(req.query);
+    if (!req.file) throw AppError.validation([{ field: 'video', issue: 'Choose an MP4 or WebM video.' }]);
+    sendSuccess(res, await service.uploadVideo(req.file.buffer), { status: 201 });
   });
   router.post('/images', upload.single('image'), async (req, res) => {
     if (!req.file) throw AppError.validation([{ field: 'image', issue: 'Image file is required.' }]);

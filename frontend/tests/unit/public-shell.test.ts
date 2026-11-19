@@ -45,10 +45,36 @@ describe('public configuration and content', () => {
     expect(plainText('<p>Service &amp; sourcing</p><script>alert(1)</script>')).toBe('Service & sourcing');
   });
   it('accepts public CDN images and rejects unknown or signed image URLs', () => {
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:4000');
     expect(publicAssetUrl('/images/wechat-contact.jpeg')).toBe('/images/wechat-contact.jpeg');
+    expect(publicAssetUrl('http://localhost:4000/v1/public/media/products/local/categories/image.webp')).toBe(
+      'http://localhost:4000/v1/public/media/products/local/categories/image.webp',
+    );
+    expect(publicAssetUrl('http://localhost:4000/v1/public/media/products/local/generics/image.webp')).toBe(
+      'http://localhost:4000/v1/public/media/products/local/generics/image.webp',
+    );
+    expect(publicAssetUrl('http://localhost:4000/v1/public/media/products/local/image.png')).toBe(
+      'http://localhost:4000/v1/public/media/products/local/image.png',
+    );
     expect(publicAssetUrl('https://cdn.medaxisglobalpharma.com/products/image.webp')).toBeTruthy();
+    expect(publicAssetUrl('http://localhost:4000/v1/public/media/products/s3/local.png')).toBe(
+      'http://localhost:4000/v1/public/media/products/s3/local.png',
+    );
+    expect(publicAssetUrl('http://localhost:4000/v1/public/media/products/s3/manufacturers/logo.webp')).toBe(
+      'http://localhost:4000/v1/public/media/products/s3/manufacturers/logo.webp',
+    );
+    expect(publicAssetUrl('http://localhost:4000/v1/public/media/avatars/s3/secret.jpg')).toBeNull();
     expect(publicAssetUrl('https://unknown.test/image.webp')).toBeNull();
     expect(publicAssetUrl('https://cdn.medaxisglobalpharma.com/image.webp?private=token')).toBeNull();
+  });
+  it('does not enable development media URLs in production', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'https://api.example.test');
+    expect(publicAssetUrl('https://api.example.test/v1/public/media/products/local/image.png')).toBeNull();
+    expect(publicAssetUrl('https://api.example.test/v1/public/media/products/local/manufacturers/logo.webp')).toBeNull();
+    expect(publicAssetUrl('https://api.example.test/v1/public/media/avatars/local/secret.jpg')).toBeNull();
+    expect(publicAssetUrl('http://api.example.test/v1/public/media/products/local/image.png')).toBeNull();
+    vi.stubEnv('NODE_ENV', 'test');
   });
   it.each(['/api/private.jpeg', '/q/token.jpeg', '/images/../private.jpeg', '//evil.test/image.jpeg', '/images/%2e%2e/private.jpeg', '/images/wechat-contact.jpeg?token=secret'])('rejects unsafe local image path %s', (path) => {
     expect(publicAssetUrl(path)).toBeNull();

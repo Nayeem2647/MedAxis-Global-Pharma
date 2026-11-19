@@ -34,14 +34,15 @@ import { bsonDecimal } from '../src/shared/utils/decimal.js';
 import { createLogger } from '../src/shared/utils/logger.js';
 import { migrate } from '../src/scripts/migrate.js';
 import { rfqRecord } from './fixtures/rfq.js';
-import { validEnv } from './helpers/env.js';
+import { s3EnvSettings, validEnv } from './helpers/env.js';
 
 const databaseName = `decision_test_${randomUUID().replaceAll('-', '').slice(0, 18)}`;
 const env = loadEnv({
   ...validEnv,
+  ...s3EnvSettings,
   QUOTATION_TOKEN_ENCRYPTION_KEY: 'ce'.repeat(32),
   QUOTATION_TOKEN_KEY_ID: 'test-delivery',
-  R2_BUCKET_QUOTES: 'test-private-quotes',
+  S3_BUCKET_QUOTES: 'test-private-quotes',
   WEBHOOK_HMAC_SECRET: 'test-reply-hmac',
 });
 const logger = createLogger({ silent: true });
@@ -261,7 +262,7 @@ describe('magic-link decisions, fulfillment and operations', () => {
     expect(response.body.data.availability.available).toBe(1);
     expect(response.body.data.validity_remaining_seconds).toBeGreaterThan(0);
     expect(JSON.stringify(response.body)).not.toMatch(
-      /procurement|markup|margin|token_hash|acceptance_evidence|recorded_by|r2_object_key/,
+      /procurement|markup|margin|token_hash|acceptance_evidence|recorded_by|object_key/,
     );
     expect(response.headers['referrer-policy']).toBe('no-referrer');
     expect(response.headers['cache-control']).toBe('no-store');
@@ -525,14 +526,17 @@ describe('magic-link decisions, fulfillment and operations', () => {
     expect((await publicPost('request-refresh', quote.token)).status).toBe(200);
   });
 
-  it('proxies an on-demand PDF, records only private R2 keys and replaces its download with accepted Proforma after acceptance', async () => {
+  it('proxies a token-authorized PDF, records private S3 keys and switches to the accepted Proforma', async () => {
     const quote = await issued();
+    expect((await request(app).get('/v1/public/quotation/pdf/' + 'a'.repeat(64))).status).toBe(404);
     const original = await request(app).get(`/v1/public/quotation/pdf/${quote.token}`).buffer();
     expect(original.status, JSON.stringify(original.body)).toBe(200);
     expect(original.headers['content-type']).toBe('application/pdf');
     expect(original.body).toEqual(Buffer.from('%PDF-1.7\ntest commercial PDF'));
     expect(renderer.render.mock.calls[0]![0]).toMatchObject({ mode: 'ORIGINAL_QUOTE' });
-    expect((await QuotationVersionModel.findById(quote.versionId).lean())?.pdf?.original).toBeDefined();
+    expect((await QuotationVersionModel.findById(quote.versionId).lean())?.pdf?.original).toMatchObject({
+      object_key: expect.stringMatching(/^quotes\/s3\/.+\/original-.+\.pdf$/),
+    });
     expect((await publicPost('accept', quote.token, { terms_accepted: true })).status).toBe(200);
     await runtime.dispatch();
     const accepted = await request(app).get(`/v1/public/quotation/pdf/${quote.token}`).buffer();
@@ -543,7 +547,9 @@ describe('magic-link decisions, fulfillment and operations', () => {
     expect(JSON.stringify(renderer.render.mock.calls)).not.toMatch(
       /procurement|markup|margin|magic_link_token_hash|internal_note/,
     );
-    expect((await QuotationVersionModel.findById(quote.versionId).lean())?.pdf?.accepted).toBeDefined();
+    expect((await QuotationVersionModel.findById(quote.versionId).lean())?.pdf?.accepted).toMatchObject({
+      object_key: expect.stringMatching(/^quotes\/s3\/.+\/accepted-.+\.pdf$/),
+    });
     expect(await NotificationLogModel.countDocuments({ kind: 'PDF_RENDER', status: 'PENDING' })).toBe(0);
   });
 

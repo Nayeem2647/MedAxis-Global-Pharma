@@ -17,6 +17,12 @@ beforeEach(() => {
 });
 
 describe('allowlisted catalog boundaries', () => {
+  it('accepts local upload image URLs on the configured development API', () => {
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:4000');
+    const image = 'http://localhost:4000/v1/public/media/products/local/image.png';
+    expect(homeProductSchema.parse({ ...product, primary_image_url: image, image_urls: [image] }).image_urls).toEqual([image]);
+    expect(homeProductSchema.safeParse({ ...product, image_urls: ['http://unknown.test/v1/public/media/products/local/image.png'] }).success).toBe(false);
+  });
   it('strips nested commercial/admin data and renders rich content only as plain text', () => {
     const parsed = homeProductSchema.parse({ ...product, unit_price: 'PRIVATE', internal_notes: 'PRIVATE', description: '<p>Public</p><script>execute()</script><img src=x onerror=execute()>',
       manufacturer: { ...product.manufacturer, procurement_cost_bdt: 'PRIVATE' }, alternate_slugs: { en: 'medicine', zhCN: null }, translations: { en: { ...product.translations.en, margin: 'PRIVATE' } } });

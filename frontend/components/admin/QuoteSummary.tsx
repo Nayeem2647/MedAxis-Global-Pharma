@@ -1,2 +1,131 @@
-import type { AdminVersion } from '../../lib/admin-workflow';
-export function QuoteSummary({ version }: { version: AdminVersion }) { return <section className="admin-panel"><div className="admin-section-heading"><h2>Commercial version {version.version_number}</h2><span className="admin-status">{version.status}</span></div><div className="admin-table-scroll" role="region" tabIndex={0} aria-label="Quotation lines"><table className="admin-table"><thead><tr><th>Medicine</th><th>Quantity</th><th>Availability</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>{version.items.map((line) => <tr key={line.id}><td>{line.brand_name}<span>{line.generic_name} · {line.strength} · {line.dosage_form} · {line.pack_size}</span>{line.customer_facing_note && <p>{line.customer_facing_note}</p>}</td><td>{line.quantity} {line.packaging_unit}</td><td>{line.availability_status}</td><td>{line.availability_status === 'AVAILABLE' ? `${version.billing_currency} ${line.unit_quoted_price}` : 'Not payable'}</td><td>{line.availability_status === 'AVAILABLE' ? `${version.billing_currency} ${line.total_line_price}` : 'Not payable'}</td></tr>)}</tbody></table></div><dl className="admin-facts"><dt>Subtotal</dt><dd>{version.billing_currency} {version.subtotal_amount}</dd><dt>Freight</dt><dd>{version.freight_cost}</dd><dt>Insurance</dt><dd>{version.insurance_cost}</dd><dt>Server total</dt><dd><strong>{version.billing_currency} {version.total_amount}</strong></dd><dt>Shipping</dt><dd>{version.shipping_terms.method} {version.shipping_terms.incoterm} · {version.shipping_terms.named_place}{version.shipping_terms.cold_chain_required ? ' · Cold-chain handling' : ''} {version.shipping_terms.temperature_range}</dd><dt>Payment</dt><dd>{version.payment_terms}</dd>{version.valid_until && <><dt>Valid until</dt><dd>{version.valid_until}</dd></>}{version.reservation_expires_at && <><dt>Server reservation expiry</dt><dd>{version.reservation_expires_at} · {version.reservation_status}</dd></>}{version.payment && <><dt>Recorded wire payment</dt><dd>{version.payment.currency} {version.payment.amount} · {version.payment.reference} · {version.payment.received_at}</dd></>}{version.shipment && <><dt>Shipment</dt><dd>{version.shipment.courier_name} · {version.shipment.awb_tracking_number} · {version.shipment.dispatched_at}{version.shipment.estimated_delivery ? ` · Estimated ${version.shipment.estimated_delivery}` : ''}</dd></>}{version.delivered_at && <><dt>Delivered</dt><dd>{version.delivered_at}</dd></>}</dl></section>; }
+import { quotationDate, quotationStatus } from "../../lib/admin-quotations";
+import type { AdminVersion } from "../../lib/admin-workflow";
+export function QuoteSummary({ version }: { version: AdminVersion }) {
+  return (
+    <section className="admin-panel">
+      <div className="admin-section-heading">
+        <h2>Commercial version {version.version_number}</h2>
+        <span className="admin-status">{quotationStatus(version.status)}</span>
+      </div>
+      <div
+        className="admin-table-scroll"
+        role="region"
+        tabIndex={0}
+        aria-label="Quotation lines"
+      >
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Medicine</th>
+              <th>Quantity</th>
+              <th>Availability</th>
+              <th>Unit price</th>
+              <th>Line total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {version.items.map((line) => (
+              <tr key={line.id}>
+                <td>
+                  {line.brand_name}
+                  <span>
+                    {line.generic_name} · {line.strength} · {line.dosage_form} ·{" "}
+                    {line.pack_size}
+                  </span>
+                  {line.customer_facing_note && (
+                    <p>{line.customer_facing_note}</p>
+                  )}
+                </td>
+                <td>
+                  {line.quantity} {line.packaging_unit}
+                </td>
+                <td>{line.availability_status}</td>
+                <td>
+                  {line.availability_status === "AVAILABLE"
+                    ? `${version.billing_currency} ${line.unit_quoted_price}`
+                    : "Not payable"}
+                </td>
+                <td>
+                  {line.availability_status === "AVAILABLE"
+                    ? `${version.billing_currency} ${line.total_line_price}`
+                    : "Not payable"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl className="admin-facts">
+        <dt>Subtotal</dt>
+        <dd>
+          {version.billing_currency} {version.subtotal_amount}
+        </dd>
+        <dt>Freight</dt>
+        <dd>{version.freight_cost}</dd>
+        <dt>Insurance</dt>
+        <dd>{version.insurance_cost}</dd>
+        <dt>Server total</dt>
+        <dd>
+          <strong>
+            {version.billing_currency} {version.total_amount}
+          </strong>
+        </dd>
+        <dt>Shipping</dt>
+        <dd>
+          {version.shipping_terms.method} {version.shipping_terms.incoterm} ·{" "}
+          {version.shipping_terms.named_place}
+          {version.shipping_terms.cold_chain_required
+            ? " · Cold-chain handling"
+            : ""}{" "}
+          {version.shipping_terms.temperature_range}
+        </dd>
+        <dt>Payment</dt>
+        <dd>{version.payment_terms}</dd>
+        {version.valid_until && (
+          <>
+            <dt>Valid until</dt>
+            <dd>{quotationDate(version.valid_until)}</dd>
+          </>
+        )}
+        {version.reservation_expires_at && (
+          <>
+            <dt>Server reservation expiry</dt>
+            <dd>
+              {quotationDate(version.reservation_expires_at)} ·{" "}
+              {version.reservation_status}
+            </dd>
+          </>
+        )}
+        {version.payment && (
+          <>
+            <dt>Recorded wire payment</dt>
+            <dd>
+              {version.payment.currency} {version.payment.amount} ·{" "}
+              {version.payment.reference} ·{" "}
+              {quotationDate(version.payment.received_at)}
+            </dd>
+          </>
+        )}
+        {version.shipment && (
+          <>
+            <dt>Shipment</dt>
+            <dd>
+              {version.shipment.courier_name} ·{" "}
+              {version.shipment.awb_tracking_number} ·{" "}
+              {quotationDate(version.shipment.dispatched_at)}
+              {version.shipment.estimated_delivery
+                ? ` · Estimated ${quotationDate(version.shipment.estimated_delivery)}`
+                : ""}
+            </dd>
+          </>
+        )}
+        {version.delivered_at && (
+          <>
+            <dt>Delivered</dt>
+            <dd>{quotationDate(version.delivered_at)}</dd>
+          </>
+        )}
+      </dl>
+    </section>
+  );
+}

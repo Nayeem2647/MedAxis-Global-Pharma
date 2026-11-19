@@ -19,7 +19,7 @@ Notation below: `!` required; `?` optional; `UUID` string reference; `Decimal` D
 
 | Collection | Fields |
 |---|---|
-| manufacturers | `translations!`, `country!`, `certifications:[string]`, `is_active:boolean!` |
+| manufacturers | `translations!`, `country?`, `certifications:[string]`, `is_active:boolean!` |
 | generics | `translations!`, `therapeutic_indications:[string]`, `is_active:boolean!` |
 | categories | `translations!`, `sort_order:int!`, `is_active:boolean!` |
 | products | `sku:string!`, `manufacturer_id:UUID!`, `generic_id:UUID!`, `category_ids:[UUID]!`, `translations!`, `strength:string!`, `dosage_form:string!`, `pack_size:string!`, `packaging_unit:string!`, `cold_chain_required:boolean!`, `storage_condition:string?`, `image_keys:[string]`, `status:DRAFT/PUBLISHED/ARCHIVED!` |
@@ -33,7 +33,7 @@ Products intentionally contain no procurement price. If an indicative catalog co
 |---|---|
 | rfqs | `rfq_number:string!`, `customer_id:UUID!`, `inquiry_type:QUICK_QUOTE/CART_RFQ!`, `contact_snapshot:object!`, `destination_country!`, `destination_city_port?`, `preferred_currency:USD/CNY/EUR/BDT!`, `status!`, `has_prescription:boolean!`, `close_reason?`, `closed_at:Date?`, `terminal_at:Date?`, `items:[RfqItem]!` |
 | rfq_idempotency_keys | `key:string!`, `request_hash:string!`, `rfq_id:UUID!`, `response_snapshot:object!`, `expires_at:Date!`, `created_at:Date!` |
-| prescriptions | `rfq_id:UUID!`, `customer_id:UUID!`, `r2_storage_key:string?`, `mime_type!`, `file_size_bytes:int!`, `encryption:{algorithm,key_id,iv,auth_tag}?`, `uploaded_at:Date!`, `purge_scheduled_at:Date!`, `purge_status:PENDING/DELETING/PURGED!`, `purged_at:Date?`, `retry_count:int!`, `next_retry_at:Date?` |
+| prescriptions | `rfq_id:UUID!`, `customer_id:UUID!`, `object_key:string?`, `mime_type!`, `file_size_bytes:int!`, `encryption:{algorithm,key_id,iv,auth_tag}?`, `uploaded_at:Date!`, `purge_scheduled_at:Date!`, `purge_status:PENDING/DELETING/PURGED!`, `purged_at:Date?`, `retry_count:int!`, `next_retry_at:Date?` |
 
 `contact_snapshot` copies name, customer type, company, contact channels and locale at submission; customer profile edits never modify it. Email is optional at intake, but at least one usable contact channel is required. B2B requires company name. A valid recipient email is required before automated quote issuance; China communications use email with manual WeChat contact available.
 

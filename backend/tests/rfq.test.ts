@@ -187,6 +187,7 @@ describe('RFQ validation and privacy', () => {
       line_notes: 'diagnosis',
       custom_medicine_name: 'private medicine',
       r2_object_key: 'private/key',
+      object_key: 'prescriptions/s3/private.enc',
     };
     expect(Object.values(redact(sensitive) as Record<string, unknown>).every((value) => value === '[REDACTED]')).toBe(
       true,

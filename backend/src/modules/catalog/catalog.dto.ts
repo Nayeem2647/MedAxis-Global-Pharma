@@ -1,6 +1,6 @@
 import type { Model } from 'mongoose';
 import { cleanHtml } from '../../shared/utils/content.js';
-import { productImageUrl } from '../storage/storage.service.js';
+import { productVideoUrl, productImageUrl } from '../storage/storage.service.js';
 import {
   ManufacturerModel,
   GenericModel,
@@ -11,7 +11,9 @@ import {
 } from './catalog.schema.js';
 import { localeKey, type Locale, type MasterKind } from './catalog.validator.js';
 
-export type MasterRecord = IGeneric & { country?: string; certifications?: string[]; sort_order?: number };
+export type MasterRecord = IGeneric &
+  Partial<Pick<IManufacturer, 'country' | 'certifications' | 'logo_data_url' | 'logo_object_key'>> &
+  { sort_order?: number };
 // All three schemas share these profile fields; kind-specific fields remain optional in this adapter.
 export const masterModel = (kind: MasterKind) =>
   ({ manufacturers: ManufacturerModel, generics: GenericModel, categories: CategoryModel })[
@@ -54,6 +56,8 @@ export const PUBLIC_PRODUCT_PROJECTION = {
   cold_chain_required: 1,
   storage_condition: 1,
   image_keys: 1,
+  video_key: 1,
+  seo_image_key: 1,
   review_metadata: 1,
   updated_at: 1,
 };
@@ -61,6 +65,7 @@ export interface PublicProductTranslation {
   brand_name: string;
   slug: string;
   description?: string;
+  description_html?: string;
   seo_title?: string;
   meta_description?: string;
   indication_summary?: string;
@@ -102,6 +107,8 @@ export interface PublicProduct extends PublicProductTranslation {
   cold_chain_required: boolean;
   primary_image_url: string | null;
   image_urls: string[];
+  video_url?: string;
+  seo_image_url?: string;
 }
 export const alternateSlugs = (record: { translations: { en: { slug: string }; zhCN?: { slug: string } } }) => ({
   en: record.translations.en.slug,
@@ -128,6 +135,7 @@ function publicTranslation(value: IProduct['translations']['en']): PublicProduct
     brand_name: value.brand_name,
     slug: value.slug,
     description: value.description === undefined ? undefined : cleanHtml(value.description),
+    description_html: value.description === undefined ? undefined : cleanHtml(value.description),
     seo_title: value.seo_title,
     meta_description: value.meta_description,
     indication_summary: value.indication_summary === undefined ? undefined : cleanHtml(value.indication_summary),
@@ -136,10 +144,10 @@ function publicTranslation(value: IProduct['translations']['en']): PublicProduct
     image_alt_text: value.image_alt_text,
   };
 }
-export function publicProduct(record: JoinedProduct, locale: Locale, imageBase?: string): PublicProduct {
+export function publicProduct(record: JoinedProduct, locale: Locale, imageBase?: string, legacyImageBase?: string): PublicProduct {
   const translation = publicTranslation(record.translations[localeKey(locale)] ?? record.translations.en);
   const images = (record.image_keys ?? [])
-    .map((key) => productImageUrl(imageBase, key))
+    .map((key) => productImageUrl(imageBase, key, legacyImageBase))
     .filter((url): url is string => url !== null);
   return {
     id: record._id,
@@ -163,6 +171,8 @@ export function publicProduct(record: JoinedProduct, locale: Locale, imageBase?:
     review_metadata: record.review_metadata,
     primary_image_url: images[0] ?? null,
     image_urls: images,
+    video_url: productVideoUrl(imageBase, record.video_key) ?? undefined,
+    seo_image_url: record.seo_image_key ? productImageUrl(imageBase, record.seo_image_key, legacyImageBase) ?? undefined : undefined,
   };
 }
 

@@ -15,5 +15,7 @@ export async function adminPageBoundary(request: NextRequest): Promise<NextRespo
     if (response.status === 401 || response.status === 403) return denied();
     const mapped = mappedAdminCookies(response.headers); await parseApiResponse(response, sessionsSchema, [200]);
     const next = secure(NextResponse.next()); for (const value of mapped) next.headers.append('Set-Cookie', value); return next;
-  } catch { return secure(new NextResponse('The admin session could not be verified. Please reload and try again.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })); }
+  } catch {
+    return secure(new NextResponse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Admin temporarily unavailable | MedAxis</title><style>body{margin:0;background:#f0f7f9;color:#193746;font:16px/1.6 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}main{box-sizing:border-box;width:min(90%,520px);padding:36px;background:white;border:1px solid #dce8ed;border-radius:16px}h1{font-size:24px;line-height:1.3}p{color:#526b78}nav{display:flex;gap:16px;flex-wrap:wrap}a{color:#087f96}a:first-child{padding:10px 18px;background:#087f96;color:white;border-radius:7px;text-decoration:none}</style></head><body><main><strong>MedAxis Admin</strong><h1>Admin temporarily unavailable</h1><p>We could not verify your session because the server or database is taking too long to respond. Please try again shortly.</p><nav><a href="/admin">Try again</a><a href="/admin/login">Back to sign in</a></nav></main></body></html>`, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '5' } }));
+  }
 }

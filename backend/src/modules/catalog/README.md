@@ -1,5 +1,9 @@
 # Catalog, storage, CMS and platform settings
 
+Local development defaults to disk storage for all uploads. No S3/R2 buckets are
+needed; see [local uploads](../storage/README.md) for paths, access controls and
+setup. Cloud configuration below applies only when explicitly selecting S3.
+
 All endpoints use the standard API envelope. Public product payloads include
 localized specifications, active manufacturer/generic/category profiles, image
 URLs, and `alternate_slugs: { en, zhCN }`. Missing Chinese content falls back to
@@ -42,8 +46,48 @@ paths such as `/en/products/new-slug`. Missing/hidden targets return
 
 ## Admin catalog and uploads
 
+Generic therapeutic indications accept paragraphs: up to 100 entries and 5000
+characters in total. Frontend, API, MongoDB validation and public DTO readers use
+compatible limits. Admin slug fields normalize spaces and punctuation to hyphens;
+they are single URL paths, not search-tag lists.
+
+POST `/v1/admin/catalog/translate-indications` accepts strict `{ text }` (English,
+1–5000 characters), requires full admin authentication and the existing Origin
+boundary, and returns `{ translated_text, source_language: "en", target_language:
+"zh-CN" }`. It is rate-limited to 20 requests/minute and translates on the server
+through DeepL to Simplified Chinese. Set `DEEPL_API_KEY` in `backend/.env` and
+restart the backend; Free keys ending in `:fx` use `api-free.deepl.com`, other
+keys use `api.deepl.com`. Keys never reach the browser. Translation has a ten-second
+provider deadline and no automatic retries, since provider calls may be billed.
+
+The generic editor fills an empty Chinese description automatically after typing
+pauses. Existing descriptions start in manual mode; opting in replaces them on
+successful translation. Manual edits stop automatic filling and cancel pending
+results. Source changes discard stale responses. Errors preserve the description
+and permit manual saving. Generated medical text must be reviewed before saving;
+generation clears the existing verification checkbox. Translation does not save
+or publish a record. Missing keys, provider quota exhaustion and failures have
+distinct error messages. Apply `npm run migrate` for the new indication length.
+
 All admin routes require the signed full admin session. They use `no-store`
 and reject explicit mutation origins outside `PUBLIC_ORIGIN`.
+
+DELETE `/v1/admin/catalog/{products|manufacturers|generics|categories}/:id`
+requires the record's latest `expected_updated_at` ISO timestamp in a strict
+JSON body and accepts no query parameters. It returns `{ id, deleted: true }`.
+A stale timestamp returns 409; a master still referenced by any non-deleted
+product (including drafts and archived products) returns 422. Reassign or
+delete those products first.
+
+Deletion records `deleted_at` and archives a product or deactivates a master.
+Deleted records disappear from admin lists, pickers, detail pages, public
+catalog pages and sitemaps. Records and uploaded images remain available to
+historical RFQs and quotations; existing SKUs and slugs remain reserved.
+Editing or importing cannot resurrect a deleted entry. Repeating a completed
+deletion succeeds without duplicating the deletion audit event. The admin list
+button acts immediately, without a confirmation dialog or automatic retries.
+Run `npm run migrate` when updating an existing development database so its
+strict collection validators accept the optional `deleted_at` field.
 
 POST `/v1/admin/catalog/products` accepts:
 
@@ -86,17 +130,63 @@ changes. Atlas / replica-set transactions are required.
 
 POST `/v1/admin/catalog/images` accepts multipart field `image`, maximum 5 MiB.
 Actual content must be JPEG, PNG or WebP. The response contains an opaque
-`r2_object_key`, public CDN URL, MIME type and size. Put that key into a product's
+`object_key`, public CDN URL, MIME type and size. Put that key into a product's
 `image_keys`; original filenames are not used as storage keys.
+
+Product writes accept at most six ordered `image_keys`: the first is the main
+picture and the remaining five are additional pictures. Optional `seo_image_key`
+selects a separate social sharing image; metadata falls back to the main image.
+POST `/v1/admin/catalog/videos` accepts one multipart `video` (MP4 or WebM,
+maximum 50 MiB), checks the actual file type, and returns the same upload receipt
+shape. Persist its key as optional `video_key`. Local development stores videos
+under `products/local/videos/` and serves byte ranges for playback and seeking.
+Videos never require a third-party embed or block publishing when omitted.
+
+PATCH accepts `video_key: null`, `seo_image_key: null`, `storage_condition: null`
+and null optional translated text fields to remove saved values. Omission
+preserves saved values. Public DTOs expose approved `video_url`, `seo_image_url`
+and sanitized `description_html`, never storage credentials. Rich descriptions
+allow basic paragraphs, headings, emphasis and lists. Search descriptions remain
+plain text. The search preview matches public title/description fallbacks;
+canonical, language links and price-free structured data are preserved. Apply
+`npm run migrate` to existing development databases before saving media fields.
 
 POST `/v1/admin/catalog/generics`, `/manufacturers`, and `/categories` create
 masters or update an existing master when `id` is supplied. Updates are full
 profile submissions. Each accepts `translations.en: { name, slug }`, optional
-`translations.zhCN`, and `is_active`. Manufacturer additionally requires
-`country` and optionally `certifications`. Generic accepts
+`translations.zhCN`, and `is_active`. Manufacturers accept optional `country`
+and `certifications`. Omitting `country` when editing preserves the existing value. Generic accepts
 `therapeutic_indications`; category accepts `sort_order`. Translation SEO and
 description fields match the database schema. Manufacturer/generic name changes
 update the corresponding materialized product search labels transactionally.
+
+English and Chinese page slugs must be unique within each master directory,
+including inactive records. Duplicate submissions return `422 CATALOG_SLUG_CONFLICT`
+with the conflicting `translations.en.slug` / `translations.zhCN.slug` fields.
+Edit the existing master by supplying its `id`, or choose a different slug for a
+different master. Edits may keep their own slugs. Unique indexes also protect
+against simultaneous duplicate submissions; rejected staged logos are removed.
+
+Manufacturer submissions can include a PNG or WebP `logo_data_url` up to 262,144
+characters. Omit it to keep the saved logo or send `null` to remove it. In S3 mode,
+replacement and new logos use object storage. The authenticated manufacturer
+detail endpoint returns the image source for both inline and S3 logos.
+
+The Generic API retains the optional `logo_data_url` image field with
+the same PNG/WebP validation and size limit for existing installations. Generic
+admin forms, lists and previews omit picture controls and image display;
+ordinary edits leave any existing stored picture unchanged. Generic pictures use
+`products/local/generics/` locally. Omit the field to retain a saved picture or
+send `null` to remove it. Detail responses include its image URL in
+`logo_data_url`; list responses include `logo_url`. Replacement/removal deletes
+the retired file only after the database transaction commits.
+
+Categories use the same optional image field and lifecycle under
+`products/local/categories/`. Category updates and status switches keep the
+saved picture when that field is omitted; `sort_order` remains part of every
+category submission. Generic/category storage failures return the dedicated
+`GENERIC_IMAGE_UPLOAD_FAILED` / `CATEGORY_IMAGE_UPLOAD_FAILED` codes before any
+database write, allowing a corrected manual submission.
 
 ## CSV import
 
@@ -155,25 +245,23 @@ Configured wire instructions additionally require `beneficiary_name`,
 `bank_name`, `account_number`, and `swift_code`; `bank_address` and `currency`
 are optional. Sensitive bank values are not copied into audit metadata.
 
-## R2, encryption and revalidation
+## S3, encryption and revalidation
 
-Configure `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-`R2_BUCKET_PRODUCTS`, `R2_BUCKET_QUOTES`, `R2_BUCKET_PRESCRIPTIONS`, and
-`R2_PUBLIC_BASE_URL` (the public product-image CDN base). The SDK uses region
-`auto` and `https://<account>.r2.cloudflarestorage.com`. Logical object keys use
-`products/`, `quotes/`, and `prescriptions/` prefixes. Only product keys can be
-converted into public URLs. Quotes and medical objects must remain private.
+Configure `AWS_REGION`, `S3_BUCKET_PRODUCTS`, `S3_BUCKET_QUOTES`,
+`S3_BUCKET_PRESCRIPTIONS`, `S3_BUCKET_AVATARS` and `S3_PUBLIC_BASE_URL`.
+Use the backend runtime role for S3. See the [AWS runbook](../../../../infra/aws/README.md)
+for provisioning and migration. Catalog image keys use `products/s3/` and
+are served through CloudFront. The old R2 settings support legacy reads only.
 
-`storage.service.ts` exports a lazy, injectable R2 service with image upload,
+`storage.service.ts` exports a lazy, injectable S3 service with image upload,
 private prescription upload/download, and bucket-scoped operations. Prescription
 helpers accept only actual JPEG/PNG/PDF buffers up to 5,242,880 bytes, encrypt
 with AES-256-GCM before upload, and authenticate/decrypt on download. Configure
 `PRESCRIPTION_ENCRYPTION_KEY` (32 bytes in hex/base64) and `PRESCRIPTION_KEY_ID`.
-Medical metadata contains `r2_object_key`, MIME/size and
+Medical metadata contains `object_key`, MIME/size and
 `encryption: { algorithm, iv, auth_tag, key_id }`; it has no public URL or key
-material. At the later RFQ persistence boundary, map `r2_object_key` to the
-canonical prescription schema's `r2_storage_key`. Step 5 will expose the
-prescription intake/authorized streaming endpoints.
+material. The authorized RFQ stream reads old `r2_storage_key` references
+during the transition.
 
 After a committed mutation, a non-blocking POST is sent to each configured
 `PUBLIC_ORIGIN` at `/api/revalidate`, with bearer
@@ -196,4 +284,4 @@ remove only a unique `catalog_test_*` database. They exercise actual validators,
 transactions, public projections, localization, references, redirects, CSV,
 CMS and settings. Webhooks are stubbed. Storage unit tests mock the S3 transport
 and verify real magic-byte detection and encryption round trips; they do not
-upload test objects into live R2 buckets.
+upload test objects into live storage buckets.

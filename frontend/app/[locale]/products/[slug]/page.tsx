@@ -12,6 +12,7 @@ import { publicAssetUrl } from '../../../../lib/public-catalog';
 import { Breadcrumbs } from '../../../../components/catalog/Breadcrumbs';
 import { CatalogState } from '../../../../components/catalog/CatalogState';
 import { cartInput } from '../../../../components/catalog/ProductCard';
+import { ProductRichDescription } from '../../../../components/catalog/ProductRichDescription';
 import { ProductActions } from '../../../../components/home/ProductActions';
 import { CatalogImage } from '../../../../components/catalog/CatalogImage';
 
@@ -55,7 +56,8 @@ export default async function ProductPage({ params }: Props) {
         {product.review_metadata&&<p className="small muted">{locale==='zh-CN'?(product.review_metadata.kind==='MEDICAL'?'医学审核':'技术审核'):(product.review_metadata.kind==='MEDICAL'?'Medical review':'Technical review')} · {product.review_metadata.reviewer_name} · <time dateTime={product.review_metadata.reviewed_at}>{product.review_metadata.reviewed_at.slice(0,10)}</time></p>}
       </div>
     </div>
-    <div className="product-information">{[[t('description'), product.description], [t('indications'), product.indication_summary], [t('usageNotes'), product.usage_notes]].map(([label, content]) => content && <section key={label}><h2>{label}</h2><p>{content}</p></section>)}<p className="medical-notice">{t('medicalNotice')}</p></div>
+    {product.video_url && <section className="product-detail-video"><h2>{locale === 'zh-CN' ? '产品视频' : 'Product video'}</h2><video controls playsInline preload="metadata" src={product.video_url} poster={images[0]} aria-label={product.brand_name + ' video'} /></section>}
+    <div className="product-information">{[[t('description'), product.description], [t('indications'), product.indication_summary], [t('usageNotes'), product.usage_notes]].map(([label, content]) => content && <section key={label}><h2>{label}</h2>{label === t('description') && product.description_html ? <ProductRichDescription html={product.description_html} /> : <p>{content}</p>}</section>)}<p className="medical-notice">{t('medicalNotice')}</p></div>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(productStructuredData(product, locale, images)) }}/>
   </div></main>;
 }
