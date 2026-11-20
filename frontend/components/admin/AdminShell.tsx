@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Activity, ChevronDown, FileText, Layers, LayoutDashboard, LogOut, Pill, Plus, ShieldCheck, Star, Store } from 'lucide-react';
+import { Activity, ChevronDown, FileText, Image as ImageIcon, Layers, LayoutDashboard, LogOut, Pill, Plus, ShieldCheck, Star, Store } from 'lucide-react';
 import { z } from 'zod';
 import { useAdminStream } from '../../hooks/useAdminStream';
 import { notifyAdminSessionChange } from '../../lib/admin-auth-events';
@@ -124,7 +124,8 @@ export function AdminShell({ session, children }: { session: AdminSession; child
     <MasterNavigation pathname={pathname} kind="manufacturers"/>
     <MasterNavigation pathname={pathname} kind="generics"/>
     <MasterNavigation pathname={pathname} kind="categories"/>
-    {[['/admin/catalog/banners','Announcements'],['/admin/customers','Customers'],['/admin/settings','Settings'],['/admin/audit-logs','Audit logs']].map(([href,label])=><AdminLink key={href} href={href} current={pathname===href}>{label}</AdminLink>)}<AdminLink href="/admin/sessions" current={pathname === '/admin/sessions'}><ShieldCheck size={18}/>Sessions</AdminLink></nav>
+    <AdminLink href="/admin/catalog/banners" current={pathname.startsWith('/admin/catalog/banners')}><ImageIcon size={18}/>Banner Setup</AdminLink>
+    {[['/admin/customers','Customers'],['/admin/settings','Settings'],['/admin/audit-logs','Audit logs']].map(([href,label])=><AdminLink key={href} href={href} current={pathname===href}>{label}</AdminLink>)}<AdminLink href="/admin/sessions" current={pathname === '/admin/sessions'}><ShieldCheck size={18}/>Sessions</AdminLink></nav>
     <div className="admin-sidebar-footer"><label className="admin-sound"><input type="checkbox" checked={sound} disabled={!active} onChange={(event) => void changeSound(event.currentTarget.checked)}/>Sound alerts</label><p className="small">30-minute inactivity limit</p><button type="button" onClick={() => void logout()}><LogOut size={17}/>Sign out</button></div></aside>
     <div className="admin-workspace">
       {remaining <= 120_000 && active && <p className="admin-idle-warning" role="status">You will be signed out after {Math.ceil(remaining / 60_000)} minute(s) without activity.</p>}

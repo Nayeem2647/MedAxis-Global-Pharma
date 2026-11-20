@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from 'react';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { LockKeyhole, MessageCircle, Plus, RefreshCw } from 'lucide-react';
+import { LockKeyhole, MessageCircle, RefreshCw } from 'lucide-react';
 import { QuotationSession, declineBody, refreshBody, revisionBody, type Decision, type QuotationInitial, type QuotationProblem } from '../../lib/quotation';
 import type { ContactConfig } from '../../lib/public-config';
 import { ContactDialog } from '../layout/ContactDialog';
@@ -61,7 +62,7 @@ export function QuotationViewer({ token, initial, contact }: { token?: string; i
   const problem = state.problem ?? pdfProblem;
   const send = async (input: Decision) => { setPdfProblem(null); await session.decide(input); };
   return <>
-    <header className="quotation-header"><div className="quotation-header-inner"><div className="quotation-brand"><span className="brand-mark" aria-hidden="true"><Plus size={28}/></span><span>MedAxis<span className="brand-sub">GLOBAL PHARMA</span></span></div>
+    <header className="quotation-header"><div className="quotation-header-inner"><div className="quotation-brand"><Image src="/images/medaxis-logo.png" alt="MedAxis Global Pharma" width={818} height={196} unoptimized priority className="quotation-logo"/></div>
       <QuotationLanguage/><button type="button" className="button secondary" onClick={() => setContactOpen(true)}><MessageCircle size={17}/>{t('contact')}</button>
     </div></header>
     <main className="quotation-main"><div className="quotation-privacy"><LockKeyhole size={15}/><span>{t('privacy')}</span></div>

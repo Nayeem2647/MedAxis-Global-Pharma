@@ -6,6 +6,7 @@ import { isLocale, locales } from '../../i18n/routing';
 import { CartProvider } from '../../components/layout/CartProvider';
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicAnalytics } from '../../components/layout/PublicAnalytics';
+import { CustomerAccountProvider } from '../../components/customer/CustomerAccountProvider';
 import { getAnalyticsConfig, getContactConfig } from '../../lib/public-config';
 import '../globals.css';
 
@@ -16,6 +17,6 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   if (!isLocale(locale)) notFound();
   setRequestLocale(locale);
   const analytics = getAnalyticsConfig();
-  return <html lang={locale}><body><NextIntlClientProvider><CartProvider><PublicShell contact={getContactConfig()}>{children}</PublicShell></CartProvider>
+  return <html lang={locale}><body><NextIntlClientProvider><CartProvider><CustomerAccountProvider><PublicShell contact={getContactConfig()}>{children}</PublicShell></CustomerAccountProvider></CartProvider>
     {analytics && <PublicAnalytics {...analytics}/>}</NextIntlClientProvider></body></html>;
 }

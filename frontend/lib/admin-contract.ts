@@ -112,8 +112,9 @@ export function adminProxyRule(path: string, method: string): AdminProxyRule | n
   if (/^catalog\/(?:manufacturers|generics|categories)$/.test(path) && method === 'GET') return json(['page','limit','q','is_active']);
   if (new RegExp(`^catalog/(?:products|manufacturers|generics|categories)/${uuid}$`).test(path) && method === 'GET') return json();
   if (new RegExp(`^catalog/(?:products|manufacturers|generics|categories)/${uuid}$`).test(path) && method === 'DELETE') return json();
-  if (path === 'cms/banners' && method === 'GET') return json(['page','limit','q','is_active']);
+  if (path === 'cms/banners' && method === 'GET') return json(['page','limit','q','is_active','placement']);
   if (new RegExp(`^cms/banners/${uuid}$`).test(path) && method === 'GET') return json();
+  if (new RegExp(`^cms/banners/${uuid}$`).test(path) && method === 'DELETE') return json();
   if (path === 'quotations' && method === 'GET') return json(['page','limit','q','rfq_id','overall_status','status','reservation_before','worklist']);
   if (path === 'quotations/summary' && method === 'GET') return json(['window_hours']);
   if (new RegExp(`^quotations/${uuid}/draft$`).test(path) && method === 'PATCH') return json();

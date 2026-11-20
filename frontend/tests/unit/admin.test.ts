@@ -22,6 +22,37 @@ beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'https://api.test'); v
 afterEach(() => vi.useRealTimers());
 
 describe('opaque admin cookies and private boundary', () => {
+  it.each(['/admin/login', '/admin/rfqs', '/admin/login?reset=local-reset-token'])('moves local dev admin page %s to its configured origin before sign-in', async (path) => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('ADMIN_FRONTEND_ORIGIN', 'http://localhost:3000');
+    const fetcher = vi.fn<typeof fetch>(); vi.stubGlobal('fetch', fetcher);
+    const response = await adminPageBoundary(new NextRequest(`http://localhost:3001${path}`));
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(`http://localhost:3000${path}`);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('keeps the configured local sign-in page in place without a redirect loop', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('ADMIN_FRONTEND_ORIGIN', 'http://localhost:3000');
+    const response = await adminPageBoundary(new NextRequest('http://localhost:3000/admin/login'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+  it('does not redirect to an external configured origin from a local dev page', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const response = await adminPageBoundary(new NextRequest('http://localhost:3001/admin/login'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+  it('does not apply local port correction in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('ADMIN_FRONTEND_ORIGIN', 'http://localhost:3000');
+    const response = await adminPageBoundary(new NextRequest('http://localhost:3001/admin/login'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
   it('maps separate cookies, preserves signed bytes/security and removes upstream domains', () => {
     const headers = new Headers(); headers.append('Set-Cookie', cookie(full, '/v1/admin') + '; Domain=api.test'); headers.append('Set-Cookie', cookie(pre, '/v1/admin/auth'));
     expect(mappedAdminCookies(headers, true)).toEqual([cookie(full, '/').replace('; Path=/', '; Path=/'), cookie(pre, '/api/admin/auth')]);

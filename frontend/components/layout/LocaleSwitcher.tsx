@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
 import type { MouseEvent } from 'react';
+import { Check } from 'lucide-react';
 import { locales, type Locale } from '../../i18n/routing';
 import { counterpartPath, localizedCatalogSearch, type CatalogLocaleFilter } from '../../lib/locale-navigation';
 
@@ -29,6 +30,6 @@ export function LocaleSwitcher({ enPath, zhPath }: { enPath?: string; zhPath?: s
   }
   return <nav className="locale-switcher" aria-label={t('language')}>
     {locales.map((target) => <a key={target} href={counterpartPath(target, pathname, target === 'en' ? enPath : zhPath)} lang={target} hrefLang={target}
-      aria-current={target === locale ? 'true' : undefined} onClick={(event) => switchLocale(event, target)}>{target === 'en' ? 'English' : '简体中文'}</a>)}
+      aria-current={target === locale ? 'true' : undefined} onClick={(event) => switchLocale(event, target)}><span>{target === 'en' ? 'English' : '简体中文'}</span><Check className="locale-switcher-check" size={13} strokeWidth={2.5} aria-hidden="true"/></a>)}
   </nav>;
 }

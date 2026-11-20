@@ -4,6 +4,8 @@
 **Date:** November 2026  
 **Status:** 🔄 Draft — Pending Final Review
 
+**Owner-approved extension — 20 November 2026:** The frontend now also includes localized customer Login/Register and `/[locale]/account` dashboards. `/api/customer/*` is a separate Node adapter for `/v1/public/customer/*`; it forwards only the customer session cookie. Customer accounts, sessions, drafts and events are separate persistence collections. Existing guest RFQ, quotation Magic Links and admin authentication remain independent. See [Customer-Dashboard.md](Customer-Dashboard.md).
+
 ---
 
 ## 0. Architecture Diagrams (Visual Overview)

@@ -6,6 +6,8 @@
 **Source Document:** `Idea.md` (MedAxis Global Pharma Business and Website Workflow)  
 **Target Release:** Release 1 (Core RFQ & Quotation Management) with roadmap for Releases 2–4  
 
+**Owner-approved extension — 20 November 2026:** Optional customer accounts and the customer dashboard are now part of the implementation scope. See [Customer-Dashboard.md](Customer-Dashboard.md) for the agreed features, ownership rules, email verification, endpoints and rollout. Guest RFQ and passwordless quotation acceptance remain supported.
+
 ---
 
 ## 1. Project Overview & Business Model
@@ -155,7 +157,7 @@ Unlike standard e-commerce platforms, MedAxis Global Pharma operates strictly on
 * **Header & Global Navigation**:
   * Contact info (Phone, Email, WeChat QR/ID, WhatsApp link).
   * Navigation links: Home, Products, Services, About Us, Contact (*Blog deferred to Release 2*).
-  * Header actions: Global Search, Language Selector (EN / ZH), Quotation Cart badge. (Customer self-service account login deferred to Release 3; Release 1 is 100% passwordless via Magic Links).
+  * Header actions: Global Search, Language Selector (EN / ZH), Quotation Cart badge and optional Customer Login/Register (or My Account/Sign out). The original Release 3 account deferral is superseded by the owner-approved customer dashboard extension; guest RFQs and Magic Links remain available.
   * Dismissible announcement bar for operational notices or trade announcements (bilingual).
   * **Mainland China Direct Channels**: On Chinese locale (`/zh-CN/`), display prominent WeChat ID and scan-to-chat QR code modal alongside WhatsApp to support users behind the Great Firewall.
 * **Multi-Faceted Search & Filtering**:
@@ -290,7 +292,7 @@ Unlike standard e-commerce platforms, MedAxis Global Pharma operates strictly on
     * Zero barriers: No password entry, registration forms, or login forgotten-password loops.
   * **Optional Self-Service Portal (Secondary / Power User Experience)**:
     * Available for wholesale buyers who wish to track multiple ongoing RFQs or review historical versions.
-    * Accessible via passwordless Magic Link (dispatched to verified email) or optional account password (zero OTP required).
+    * Customer accounts use email/password with email-link verification before historical RFQ/quotation access. The per-quotation Magic Link remains an independent passwordless experience. See [Customer-Dashboard.md](Customer-Dashboard.md).
 * **Super Admin Unified Control Center**:
   * **Command Overview & Real-Time Inbox**:
     * Unified feed displaying all incoming inquiries, clearly tagged: `[Quick Quote]` or `[Cart RFQ]`.

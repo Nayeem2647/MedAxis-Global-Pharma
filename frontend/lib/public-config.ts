@@ -1,18 +1,27 @@
 import { publicAssetUrl } from './public-catalog';
 import { siteOrigin } from './seo';
 
-export function getContactConfig() {
+export interface ContactConfig {
+  whatsapp: string | null;
+  wechatId: string | null;
+  wechatQr: string | null;
+  email: string | null;
+  phone?: string | null;
+}
+
+export function getContactConfig(): ContactConfig {
   const phone = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '+8801560066410').replace(/[\s()+-]/g, '');
+  const contactPhone = (process.env.NEXT_PUBLIC_CONTACT_PHONE ?? '+8801560064010').replace(/[\s()+-]/g, '');
   const wechatId = process.env.NEXT_PUBLIC_WECHAT_ID?.trim();
   const email = process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim();
   return {
+    phone: /^[1-9]\d{6,14}$/.test(contactPhone) ? `+${contactPhone}` : null,
     whatsapp: phone && /^[1-9]\d{6,14}$/.test(phone) ? `https://wa.me/${phone}` : null,
     wechatId: wechatId && /^[a-zA-Z0-9_-]{2,100}$/.test(wechatId) ? wechatId : null,
     wechatQr: publicAssetUrl(process.env.NEXT_PUBLIC_WECHAT_QR_URL || '/images/wechat-contact.jpeg'),
     email: email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null,
   };
 }
-export type ContactConfig = ReturnType<typeof getContactConfig>;
 
 export function getAnalyticsConfig() {
   const domain = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;

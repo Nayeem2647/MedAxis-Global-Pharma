@@ -2,7 +2,7 @@ import Ajv from 'ajv';
 import draft4 from 'ajv/lib/refs/json-schema-draft-04.json' with { type: 'json' };
 import { Types } from 'mongoose';
 import { describe, expect, it } from 'vitest';
-import validators from '../src/shared/persistence/validators.json' with { type: 'json' };
+import validators from '../src/shared/persistence/validators.js';
 import { RFQ_STATUS } from '../src/config/constants.js';
 import { rfqRecord } from './fixtures/rfq.js';
 

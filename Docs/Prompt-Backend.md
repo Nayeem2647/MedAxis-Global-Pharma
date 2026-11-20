@@ -8,7 +8,7 @@
 - [Database-Schema.md](Database-Schema.md) — Authoritative field definitions & Mongoose schema conventions
 - [API-Spec.md](API-Spec.md) — Complete REST contract (`/v1`, 52 endpoints), uniform JSON envelopes, error codes, security headers
 
-> **How to Use This File:** Execute Steps **1 through 8** sequentially. Copy the **Prompt** block of the current step into your coding session, implement only that step's scope, and pass its **Verification Gate** before proceeding to the next step. Never expand Release 1 into multi-role RBAC, customer accounts/passwords, online payments, or supplier layers.
+> **How to Use This File:** Execute Steps **1 through 8** sequentially. Copy the **Prompt** block of the current step into your coding session, implement only that step's scope, and pass its **Verification Gate** before proceeding to the next step. Multi-role RBAC, online payments and supplier layers remain excluded. Customer accounts/passwords are an explicitly owner-approved extension dated 20 November 2026; follow [Customer-Dashboard.md](Customer-Dashboard.md) for that additional scope.
 
 ---
 

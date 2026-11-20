@@ -8,7 +8,7 @@ import { QuotationVersionModel } from '../src/modules/quotation/quotation.schema
 import type { IRfq } from '../src/modules/rfq/rfq.schema.js';
 import { migrate } from '../src/scripts/migrate.js';
 import { persistenceModels } from '../src/shared/persistence/models.js';
-import validators from '../src/shared/persistence/validators.json' with { type: 'json' };
+import validators from '../src/shared/persistence/validators.js';
 import { rfqRecord } from './fixtures/rfq.js';
 
 // Allow malformed status values deliberately: these writes must reach server validation.
@@ -36,10 +36,10 @@ afterAll(async () => {
   await mongoose.disconnect();
 });
 
-it('installs all 21 strict/error validators and declared indexes idempotently', async () => {
+it('installs all 22 strict/error validators and declared indexes idempotently', async () => {
   const db = mongoose.connection.db!;
   const collections = await db.listCollections({}, { nameOnly: false }).toArray();
-  expect(persistenceModels).toHaveLength(21);
+  expect(persistenceModels).toHaveLength(26);
   for (const model of persistenceModels) {
     const name = model.collection.name as keyof typeof validators;
     const info = collections.find((collection) => collection.name === name);

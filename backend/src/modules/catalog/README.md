@@ -12,6 +12,26 @@ field projections followed by explicit DTO construction; they never serialize
 whole product, translation, or master documents. Prices, FX, costs, margins,
 tokens and admin notes are not part of public DTO types or projections.
 
+## Customer ratings
+
+Run `npm run migrate:ratings` to prepare only the new `product_ratings` collection,
+its strict validator and unique product/visitor index. The standard migration
+also includes it. Existing product and commercial records are unchanged.
+
+`GET /v1/public/products/:id/ratings` returns `{ average, count, my_rating }`.
+`PUT` on the same path accepts strict `{ score: 1..5 }` with a whole-number score.
+Only a published product with active related profiles is eligible. Writes require
+an allowed `Origin` and are limited to ten per minute per IP. A signed HttpOnly
+browser cookie identifies an anonymous voter; only its hash is stored. Repeating
+a vote from that browser updates its existing row. These are customer ratings,
+not verified-purchase reviews or medical review metadata. No written reviews are
+collected. Personal rating reads and writes use `no-store`.
+
+Catalog lists/details include public `customer_rating: { average, count }` only.
+Aggregates are computed from stored votes after pagination, without exposing
+visitor identifiers. The catalog cards refresh their displayed totals separately
+so a cached catalog page does not hide a newly submitted rating.
+
 ## Public endpoints
 
 | Method / path                        | Behavior                                                             |

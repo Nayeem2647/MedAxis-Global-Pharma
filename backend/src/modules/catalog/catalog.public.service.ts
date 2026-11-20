@@ -59,6 +59,14 @@ function joins(): PipelineStage[] {
     { $match: { 'category_profiles.0': { $exists: true } } },
   ];
 }
+function ratingJoins(): PipelineStage.Lookup[] {
+  return [{ $lookup: {
+    from: 'product_ratings', localField: '_id', foreignField: 'product_id',
+    pipeline: [{ $group: { _id: null, average: { $avg: '$score' }, count: { $sum: 1 } } },
+      { $project: { _id: 0, average: { $round: ['$average', 1] }, count: 1 } }],
+    as: 'customer_ratings',
+  } }];
+}
 export function createPublicCatalogService(env: AppEnv) {
   async function filters(query: CatalogQuery) {
     const match: Record<string, unknown> = { status: 'PUBLISHED', deleted_at: { $exists: false } };
@@ -132,7 +140,7 @@ export function createPublicCatalogService(env: AppEnv) {
       ...joins(),
       {
         $facet: {
-          products: [{ $sort: { sku: 1, _id: 1 } }, { $skip: (query.page - 1) * query.limit }, { $limit: query.limit }],
+          products: [{ $sort: { sku: 1, _id: 1 } }, { $skip: (query.page - 1) * query.limit }, { $limit: query.limit }, ...ratingJoins()],
           total: [{ $count: 'count' }],
           dosage: [{ $group: { _id: '$dosage_form', count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
           cold: [{ $group: { _id: '$cold_chain_required', count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
@@ -190,8 +198,18 @@ export function createPublicCatalogService(env: AppEnv) {
       { $project: PUBLIC_PRODUCT_PROJECTION },
       ...joins(),
       { $limit: 1 },
+      ...ratingJoins(),
     ]);
     return rows[0] ? publicProduct(rows[0], locale, publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL) : redirect('products', slug, locale);
+  }
+
+  async function productById(id: string) {
+    const rows = await ProductModel.aggregate<JoinedProduct>([
+      { $match: { _id: id, status: 'PUBLISHED', deleted_at: { $exists: false } } },
+      { $project: PUBLIC_PRODUCT_PROJECTION }, ...joins(), { $limit: 1 }, ...ratingJoins(),
+    ]).option({ maxTimeMS: 10_000 });
+    if (!rows[0]) throw AppError.notFound();
+    return publicProduct(rows[0], 'en', publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL);
   }
 
   async function master(kind: MasterKind, slug: string, query: CatalogQuery) {
@@ -235,5 +253,5 @@ export function createPublicCatalogService(env: AppEnv) {
       categories: categories!.map(pair),
     };
   }
-  return { list, product, master, sitemap };
+  return { list, product, productById, master, sitemap };
 }

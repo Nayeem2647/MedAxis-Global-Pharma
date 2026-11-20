@@ -6,15 +6,20 @@ Sources: [DFD.md](DFD.md), [PRD.md](PRD.md), [Architecture.md](Architecture.md).
 
 ## 1. Collection List
 
-DFD store IDs are logical groups, not physical collection counts. This design has 21 collections. Operational collections omitted from the DFD dictionary are explicitly identified below.
+DFD store IDs are logical groups, not physical collection counts. The original design had 21 collections. The current implementation registers 26, including product ratings and the four owner-approved customer-account collections. Operational collections omitted from the DFD dictionary are explicitly identified below.
 
 | Collection | DFD mapping | Purpose |
 |---|---|---|
 | products | D1 | Multilingual medicine SKUs; no public prices |
+| product_ratings | Catalog extension | Moderated product rating records |
 | manufacturers | D2 | Direct licensed manufacturer records |
 | generics | D3 | Active ingredient and SEO hubs |
 | categories | D4 | Therapeutic categories |
 | customers | D7 | B2B/B2C directory; no buyer accounts/passwords |
+| customer_accounts | Customer dashboard extension | Verified account identity and Argon2id credentials; separate from contact directory |
+| customer_sessions | Customer dashboard extension | Private revocable customer sessions with TTL expiry |
+| customer_drafts | Customer dashboard extension | Account-owned saved requirements and RFQ submission receipts |
+| customer_events | Customer dashboard extension | Account activity/history references |
 | rfqs | D5 | Inquiry, contact snapshot and embedded request items |
 | rfq_idempotency_keys | D6 | Submission deduplication for 24 hours |
 | prescriptions | D12 metadata | Optional encrypted medical file metadata |

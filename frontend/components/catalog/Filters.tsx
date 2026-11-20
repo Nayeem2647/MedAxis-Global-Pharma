@@ -65,7 +65,7 @@ export async function Filters({ locale, path, query, lockedKind }: { locale: Loc
       })}
       <div className="filter-field filter-search">
         <label htmlFor="catalog-filter-q">{t('filterSearch')}</label>
-        <div className="filter-search-box">
+        <div className="filter-search-box filter-actions">
           <input id="catalog-filter-q" name="q" type="search" maxLength={100} defaultValue={query.q} placeholder={t('searchProductsPlaceholder')}/>
           <button className="filter-search-submit" type="submit" aria-label={t('searchCatalog')}>
             <Search size={18} aria-hidden="true"/>

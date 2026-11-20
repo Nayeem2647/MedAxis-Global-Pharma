@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { isLocale } from '../../../i18n/routing';
 import { buildLocalizedMetadata } from '../../../lib/seo';
 import { getProducts } from '../../../lib/catalog-data';
+import { getBanners } from '../../../lib/public-catalog';
 import { catalogQueryString, readCatalogQuery, type SearchValues } from '../../../lib/catalog-query';
 import { ApiError } from '../../../lib/api-client';
 import { ProductCard } from '../../../components/catalog/ProductCard';
@@ -12,6 +13,7 @@ import { Filters } from '../../../components/catalog/Filters';
 import { Pagination } from '../../../components/catalog/Pagination';
 import { CatalogState } from '../../../components/catalog/CatalogState';
 import { Breadcrumbs } from '../../../components/catalog/Breadcrumbs';
+import { PlacementBanner } from '../../../components/home/PlacementBanner';
 
 type Props = { params: Promise<{ locale: string }>; searchParams: Promise<SearchValues> };
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
@@ -33,12 +35,19 @@ export default async function ProductsPage({ params, searchParams }: Props) {
   const path = `/${locale}/products`;
   let data: Awaited<ReturnType<typeof getProducts>> | null = null;
   let error: unknown;
+  const allBanners = await getBanners(locale);
+  const productsBanners = allBanners.filter((banner) => banner.placement === 'PRODUCTS_BANNER' && banner.media_url);
   try {
     if (!valid) throw new ApiError('Invalid filters.', { status: 400, code: 'INVALID_REQUEST' });
     data = await getProducts(locale, catalogQueryString(query));
   } catch (failure: unknown) { error = failure; }
   return <main id="main-content" className="catalog-page"><div className="site-container section">
     <Breadcrumbs locale={locale} entries={[{ name: t('products'), href: path }]}/>
+    {productsBanners.length > 0 && (
+      <div className="products-banner-slot">
+        <PlacementBanner banners={productsBanners} locale={locale} variant="products" />
+      </div>
+    )}
     <div className="catalog-heading"><p className="eyebrow">MEDAXIS GLOBAL PHARMA</p><h1>{t('products')}</h1><p>{t('catalogDescription')}</p></div>
     <Filters locale={locale} path={path} query={query} facets={data?.facets ?? { dosage_forms: [], cold_chain: [] }}/>
     {data?.products.length ? <>

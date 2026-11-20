@@ -227,6 +227,11 @@ function LegacyResourceEditor({
         } else if (kind === 'banners')
           body = validatedInput(bannerBody, {
             ...(row ? { id: row.id } : {}),
+            ...(banner?.placement ? { placement: banner.placement } : {}),
+            ...(banner?.media_type && banner?.media_key ? { media_type: banner.media_type, media_key: banner.media_key } : {}),
+            ...(banner?.resource_type ? { resource_type: banner.resource_type } : {}),
+            ...(banner?.resource_id ? { resource_id: banner.resource_id } : {}),
+            ...(banner?.show_overlay !== undefined ? { show_overlay: banner.show_overlay } : {}),
             translations: content,
             is_active: checked('is_active'),
             sort_order: Number(form.get('sort_order')),

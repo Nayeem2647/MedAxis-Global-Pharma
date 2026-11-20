@@ -35,7 +35,9 @@ import {
   X,
 } from 'lucide-react';
 import { LocaleSwitcher } from './LocaleSwitcher';
+import { useProductTools } from '../catalog/ProductToolsProvider';
 import type { ContactConfig } from '../../lib/public-config';
+import { useCustomerAccount } from '../customer/CustomerAccountProvider';
 
 interface HeaderProps {
   itemCount: number;
@@ -44,6 +46,7 @@ interface HeaderProps {
   onContact(): void;
   onQuickQuote(): void;
   contact?: ContactConfig;
+  contactOpen?: boolean;
 }
 
 type DropdownKey = 'products' | 'services' | 'blog' | 'about';
@@ -52,6 +55,7 @@ interface DropdownItem {
   label: string;
   href: string;
   description?: string;
+  compare?: boolean;
   Icon: typeof Pill;
 }
 
@@ -63,10 +67,18 @@ interface DropdownGroup {
   items: DropdownItem[];
 }
 
-export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, contact }: HeaderProps) {
+export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, contact, contactOpen = false }: HeaderProps) {
   const locale = useLocale();
   const pathname = usePathname();
   const t = useTranslations('Shell');
+  const { showComparison } = useProductTools();
+  const account = useCustomerAccount();
+  const [signingOut, setSigningOut] = useState(false);
+  async function signOut() {
+    setSigningOut(true);
+    try { await account.logout(); window.location.assign(`/${locale}`); }
+    finally { setSigningOut(false); }
+  }
   const [menuOpen, setMenuOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<DropdownKey | null>(null);
   const [mobileOpenGroup, setMobileOpenGroup] = useState<DropdownKey | null>('products');
@@ -76,6 +88,7 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
   const phone = '+8801560064010';
 
   const isRouteActive = (route: string) => {
+    if (contactOpen) return false;
     const href = route ? `/${locale}/${route}` : `/${locale}`;
     if (!route) return pathname === href;
     return pathname === href || Boolean(pathname?.startsWith(`${href}/`));
@@ -112,7 +125,7 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
         { label: t('newArrivals'), href: `/${locale}/#catalog`, Icon: Sparkles },
         { label: t('browseByGeneric'), href: `/${locale}/generics`, Icon: FlaskConical },
         { label: t('browseByManufacturer'), href: `/${locale}/manufacturers`, Icon: Building2 },
-        { label: t('compareProducts'), href: `/${locale}/categories`, Icon: Layers },
+        { label: t('compareProducts'), href: `/${locale}/categories`, Icon: Layers, compare: true },
       ],
     },
     {
@@ -159,17 +172,17 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
     <div className="top-bar">
       <div className="site-container top-bar-container">
         <div className="top-bar-left">
-          <a href={`tel:${phone}`} className="top-bar-link" aria-label={`Phone: ${phone}`}>
+          <a href={`tel:${phone}`} className="top-bar-link" aria-label={t('phoneLabel', { phone })}>
             <Phone size={16} aria-hidden="true" />
             <span>{phone}</span>
           </a>
-          <a href={`mailto:${email}`} className="top-bar-link" aria-label={`Email: ${email}`}>
+          <a href={`mailto:${email}`} className="top-bar-link" aria-label={t('emailLabel', { email })}>
             <Mail size={16} aria-hidden="true" />
             <span>{email}</span>
           </a>
         </div>
         <div className="top-bar-right">
-          <div className="top-bar-socials" aria-label="Social media">
+          <div className="top-bar-socials" aria-label={t('socialMedia')}>
             <a href="https://www.linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="top-bar-social-link">
               <Linkedin size={17} aria-hidden="true" />
             </a>
@@ -184,14 +197,14 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
             </a>
           </div>
           <div className="top-bar-auth">
-            <Link href="/admin/login" className="top-bar-auth-btn top-bar-login-btn">
+            <Link href={`/${locale}/${account.profile ? 'account' : 'login'}`} className="top-bar-auth-btn top-bar-login-btn">
               <LogIn size={15} aria-hidden="true" />
-              <span>Login</span>
+              <span>{t(account.profile ? 'myAccount' : 'login')}</span>
             </Link>
-            <button type="button" onClick={onQuickQuote} className="top-bar-auth-btn top-bar-register-btn">
+            {account.profile ? <button type="button" onClick={signOut} disabled={signingOut} className="top-bar-auth-btn top-bar-register-btn">{t('logout')}</button> : <Link href={`/${locale}/register`} className="top-bar-auth-btn top-bar-register-btn">
               <UserPlus size={15} aria-hidden="true" />
-              <span>Register</span>
-            </button>
+              <span>{t('register')}</span>
+            </Link>}
           </div>
         </div>
       </div>
@@ -229,7 +242,9 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
                 {expanded && (
                   <div className={`nav-menu${group.heading ? ' nav-menu-wide' : ''}`}>
                     {group.heading && <p className="nav-menu-heading">{group.heading}</p>}
-                    {group.items.map(({ label, description, href, Icon }) => (
+                    {group.items.map(({ label, description, href, Icon, compare }) => compare ? (
+                      <button key={href} type="button" className="nav-menu-item" aria-haspopup="dialog" onClick={() => { setOpenMenu(null); showComparison(); }}><span className="nav-menu-icon" aria-hidden="true"><Icon size={17}/></span><span className="nav-menu-title">{label}</span></button>
+                    ) : (
                       <Link key={href} href={href} className="nav-menu-item" onClick={() => setOpenMenu(null)}>
                         <span className="nav-menu-icon" aria-hidden="true"><Icon size={17} /></span>
                         <span className="nav-menu-text">
@@ -243,24 +258,26 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
               </div>
             );
           })}
-          <button type="button" className="nav-link nav-contact-btn" onClick={() => { setOpenMenu(null); onContact(); }}>
+          <button type="button" className="nav-link nav-contact-btn" aria-current={contactOpen ? 'true' : undefined} aria-haspopup="dialog" aria-expanded={contactOpen} onClick={() => { setOpenMenu(null); onContact(); }}>
             {t('contact')}
           </button>
         </nav>
-        <div className="header-preferences"><LocaleSwitcher /></div>
-        <div className="header-tools">
-          <button className="cart-button" aria-label={t('cartCount', { count: itemCount })} onClick={onCart} disabled={!hydrated}>
-            <ShoppingBag size={21} /><span className="cart-badge" aria-live="polite">{itemCount}</span>
-          </button>
-          <button className="icon-button menu-button" aria-label={t('menu')} aria-expanded={menuOpen} aria-controls="mobile-navigation" onClick={() => setMenuOpen(!menuOpen)}>
-            {menuOpen ? <X size={23} /> : <Menu size={23} />}
-          </button>
+        <div className="header-actions">
+          <div className="header-preferences"><LocaleSwitcher /></div>
+          <div className="header-tools">
+            <button className="cart-button" aria-label={t('cartCount', { count: itemCount })} onClick={onCart} disabled={!hydrated}>
+              <ShoppingBag size={21} /><span className="cart-badge" aria-live="polite">{itemCount}</span>
+            </button>
+            <button className="icon-button menu-button" aria-label={t('menu')} aria-expanded={menuOpen} aria-controls="mobile-navigation" onClick={() => setMenuOpen(!menuOpen)}>
+              {menuOpen ? <X size={23} /> : <Menu size={23} />}
+            </button>
+          </div>
+          <button className="button primary header-quote" onClick={onQuickQuote}><Mail size={18} aria-hidden="true"/>{t('quickQuote')}</button>
         </div>
-        <button className="button primary header-quote" onClick={onQuickQuote}>{t('quickQuote')}<ArrowRight size={17} /></button>
       </div>
       {menuOpen && (
         <nav className="mobile-nav site-container" id="mobile-navigation" aria-label={t('mobileNavigation')}>
-          <Link href={`/${locale}`} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+          <Link href={`/${locale}`} className="mobile-nav-link" aria-current={isRouteActive('') ? 'page' : undefined} onClick={() => setMenuOpen(false)}>
             {t('home')}<ArrowRight size={17} />
           </Link>
           {dropdownGroups.map((group) => {
@@ -268,7 +285,7 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
             return (
               <div key={group.id} className="mobile-nav-group">
                 <div className="mobile-nav-row">
-                  <Link href={group.href} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+                  <Link href={group.href} className="mobile-nav-link" aria-current={isGroupActive(group.id) ? 'page' : undefined} onClick={() => setMenuOpen(false)}>
                     {group.label}
                   </Link>
                   <button
@@ -284,7 +301,9 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
                 {groupOpen && (
                   <div className="mobile-nav-sub">
                     {group.heading && <p className="nav-menu-heading">{group.heading}</p>}
-                    {group.items.map(({ label, description, href, Icon }) => (
+                    {group.items.map(({ label, description, href, Icon, compare }) => compare ? (
+                      <button key={href} type="button" className="mobile-nav-sublink" aria-haspopup="dialog" onClick={() => { setMenuOpen(false); showComparison(); }}><Icon size={16} aria-hidden="true"/><span>{label}</span></button>
+                    ) : (
                       <Link key={href} href={href} className="mobile-nav-sublink" onClick={() => setMenuOpen(false)}>
                         <Icon size={16} aria-hidden="true" />
                         <span>
@@ -298,9 +317,10 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
               </div>
             );
           })}
-          <button type="button" className="mobile-nav-contact" onClick={() => { setMenuOpen(false); onContact(); }}>
+          <button type="button" className="mobile-nav-contact" aria-current={contactOpen ? 'true' : undefined} aria-haspopup="dialog" aria-expanded={contactOpen} onClick={() => { setMenuOpen(false); onContact(); }}>
             {t('contact')}<ArrowRight size={17} />
           </button>
+          <div className="customer-mobile-links"><Link href={`/${locale}/${account.profile ? 'account' : 'login'}`} onClick={() => setMenuOpen(false)}>{t(account.profile ? 'myAccount' : 'login')}</Link>{account.profile ? <button type="button" disabled={signingOut} onClick={signOut}>{t('logout')}</button> : <Link href={`/${locale}/register`} onClick={() => setMenuOpen(false)}>{t('register')}</Link>}</div>
         </nav>
       )}
     </header>

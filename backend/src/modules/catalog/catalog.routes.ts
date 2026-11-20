@@ -14,6 +14,7 @@ import { createAdminCatalogService } from './catalog.admin.service.js';
 import { createIndicationsTranslator } from './catalog.translation.js';
 import { createCsvImportService } from './catalog.csv.service.js';
 import { createPublicCatalogService } from './catalog.public.service.js';
+import { createProductRatingRouter } from './product-rating.routes.js';
 import {
   catalogDelete,
   catalogQuery,
@@ -40,6 +41,7 @@ function detail(res: Response, data: object) {
 export function createPublicCatalogRouter(env: AppEnv) {
   const router = Router();
   const service = createPublicCatalogService(env);
+  router.use('/products/:id/ratings', createProductRatingRouter(env, service.productById));
   const limiter = rateLimit({
     windowMs: 60_000,
     limit: 120,

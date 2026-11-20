@@ -1,6 +1,7 @@
 import { createServer, type ServerResponse } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { customerFixture } from './customer-fixtures.ts';
 import { adminVersionFixture, costFixture, quotationDetailFixture, rfqFixture, workflowIds, workflowSettings } from '../admin-fixtures.ts';
 
 const timestamp = '2026-11-15T12:00:00.000Z';
@@ -68,8 +69,26 @@ function products(chinese: boolean) {
   }, { ...common,
     id: englishId, sku: 'ENGLISH-ONLY', locale: 'en', brand_name: 'English-only medicine', slug: 'english-only-medicine', cold_chain_required: false,
     alternate_slugs: { en: 'english-only-medicine', zhCN: null }, translations: { en: { brand_name: 'English-only medicine', slug: 'english-only-medicine' } },
-    description: '<p>Original English product information.</p>', primary_image_url: 'https://cdn.medaxisglobalpharma.com/products/test-fixture.png', image_urls: ['https://cdn.medaxisglobalpharma.com/products/test-fixture.png'],
+    description: '<p>Original English product information.</p>', primary_image_url: 'https://cdn.medaxisglobalpharma.com/products/test-fixture.png', image_urls: ['https://cdn.medaxisglobalpharma.com/products/test-fixture.png', 'https://cdn.medaxisglobalpharma.com/products/test-fixture-back.png'],
+    video_url: 'https://cdn.medaxisglobalpharma.com/products/local/videos/product-fixture.mp4',
   }];
+}
+
+function detailPreviewProducts(chinese: boolean) {
+  const template = products(chinese)[0]!;
+  const description = (chinese ? '这是制药企业提供的产品资料，采购详情应按已发布的信息确认。' : 'Published manufacturer information describes the supplied product, packaging and documented sourcing requirements. ').repeat(24);
+  const descriptionHtml = `<h3>${chinese ? '产品资料' : 'Published details'}</h3><p>${description}</p><ul><li>Manufacturer instructions apply.</li></ul><script>globalThis.NEVER_EXECUTE_CATALOG_SCRIPT=true</script>`;
+  return Array.from({ length: 8 }, (_, index) => {
+    const slug = `detail-preview-${index}`;
+    const name = `Detail preview medicine ${index}`;
+    const zhName = `产品资料示例 ${index}`;
+    return { ...template, id: `a2f591d0-346b-4cc4-8d67-e25358fa02${String(index).padStart(2, '0')}`, sku: `DETAIL-PREVIEW-${index}`, brand_name: chinese ? zhName : name, slug: chinese ? `${slug}-cn` : slug,
+      alternate_slugs: { en: slug, zhCN: `${slug}-cn` }, translations: { en: { brand_name: name, slug, description }, zhCN: { brand_name: zhName, slug: `${slug}-cn`, description } },
+      description, description_html: descriptionHtml,
+      generic: master('b2f591d0-346b-4cc4-8d67-e25358fa0272', 'Detail preview generic', '产品资料通用名', 'detail-preview-generic', chinese),
+      categories: [master('c2f591d0-346b-4cc4-8d67-e25358fa0272', 'Detail preview category', '产品资料分类', 'detail-preview-category', chinese)],
+    };
+  });
 }
 
 function success(res: ServerResponse, data: unknown, page?: number, limit?: number, total?: number) {
@@ -109,9 +128,18 @@ function loseQuotationResponse(res: ServerResponse) {
   res.flushHeaders(); res.write('{"success":true,"data":');
   setTimeout(() => res.destroy(), 30);
 }
+const fixtureRatings = new Map<string, Map<string, number>>();
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://127.0.0.1:4100');
   res.setHeader('Content-Type', 'application/json');
+  if (await customerFixture(req, res, url)) return;
+  if (url.pathname.startsWith('/v1/public/products')) {
+    res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:3100');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,OPTIONS');
+    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+  }
   if (url.pathname === '/health') { res.end(JSON.stringify({ ok: true })); return; }
   if (url.pathname === '/__test__/admin' && req.method === 'POST') {
     let raw = ''; for await (const chunk of req) raw += String(chunk);
@@ -197,12 +225,16 @@ createServer(async (req, res) => {
         success(res,rows.slice((pg-1)*limit,pg*limit),pg,limit,rows.length);return;
       }
       mg.writes.push({path,body:input});
-      if(req.method==='DELETE' && id && kind!=='banners') {
+      if(req.method==='DELETE' && id) {
         const record=records.find((row)=>row._id===id);
         if(!record){quoteError(res,404,'RESOURCE_NOT_FOUND');return;}
         if(record.deleted_at){success(res,{id,deleted:true});return;}
         if(state.scenario==='delete-conflict' && mg.writes.filter((write)=>write.path===path).length===1)record.updated_at=new Date().toISOString();
         if(record.updated_at!==mgBody.expected_updated_at){quoteError(res,409,'RESOURCE_STATE_CONFLICT');return;}
+        if(kind==='banners') {
+          mg.resources[kind]=records.filter((row)=>row._id!==id) as never;
+          success(res,{id,deleted:true});return;
+        }
         if(kind!=='products') {
           const used=mg.resources.products!.some((product)=>!product.deleted_at && (kind==='manufacturers'?product.manufacturer_id===id:kind==='generics'?product.generic_id===id:Array.isArray(product.category_ids)&&product.category_ids.includes(id)));
           if(used){quoteError(res,422,'VALIDATION_FAILED');return;}
@@ -346,6 +378,25 @@ createServer(async (req, res) => {
   if (url.pathname === '/__test__/requests') { res.end(JSON.stringify(requests)); return; }
   if (url.pathname === '/__test__/state') { res.end(JSON.stringify({ slowDone })); return; }
   requests.push(url.pathname + url.search);
+  const ratingMatch = /^\/v1\/public\/products\/([a-f0-9-]{36})\/ratings$/.exec(url.pathname);
+  if (ratingMatch) {
+    res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:3100');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,OPTIONS');
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+    const visitor = /medaxis_fixture_rating=([a-f0-9-]+)/.exec(req.headers.cookie ?? '')?.[1] ?? randomUUID();
+    const votes = fixtureRatings.get(ratingMatch[1]) ?? new Map<string, number>();
+    if (req.method === 'PUT') {
+      let raw = ''; for await (const chunk of req) raw += String(chunk);
+      const body = JSON.parse(raw) as { score: number };
+      if (!Number.isInteger(body.score) || body.score < 1 || body.score > 5) { quoteError(res, 422, 'VALIDATION_FAILED'); return; }
+      votes.set(visitor, body.score); fixtureRatings.set(ratingMatch[1], votes);
+      res.setHeader('Set-Cookie', `medaxis_fixture_rating=${visitor}; Path=/v1/public/products; HttpOnly; SameSite=Lax`);
+    }
+    success(res, { average: votes.size ? Math.round([...votes.values()].reduce((total, score) => total + score, 0) / votes.size * 10) / 10 : 0, count: votes.size, my_rating: votes.get(visitor) ?? null }); return;
+  }
   const chinese = url.searchParams.get('locale') === 'zh-CN';
   const page = Number(url.searchParams.get('page') ?? 1);
   const limit = Number(url.searchParams.get('limit') ?? 20);
@@ -363,8 +414,12 @@ createServer(async (req, res) => {
     res.end('<html>NEVER_RENDER_PROXY_SECRET</html>'); return;
   }
   if (query === 'slow') { await new Promise((resolve) => setTimeout(resolve, 1800)); slowDone += 1; }
-  const all = products(chinese);
-  let rows = all.filter((product) => !query || `${product.brand_name} ${product.generic.name}`.toLowerCase().includes(query.toLowerCase()));
+  const comparisonFixture = query === 'product-tools' || url.pathname.includes('/comparison-fixture-');
+  const baseProducts = products(chinese);
+  const extras = ['40', '120'].map((strength, index) => ({ ...baseProducts[1], id: `82f591d0-346b-4cc4-8d67-e25358fa028${index}`, brand_name: `Comparison fixture ${index + 1}`, slug: `comparison-fixture-${index + 1}`, strength: `${strength} mg`, alternate_slugs: { en: `comparison-fixture-${index + 1}`, zhCN: null }, translations: { en: { brand_name: `Comparison fixture ${index + 1}`, slug: `comparison-fixture-${index + 1}` } } }));
+  const detailPreviewFixture = url.pathname.includes('/detail-preview-') || ['generic', 'category'].some((key) => url.searchParams.get(key)?.startsWith('detail-preview-'));
+  const all = detailPreviewFixture ? detailPreviewProducts(chinese) : comparisonFixture ? [...baseProducts, ...extras] : baseProducts;
+  let rows = all.filter((product) => comparisonFixture || !query || `${product.brand_name} ${product.generic.name}`.toLowerCase().includes(query.toLowerCase()));
   for (const key of ['manufacturer', 'generic', 'category'] as const) {
     const slug = url.searchParams.get(key);
     if (slug) rows = rows.filter((product) => key === 'category' ? product.categories.some((category) => category.slug === slug) : product[key].slug === slug);

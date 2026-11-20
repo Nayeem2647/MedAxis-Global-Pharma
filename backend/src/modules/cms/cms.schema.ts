@@ -2,8 +2,18 @@ import { randomUUID } from 'node:crypto';
 import { Schema, model } from 'mongoose';
 import { installPersistenceGuards } from '../../shared/persistence/guards.js';
 
+export type BannerPlacement = 'MAIN_HERO' | 'PRODUCTS_BANNER' | 'BLOG_BANNER' | 'ANNOUNCEMENT';
+export type BannerMediaType = 'IMAGE' | 'VIDEO';
+export type BannerResourceType = 'CUSTOM' | 'PRODUCT' | 'CATEGORY' | 'MANUFACTURER' | 'GENERIC';
+
 export interface ICmsBanner {
   _id: string;
+  placement: BannerPlacement;
+  media_type?: BannerMediaType;
+  media_key?: string;
+  resource_type?: BannerResourceType;
+  resource_id?: string;
+  show_overlay?: boolean;
   translations: { en: { title: string; body: string }; zhCN?: { title: string; body: string } };
   is_active: boolean;
   sort_order: number;
@@ -24,6 +34,21 @@ export const CmsBannerSchema = new Schema<ICmsBanner>(
       maxlength: 200,
       match: new RegExp('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'),
     },
+    placement: {
+      type: String,
+      required: true,
+      enum: ['MAIN_HERO', 'PRODUCTS_BANNER', 'BLOG_BANNER', 'ANNOUNCEMENT'],
+      default: 'ANNOUNCEMENT',
+    },
+    media_type: { type: String, required: false, enum: ['IMAGE', 'VIDEO'] },
+    media_key: { type: String, required: false, trim: true, maxlength: 500 },
+    resource_type: {
+      type: String,
+      required: false,
+      enum: ['CUSTOM', 'PRODUCT', 'CATEGORY', 'MANUFACTURER', 'GENERIC'],
+    },
+    resource_id: { type: String, required: false, trim: true, maxlength: 200 },
+    show_overlay: { type: Boolean, required: false },
     translations: {
       type: new Schema(
         {

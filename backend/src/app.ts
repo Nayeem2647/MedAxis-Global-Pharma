@@ -30,8 +30,11 @@ import { createAdminStream, type AdminStream } from './modules/admin/admin.strea
 import { createAdminOperationsRouter } from './modules/admin/admin.operations.js';
 import { createLocalMediaRouter } from './modules/storage/localMedia.routes.js';
 import { createStorageService, type StorageService } from './modules/storage/storage.service.js';
+import { createCustomerRouter } from './modules/customer/account.routes.js';
+import type { CustomerAuthHooks } from './modules/customer/account.auth.js';
 
 export interface CreateAppOptions {
+  customerAuth?: CustomerAuthHooks;
   env: AppEnv;
   logger: AppLogger;
   checkDatabase?: CheckDatabaseFn;
@@ -48,6 +51,7 @@ export interface CreateAppOptions {
 }
 
 export function createApp({
+  customerAuth,
   env,
   logger,
   checkDatabase = defaultCheckDatabase,
@@ -102,6 +106,7 @@ export function createApp({
   const revalidate = createRevalidator(env, logger, revalidateFetch);
   const cms = createCmsRouters(env, revalidate);
   v1.use('/public', createPublicCatalogRouter(env));
+  v1.use('/public/customer', createCustomerRouter(env, logger, pdf, storage, customerAuth));
   if (env.STORAGE_DRIVER === 'local' && !env.isProduction) {
     v1.use('/public/media', createLocalMediaRouter(env));
   }

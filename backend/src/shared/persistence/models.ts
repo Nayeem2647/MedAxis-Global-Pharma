@@ -2,7 +2,9 @@ import { ManufacturerModel } from '../../modules/catalog/catalog.schema.js';
 import { GenericModel } from '../../modules/catalog/catalog.schema.js';
 import { CategoryModel } from '../../modules/catalog/catalog.schema.js';
 import { ProductModel } from '../../modules/catalog/catalog.schema.js';
+import { ProductRatingModel } from '../../modules/catalog/product-rating.schema.js';
 import { CustomerModel } from '../../modules/customer/customer.schema.js';
+import { CustomerAccountModel, CustomerSessionModel, CustomerDraftModel, CustomerEventModel } from '../../modules/customer/account.schema.js';
 import { RfqModel } from '../../modules/rfq/rfq.schema.js';
 import { RfqIdempotencyKeyModel } from '../../modules/rfq/rfq.schema.js';
 import { PrescriptionModel } from '../../modules/storage/storage.schema.js';
@@ -25,7 +27,12 @@ export const persistenceModels = [
   GenericModel,
   CategoryModel,
   ProductModel,
+  ProductRatingModel,
   CustomerModel,
+  CustomerAccountModel,
+  CustomerSessionModel,
+  CustomerDraftModel,
+  CustomerEventModel,
   RfqModel,
   RfqIdempotencyKeyModel,
   PrescriptionModel,

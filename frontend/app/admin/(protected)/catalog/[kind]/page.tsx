@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { guardedAdminRead } from '../../../../../lib/admin-server';
 import {
+  bannerPlacements,
+  bannerRecord,
   bannerScheduleState,
   paramsFor,
   resourceKinds,
@@ -15,6 +17,7 @@ import { AdminLink } from '../../../../../components/admin/AdminShell';
 import { ManagementTable, ManagementPagination } from '../../../../../components/admin/ManagementTable';
 import { AdminMasterList } from '../../../../../components/admin/AdminMasterList';
 import { AdminProductList } from '../../../../../components/admin/AdminProductList';
+import { AdminBannerSetup } from '../../../../../components/admin/AdminBannerSetup';
 import { notFound } from 'next/navigation';
 export default async function ResourceListPage({
   params,
@@ -32,7 +35,9 @@ export default async function ResourceListPage({
       await searchParams,
       kind.data === 'products'
         ? ['page', 'limit', 'q', 'status', 'manufacturer_id', 'generic_id', 'category_id']
-        : ['page', 'limit', 'q', 'is_active'],
+        : kind.data === 'banners'
+          ? ['page', 'limit', 'q', 'is_active', 'placement']
+          : ['page', 'limit', 'q', 'is_active'],
     );
     resourceQuery.parse(Object.fromEntries(query));
   } catch {
@@ -40,6 +45,27 @@ export default async function ResourceListPage({
   }
   if (kind.data === 'products') return <AdminProductList query={Object.fromEntries(query)} />;
   if (kind.data === 'manufacturers' || kind.data === 'generics' || kind.data === 'categories') return <AdminMasterList kind={kind.data} query={Object.fromEntries(query)} />;
+  if (kind.data === 'banners') {
+    const bannersResult = await guardedAdminRead(
+      `${resourcePath('banners')}?${query}`,
+      z.array(bannerRecord).max(100),
+    );
+    if (!bannersResult.ok) return <AdminUnavailable problem={bannersResult.problem} />;
+    let bannersPagination;
+    try {
+      bannersPagination = requirePagination(bannersResult.result.meta);
+    } catch {
+      return <AdminUnavailable problem={{ status: 502 }} />;
+    }
+    const placementParam = z.enum(bannerPlacements).safeParse(query.get('placement'));
+    return (
+      <AdminBannerSetup
+        initialItems={bannersResult.result.data}
+        initialPagination={bannersPagination}
+        initialFilterPlacement={placementParam.success ? placementParam.data : ''}
+      />
+    );
+  }
   const result = await guardedAdminRead(
     `${resourcePath(kind.data)}?${query}`,
     z.array(resourceSchema(kind.data)).max(100),

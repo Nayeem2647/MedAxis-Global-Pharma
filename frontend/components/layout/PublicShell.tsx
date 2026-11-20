@@ -9,7 +9,9 @@ import { RfqDialog } from '../rfq/RfqDialog';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { ContactDialog } from './ContactDialog';
+import { FloatingChat } from './FloatingChat';
 import { useCart } from './CartProvider';
+import { ProductToolsProvider } from '../catalog/ProductToolsProvider';
 
 interface ShellActions { openQuickQuote(product?: CatalogCartInput, customName?: string): void; openContact(): void }
 const ShellContext = createContext<ShellActions | null>(null);
@@ -30,12 +32,13 @@ export function PublicShell({ children, contact }: { children: ReactNode; contac
   const [contactOpen, setContactOpen] = useState(false);
   const openQuickQuote = (product?: CatalogCartInput, initialName?: string) => { if (quote) return; setDrawerOpen(false); setContactOpen(false); setQuote({ kind: 'quick-quote', product, initialName }); };
   const openContact = () => { if (quote) return; setDrawerOpen(false); setContactOpen(true); };
-  return <ShellContext.Provider value={{ openQuickQuote, openContact }}>
-    <Header itemCount={itemCount} hydrated={hydrated} onCart={() => { if (!quote) { setContactOpen(false); setDrawerOpen(true); } }} onContact={openContact} onQuickQuote={() => openQuickQuote()} contact={contact}/>
+  return <ShellContext.Provider value={{ openQuickQuote, openContact }}><ProductToolsProvider>
+    <Header itemCount={itemCount} hydrated={hydrated} onCart={() => { if (!quote) { setContactOpen(false); setDrawerOpen(true); } }} onContact={openContact} onQuickQuote={() => openQuickQuote()} contact={contact} contactOpen={contactOpen}/>
     {children}
-    <Footer contact={contact} onContact={openContact}/>
+    <Footer contact={contact} onContact={openContact} onQuickQuote={() => openQuickQuote()}/>
+    <FloatingChat contact={contact}/>
     {quote && <RfqDialog {...quote} contact={contact} onClose={() => setQuote(null)}/>}
     <CartDrawer onCustom={() => openQuickQuote()} onSubmit={() => { setDrawerOpen(false); setQuote({ kind: 'cart' }); }}/>
     {contactOpen && <ContactDialog contact={contact} onClose={() => setContactOpen(false)}/>}
-  </ShellContext.Provider>;
+  </ProductToolsProvider></ShellContext.Provider>;
 }

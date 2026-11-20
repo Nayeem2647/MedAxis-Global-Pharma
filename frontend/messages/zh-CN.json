@@ -1,4 +1,16 @@
 {
+  "ProductTools": {
+    "actionsNamed": "{name} 的操作", "addQuote": "加入询价清单", "addQuoteNamed": "将 {name} 加入报价清单", "quoteAdded": "已加入您的询价清单",
+    "addCompare": "加入对比", "addCompareNamed": "将 {name} 加入对比", "removeCompare": "移出对比", "removeCompareNamed": "将 {name} 移出对比",
+    "quickView": "快速查看", "quickViewNamed": "快速查看 {name}", "viewDetails": "查看产品详情", "requestQuote": "申请报价",
+    "comparisonTitle": "产品对比", "comparisonHelp": "对比已发布的产品规格以便采购。本对比不构成治疗或药品替代建议。",
+    "comparisonLimit": "最多可对比 3 款产品，请先移除一款再添加。", "selectedCount": "已选 {count} / 3 款", "compareCount": "对比（{count}）", "chooseAnother": "再选择一款产品即可对比。",
+    "removeNamed": "移除 {name}", "loadingComparison": "正在加载产品规格…", "productUnavailable": "此产品已不可用或暂时无法加载。", "specification": "规格项目", "notListed": "未列明", "retry": "重试",
+    "rateProduct": "为此产品评分", "rateNamed": "为 {name} 评分", "noRatings": "暂无客户评分", "ratingSummary": "{count} 条客户评分，平均 {average} 分（满分 5 分）",
+    "chooseStars": "您的评分", "starCount": "{count} 星", "loadingRating": "正在加载您的评分…", "savingRating": "正在保存…", "submitRating": "提交评分", "updateRating": "更新评分", "ratingSaved": "谢谢，您的评分已保存。",
+    "ratingHelp": "分享您对该产品的使用体验，之后可更新评分。评分不能替代专业医护人员的建议。",
+    "ratingUnavailable": "评分暂时无法使用，请稍后重试。", "ratingRateLimited": "请等待一分钟后再评分。"
+  },
   "Home": {
     "eyebrow": "MedAxis Global Pharma",
     "title": "连接全球的医药采购服务。",
@@ -34,6 +46,21 @@
     "tileRfqKicker": "清晰的需求清单", "tileRfqTitle": "按您的需求询价", "tileRfqBody": "将目录产品及自定义药品需求汇总于同一清单。", "prepareList": "准备询价清单"
   },
   "Catalog": {
+    "productPhotos": "产品图片",
+    "productMedia": "产品图片与视频",
+    "productVideo": "产品视频",
+    "namedVideo": "{name} 产品视频",
+    "previousMedia": "上一张图片或视频",
+    "nextMedia": "下一张图片或视频",
+    "showImage": "查看第 {number} 张产品图片",
+    "videoHint": "选择视频，进一步查看产品包装。",
+    "orderWhatsapp": "通过 WhatsApp 咨询",
+    "priceInquiry": "价格咨询",
+    "whatsappMessage": "您好 MedAxis，我想咨询 {name}（{strength}）。请提供供货情况及报价。",
+    "preferWechat": "使用微信咨询？",
+    "scanForEnquiry": "扫码与我们的团队咨询此产品。",
+    "contactOptions": "查看联系方式",
+    "productDetails": "产品详情",
     "products": "产品",
     "manufacturers": "制药企业",
     "generics": "活性成分",
@@ -98,6 +125,11 @@
     "sku": "产品编号",
     "storage": "储存条件",
     "description": "产品信息",
+    "seeMore": "查看更多", "seeLess": "收起",
+    "similarProducts": "相关产品", "browseProducts": "查看全部产品",
+    "similarProductsEmpty": "暂无已发布的相关产品。",
+    "similarProductsUnavailable": "相关产品暂时无法加载，请稍后重试。",
+    "previousSimilar": "上一组相关产品", "nextSimilar": "下一组相关产品",
     "indications": "适应症概述",
     "usageNotes": "使用说明",
     "medicalNotice": "药品及成分信息仅用于采购咨询，不构成治疗或药品替代建议，请咨询合格医护人员。",
@@ -121,6 +153,7 @@
     "description": "为国际买家提供孟加拉国持牌制药企业的医药采购服务。"
   },
   "Shell": {
+    "login": "登录", "register": "注册", "myAccount": "我的账户", "logout": "退出登录", "phoneLabel": "电话：{phone}", "emailLabel": "电子邮箱：{email}", "socialMedia": "社交媒体",
     "language": "语言", "navigation": "主导航", "mobileNavigation": "移动导航", "utilityNavigation": "实用链接",
     "home": "首页", "products": "产品", "manufacturers": "制药企业", "generics": "通用药名", "services": "服务",
     "blog": "资讯博客", "about": "关于我们", "contact": "联系我们", "toggleSubmenu": "展开或收起{section}菜单",
@@ -131,7 +164,17 @@
     "quickQuote": "快速询价", "cartCount": "询价清单，共 {count} 项", "close": "关闭", "menu": "展开或收起菜单", "skip": "跳至主要内容",
     "directSourcing": "直接对接孟加拉国持牌制药企业", "headerNote": "服务机构、批发买家、患者及照护者",
     "sourcingStatement": "立足孟加拉国，直接对接持牌制药企业，为国际批发买家及个人患者提供医药采购服务。",
-    "stayConnected": "联系采购团队", "privacy": "隐私与 Cookie", "terms": "网站说明", "admin": "管理员入口",
+    "stayConnected": "联系我们", "privacy": "隐私与 Cookie", "terms": "网站说明", "admin": "管理员入口",
+    "footerInfoHeading": "平台信息",
+    "footerHelpfulHeading": "实用链接",
+    "footerServicesHeading": "核心服务",
+    "subscribeNow": "立即订阅",
+    "subscribePlaceholder": "输入您的电子邮箱",
+    "subscribeAction": "订阅",
+    "subscribeInvalid": "请输入有效的电子邮箱地址。",
+    "subscribeSuccess": "已订阅产品目录更新。",
+    "regulatoryNotice": "合规声明",
+    "allRightsReserved": "保留所有权利。",
     "disclaimer": "产品信息仅用于采购咨询，不能替代专业医护人员的建议。相关药品展示不构成药品替代建议。",
     "prescriptionDisclaimer": "处方上传为自愿选项。供货与进口安排须符合目的地适用要求，并经专业审核。"
   },
@@ -144,6 +187,8 @@
     "quantityInvalid": "请输入支持范围内的正整数数量。", "cartFull": "清单最多可包含 100 种不同项目，请先移除一项。", "invalidItem": "请检查药品名称、包装单位及数量。"
   },
   "Contact": {
+    "openChat": "联系咨询团队", "chatHint": "在线咨询", "closeChat": "关闭咨询", "supportTitle": "联系支持团队", "supportIntro": "请选择您希望使用的联系方式。",
+    "wechatChatHint": "扫描官方联系二维码", "callUs": "致电我们", "emailUs": "发送邮件",
     "title": "联系 MedAxis", "intro": "通过官方联系方式，与采购团队沟通您的药品需求。",
     "openWhatsapp": "通过 WhatsApp 咨询", "unavailable": "此渠道的联系方式将于稍后提供。", "copy": "复制微信号", "copied": "已复制", "qrAlt": "MedAxis 官方微信联系二维码",
     "scanWechat": "打开微信，扫描此二维码联系团队。", "openQr": "查看原始尺寸二维码",
@@ -170,6 +215,9 @@
   },
   "Quotation": {
     "title": "报价单", "proformaTitle": "已接受报价／形式发票", "privateDocument": "私密商业文件", "version": "版本 {number}", "privacy": "私密访问 · 请勿公开此链接", "contact": "联系团队",
+    "copy": "复制", "copied": "已复制", "copyField": "复制{label}",
+    "steps": { "SENT": "已报价", "ACCEPTED": "已接受", "PAYMENT_RECEIVED": "已核验付款", "DISPATCHED": "已发运", "DELIVERED": "已送达" },
+    "progressLabel": "报价进度",
     "preparedFor": "报价对象", "issued": "签发时间", "validUntil": "报价有效期至", "billingCurrency": "结算币种", "acceptedHeading": "报价已接受", "acceptedAt": "接受时间", "reservationStatus": "预留状态", "reservationDeadline": "预留截止时间",
     "reservationHelp": "此截止时间由 MedAxis 系统确定，重新打开页面不会延长预留。银行付款及履约事宜请联系团队。",
     "itemsTitle": "报价药品", "availabilityCount": "可供应 {available} 项 · 无法供应 {unavailable} 项 · 采购中 {sourcing} 项", "medicine": "药品／规格", "quantity": "数量／单位", "availability": "供应情况", "unitPrice": "报价单价", "lineTotal": "此项总额", "notPayable": "不计应付款", "unavailableHelp": "无法供应或采购中的项目在此不列应付金额，请以系统确认的合计为准。",

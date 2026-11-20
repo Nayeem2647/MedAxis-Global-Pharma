@@ -24,6 +24,7 @@ const translationFields = {
 };
 const translationSchema = z.object(translationFields);
 export const homeProductSchema = z.object({
+  customer_rating: z.object({ average: z.number().min(0).max(5), count: z.number().int().nonnegative() }).optional(),
   id: z.uuid(), sku: text, locale: z.enum(['en', 'zh-CN']), ...translationFields, alternate_slugs: alternateSlugsSchema,
   translations: z.object({ en: translationSchema, zhCN: translationSchema.optional() }),
   manufacturer: masterSchema, generic: masterSchema, categories: z.array(masterSchema),
@@ -45,16 +46,38 @@ export const facetsSchema = z.object({
 export const catalogListSchema = homeProductsSchema.extend({ facets: facetsSchema });
 export const masterDetailSchema = masterSchema.extend({ products: z.array(homeProductSchema).max(100), facets: facetsSchema });
 export type CatalogFacets = z.infer<typeof facetsSchema>;
+export const bannerPlacements = ['MAIN_HERO', 'PRODUCTS_BANNER', 'BLOG_BANNER', 'ANNOUNCEMENT'] as const;
+export type BannerPlacement = (typeof bannerPlacements)[number];
 export const bannersSchema = z.array(z.object({
-  id: z.uuid(), title: z.string().max(200).transform(plainText), body: z.string().max(5000).transform(plainText),
+  id: z.uuid(),
+  placement: z.enum(bannerPlacements).default('ANNOUNCEMENT'),
+  media_type: z.enum(['IMAGE', 'VIDEO']).optional(),
+  media_url: z.string().refine((value) => publicAssetUrl(value) !== null || publicVideoUrl(value) !== null).optional(),
+  show_overlay: z.boolean().optional(),
+  title: z.string().max(200).transform(plainText), body: z.string().max(5000).transform(plainText),
   sort_order: z.number().int().nonnegative(), link_path: z.string().max(500).optional(),
 }));
 export type Banner = z.infer<typeof bannersSchema>[number];
 
+function cmsFetchCache(): Pick<import('./api-client').ApiRequestOptions, 'cache' | 'next'> {
+  if (process.env.NODE_ENV !== 'production' || !process.env.REVALIDATE_WEBHOOK_SECRET) {
+    return { cache: 'no-store' };
+  }
+  return { next: { revalidate: 300, tags: ['cms'] } };
+}
+
+export async function getBanners(locale: Locale): Promise<Banner[]> {
+  try {
+    return (await apiRequest(`/v1/public/cms/banners?locale=${locale}`, bannersSchema, cmsFetchCache())).data;
+  } catch {
+    return [];
+  }
+}
+
 export async function getHomeData(locale: Locale) {
   const [catalog, cms] = await Promise.allSettled([
     apiRequest(`/v1/public/products?locale=${locale}&page=1&limit=6`, homeProductsSchema, { next: { revalidate: 3600, tags: ['catalog'] } }),
-    apiRequest(`/v1/public/cms/banners?locale=${locale}`, bannersSchema, { next: { revalidate: 300, tags: ['cms'] } }),
+    apiRequest(`/v1/public/cms/banners?locale=${locale}`, bannersSchema, cmsFetchCache()),
   ]);
   const products = catalog.status === 'fulfilled' ? catalog.value.data.products : [];
   const unique = (values: CatalogMaster[]) => [...new Map(values.map((item) => [item.id, item])).values()];

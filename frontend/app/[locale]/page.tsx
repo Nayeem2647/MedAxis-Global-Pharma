@@ -34,7 +34,7 @@ export default async function Home({ params }: Props) {
   return (
     <main id="main-content">
       <Announcements banners={data.banners}/>
-      <Hero locale={locale}/>
+      <Hero locale={locale} banners={data.banners}/>
       <SourcingTiles locale={locale}/>
       <Categories locale={locale} categories={data.categories}/>
       <section className="catalog-section" id="catalog"><div className="section site-container"><div className="centered-heading"><p className="eyebrow">{t('catalogKicker')}</p><h2>{t('catalogTitle')}</h2><p className="section-intro">{t('catalogDescription')}</p></div>

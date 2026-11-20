@@ -8,6 +8,8 @@
 **Status:** Approved Engineering Baseline  
 **Source Documents:** [PRD.md](PRD.md), [Architecture.md](Architecture.md), [DFD.md](DFD.md), [Database.md](Database.md), [Database-Schema.md](Database-Schema.md)
 
+**20 November 2026 addition:** The owner-approved customer account/dashboard API is registered under `/v1/public/customer/*`, with a separate signed customer session tier and fixed browser adapter `/api/customer/*`. Its complete endpoint index, request ownership, email verification and rollout are specified in [Customer-Dashboard.md](Customer-Dashboard.md). The three-tier table below describes the original launch baseline; customer-session authentication is an additional independent tier for this extension.
+
 ---
 
 ## 1. Global Architectural Conventions & Security Standards

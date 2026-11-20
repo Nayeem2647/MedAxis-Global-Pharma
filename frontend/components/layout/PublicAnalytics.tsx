@@ -23,7 +23,7 @@ function Tracker({ domain, src, endpoint }: { domain: string; src: string; endpo
         if (!payload || typeof payload !== 'object' || !('n' in payload) || payload.n !== 'pageview' || !('u' in payload) || typeof payload.u !== 'string') return null;
         try {
           const url = new URL(payload.u);
-          if (url.origin !== window.location.origin || !/^\/(en|zh-CN)(?:\/|$)/.test(url.pathname) || /^\/(en|zh-CN)\/(q|admin|api)(?:\/|$)/.test(decodeURIComponent(url.pathname))) return null;
+          if (url.origin !== window.location.origin || !/^\/(en|zh-CN)(?:\/|$)/.test(url.pathname) || /^\/(en|zh-CN)\/(q|admin|api|account|login|register)(?:\/|$)/.test(decodeURIComponent(url.pathname))) return null;
           url.search = ''; url.hash = '';
           // Explicitly project pageviews. Custom event properties, referrers and
           // unknown metadata may contain contact, prescription or session data.
@@ -39,6 +39,6 @@ function Tracker({ domain, src, endpoint }: { domain: string; src: string; endpo
 
 export function PublicAnalytics(props: { domain: string; src: string; endpoint: string }) {
   const pathname = usePathname();
-  if (!/^\/(en|zh-CN)(?:\/|$)/.test(pathname) || /^\/(en|zh-CN)\/(q|admin|api)(?:\/|$)/.test(pathname)) return null;
+  if (!/^\/(en|zh-CN)(?:\/|$)/.test(pathname) || /^\/(en|zh-CN)\/(q|admin|api|account|login|register)(?:\/|$)/.test(pathname)) return null;
   return <Tracker {...props}/>;
 }

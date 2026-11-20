@@ -1,0 +1,49 @@
+.floating-chat { --chat-offset: max(12dvh, var(--chat-bottom, 20px), calc(env(safe-area-inset-bottom) + 16px)); position: fixed; right: max(3vw, 24px, env(safe-area-inset-right)); bottom: var(--chat-offset); z-index: 55; }
+.floating-chat-trigger { position: relative; display: grid; place-items: center; width: 76px; height: 76px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #087cf0; isolation: isolate; -webkit-tap-highlight-color: transparent; transition: transform .18s; }
+.floating-chat-logo { display: block; width: 76px; height: 76px; filter: drop-shadow(0 3px 3px #0c5d3424) drop-shadow(0 8px 10px #123d252e); }
+.floating-chat-trigger:hover { transform: translateY(-3px); }
+.floating-chat-trigger:active { transform: translateY(1px) scale(.97); }
+.floating-chat-trigger:focus-visible { outline: 3px solid #078a3e; outline-offset: 5px; }
+.floating-chat-trigger[aria-expanded="true"] { width: 60px; height: 60px; margin: 8px; border: 1px solid #078a3e; background: #079c45; color: #fff; box-shadow: 0 4px 16px #075a2c26; }
+.floating-chat-trigger::before, .floating-chat-trigger::after { content: ''; position: absolute; inset: 3px; z-index: -1; border: 1.5px solid #06b957; border-radius: 50%; opacity: 0; pointer-events: none; animation: chat-signal 8s ease-out 3s infinite; }
+.floating-chat-trigger::after { animation-delay: 3.35s; }
+.floating-chat-hint { position: absolute; right: calc(100% + 10px); top: 50%; width: max-content; max-width: min(180px, calc(100vw - 128px)); padding: 9px 13px; border: 1px solid #d4e8f2; border-radius: 12px 12px 3px 12px; background: #fff; color: #254759; box-shadow: 0 4px 18px #164f7012; font-size: .8125rem; font-weight: 600; line-height: 1.5; opacity: 0; transform: translate(5px, -50%); pointer-events: none; animation: chat-hint 8s ease 3s infinite; }
+.floating-chat.is-open .floating-chat-trigger::before, .floating-chat.is-open .floating-chat-trigger::after, .floating-chat.is-open .floating-chat-hint, .floating-chat:focus-within .floating-chat-trigger::before, .floating-chat:focus-within .floating-chat-trigger::after, .floating-chat:focus-within .floating-chat-hint, .floating-chat:hover .floating-chat-trigger::before, .floating-chat:hover .floating-chat-trigger::after, .floating-chat:hover .floating-chat-hint { animation: none; opacity: 0; }
+.floating-chat-panel { position: absolute; right: 0; bottom: 90px; width: 344px; max-width: calc(100vw - 32px); max-height: calc(100dvh - var(--chat-offset) - 110px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid #dce7ec; border-radius: 14px; background: #fff; color: #223846; box-shadow: 0 10px 40px #1c374b26; }
+@keyframes chat-signal { 0% { opacity: 0; transform: scale(.85); } 4% { opacity: .55; } 18% { opacity: 0; transform: scale(1.45); } 100% { opacity: 0; transform: scale(1.45); } }
+@keyframes chat-hint { 0%, 34%, 100% { opacity: 0; transform: translate(5px, -50%); } 6%, 27% { opacity: 1; transform: translate(0, -50%); } }
+.floating-chat-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 16px 16px 20px; border-bottom: 1px solid #e8eef2; }
+.floating-chat-heading h2 { margin: 0 0 6px; font-size: 1.125rem; font-weight: 650; line-height: 1.4; letter-spacing: -.02em; }
+.floating-chat-heading p { max-width: 225px; margin: 0; color: #526777; font-size: .875rem; line-height: 1.6; }
+.chat-close { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; margin-top: -5px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #526777; }
+.chat-close:hover { color: #223846; background: #f1f6f8; }
+.floating-chat-channels { padding: 10px; }
+.floating-chat-channel { display: flex; align-items: center; gap: 13px; width: 100%; min-height: 78px; padding: 12px; border: 0; border-radius: 9px; background: #fff; text-align: left; color: inherit; font: inherit; }
+.floating-chat-channel:hover { background: #f3f8fa; }
+.floating-chat-channel > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.floating-chat-channel strong { font-size: .9375rem; font-weight: 600; line-height: 1.4; }
+.floating-chat-channel > span > span { color: #526777; font-size: .8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.chat-channel-icon { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px; }
+.chat-whatsapp { color: #168c48; background: #e9f8ee; }
+.chat-wechat { color: #109956; background: #e8f7ef; }
+.chat-phone { color: #0872d9; background: #eaf4fe; }
+.chat-email { color: #087a90; background: #e7f6f9; }
+.chat-chevron { color: #526777; transition: transform .15s; }
+.chat-chevron.is-open { transform: rotate(180deg); }
+.floating-chat-wechat { display: grid; justify-items: center; gap: 12px; margin: 0 12px 10px; padding: 16px 10px; border: 1px solid #e1ece7; border-radius: 8px; background: #f8fcfa; }
+.floating-chat-wechat p { margin: 0; color: #526777; font-size: .8125rem; line-height: 1.7; text-align: center; }
+.floating-chat-wechat img { width: min(224px, 100%); height: auto; border: 6px solid #fff; border-radius: 4px; }
+.floating-chat-wechat > a { display: inline-flex; align-items: center; min-height: 44px; color: #087a90; font-size: .8125rem; text-decoration: underline; text-underline-offset: 3px; }
+.chat-copy-id { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 8px; border: 1px solid #cfe1d9; border-radius: 5px; background: #fff; color: #087a90; font-size: .8125rem; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .floating-chat { right: max(16px, env(safe-area-inset-right)); }
+  .floating-chat-trigger, .floating-chat-logo { width: 68px; height: 68px; }
+  .floating-chat-trigger[aria-expanded="true"] { width: 54px; height: 54px; margin: 7px; }
+  .floating-chat-panel { bottom: 82px; width: 328px; max-height: calc(100dvh - var(--chat-offset) - 102px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .floating-chat-trigger, .chat-chevron { transition: none; }
+  .floating-chat-trigger::before, .floating-chat-trigger::after, .floating-chat-hint { animation: none; }
+  .floating-chat-hint { opacity: 1; transform: translate(0, -50%); }
+}
+@media print { .floating-chat { display: none; } }

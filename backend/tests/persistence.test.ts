@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import mongoose, { Types } from 'mongoose';
 import { persistenceModels } from '../src/shared/persistence/models.js';
-import validators from '../src/shared/persistence/validators.json' with { type: 'json' };
+import validators from '../src/shared/persistence/validators.js';
 import searchIndex from '../src/scripts/atlas-search-index.json' with { type: 'json' };
 import { ProductModel } from '../src/modules/catalog/catalog.schema.js';
 import { CustomerModel } from '../src/modules/customer/customer.schema.js';
@@ -104,7 +104,7 @@ describe('persistence contracts', () => {
     try {
       await migrate();
       await migrate();
-      expect(command).toHaveBeenCalledTimes(42);
+      expect(command).toHaveBeenCalledTimes(52);
       const indexCount = persistenceModels.reduce((sum, model) => sum + model.schema.indexes().length, 0);
       expect(createIndex).toHaveBeenCalledTimes(indexCount * 2);
       for (const [value] of command.mock.calls)
@@ -118,9 +118,9 @@ describe('persistence contracts', () => {
       Reflect.set(mongoose.connection, 'db', previousDb);
     }
   });
-  it('registers exactly 21 explicitly named UUID collections and complete strict validators', () => {
-    expect(persistenceModels).toHaveLength(21);
-    expect(new Set(persistenceModels.map((m) => m.collection.name)).size).toBe(21);
+  it('registers exactly 26 explicitly named UUID collections and complete strict validators', () => {
+    expect(persistenceModels).toHaveLength(26);
+    expect(new Set(persistenceModels.map((m) => m.collection.name)).size).toBe(26);
     for (const model of persistenceModels) {
       expect(model.schema.options.autoIndex).toBe(false);
       expect(model.schema.options.strict).toBe('throw');
@@ -233,7 +233,7 @@ describe('persistence contracts', () => {
     const totalTtl = Object.values(indexes)
       .flat()
       .filter(([, options]) => options.expireAfterSeconds !== undefined);
-    expect(totalTtl).toHaveLength(3);
+    expect(totalTtl).toHaveLength(4);
     expect(searchIndex.definition.mappings.dynamic).toBe(false);
     expect(JSON.stringify(searchIndex)).not.toMatch(/procurement|markup|total_amount|payment|magic_link/);
   });

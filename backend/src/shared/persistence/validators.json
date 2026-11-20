@@ -2187,6 +2187,31 @@
           }
         }
       },
+      "placement": {
+        "bsonType": "string",
+        "enum": ["MAIN_HERO", "PRODUCTS_BANNER", "BLOG_BANNER", "ANNOUNCEMENT"]
+      },
+      "media_type": {
+        "bsonType": "string",
+        "enum": ["IMAGE", "VIDEO"]
+      },
+      "media_key": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "resource_type": {
+        "bsonType": "string",
+        "enum": ["CUSTOM", "PRODUCT", "CATEGORY", "MANUFACTURER", "GENERIC"]
+      },
+      "resource_id": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "show_overlay": {
+        "bsonType": "bool"
+      },
       "is_active": {
         "bsonType": "bool"
       },
@@ -2433,6 +2458,19 @@
       "updated_at": {
         "bsonType": "date"
       }
+    }
+  },
+  "product_ratings": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "product_id", "visitor_hash", "score", "created_at", "updated_at"],
+    "properties": {
+      "_id": { "bsonType": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$" },
+      "product_id": { "bsonType": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$" },
+      "visitor_hash": { "bsonType": "string", "pattern": "^[a-f0-9]{64}$" },
+      "score": { "bsonType": ["int", "long", "double", "decimal"], "minimum": 1, "maximum": 5, "multipleOf": 1 },
+      "created_at": { "bsonType": "date" },
+      "updated_at": { "bsonType": "date" }
     }
   },
   "platform_settings": {

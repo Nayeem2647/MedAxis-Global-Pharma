@@ -90,7 +90,7 @@ test('different translated slugs switch exactly while absent translations stay d
   const fallback = await page.goto('/zh-CN/products/english-only-medicine');
   expect(fallback?.status()).toBe(200);
   await expect(page).toHaveURL(/\/zh-CN\/products\/english-only-medicine$/);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('English-only medicine');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('English-only medicine');
   await expect(page.locator('link[rel=canonical]')).toHaveAttribute('href', 'https://medaxisglobalpharma.com/zh-CN/products/english-only-medicine');
   await expect(page.locator('meta[name=robots]')).toHaveAttribute('content', 'noindex, follow');
   await expect(page.locator('link[hreflang="zh-CN"]')).toHaveCount(0);
@@ -225,10 +225,40 @@ test('catalog/detail/hub/services stay responsive with sized images and measured
 test('unavailable product images retain a useful stable fallback', async ({ page }) => {
   await page.route('**/_next/image?**', (route) => route.fulfill({ status: 404, body: '' }));
   await page.goto('/en/products/english-only-medicine');
-  await expect(page.locator('.catalog-image-fallback')).toContainText('Image unavailable');
+  await expect(page.locator('.gallery-main .catalog-image-fallback')).toContainText('Image unavailable');
   const bounds = await page.locator('.gallery-main').boundingBox();
   expect(bounds?.width).toBeGreaterThan(100);
   expect(bounds?.height).toBeGreaterThan(100);
+});
+
+test('product gallery switches photos and video while product enquiries retain their context', async ({ page }) => {
+  await page.route('**/products/local/videos/product-fixture.mp4', (route) => route.fulfill({ contentType: 'video/mp4', body: '' }));
+  for (const locale of ['en', 'zh-CN']) {
+    const chinese = locale === 'zh-CN';
+    await page.goto(`/${locale}/products/english-only-medicine`);
+    await expect(page.locator('.product-save-enquiry')).toBeEnabled();
+    const gallery = page.locator('.product-gallery');
+    await expect(gallery.locator('.gallery-main img')).toHaveAttribute('src', /test-fixture\.png/);
+    await gallery.getByRole('button', { name: chinese ? '查看第 2 张产品图片' : 'Show product photo 2', exact: true }).click();
+    await expect(gallery.locator('.gallery-main img')).toHaveAttribute('src', /test-fixture-back\.png/);
+    await gallery.getByRole('button', { name: chinese ? '产品视频' : 'Product video', exact: true }).click();
+    const video = gallery.locator('video');
+    await expect(video).toBeVisible();
+    await expect(video).toHaveJSProperty('controls', true);
+    await expect(video).toHaveJSProperty('autoplay', false);
+    await expect(video).toHaveAttribute('playsinline', '');
+    await expect(video).toHaveCSS('object-fit', 'contain');
+    await gallery.getByRole('button', { name: chinese ? '下一张图片或视频' : 'Next photo or video', exact: true }).click();
+    await expect(gallery.locator('video')).toHaveCount(0);
+    await expect(gallery.getByRole('button', { name: chinese ? '查看第 1 张产品图片' : 'Show product photo 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const whatsapp = page.locator('.product-whatsapp');
+    const href = await whatsapp.getAttribute('href');
+    expect(new URL(href!).searchParams.get('text')).toContain('English-only medicine');
+    expect(new URL(href!).searchParams.get('text')).toContain('80 mg');
+    await page.locator('.product-price-inquiry').click();
+    await expect(page.getByRole('dialog').getByLabel(chinese ? '药品名称' : 'Medicine name', { exact: true })).toHaveValue('English-only medicine');
+    await page.keyboard.press('Escape');
+  }
 });
 
 test('paginated master directories link to real locale profiles', async ({ page }) => {

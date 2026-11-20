@@ -7,5 +7,6 @@ export default getRequestConfig(async ({ requestLocale }) => {
   const messages = locale === 'zh-CN'
     ? (await import('../messages/zh-CN.json')).default
     : (await import('../messages/en.json')).default;
-  return { locale, messages, timeZone: 'Asia/Dhaka' };
+  const customer = locale === 'zh-CN' ? (await import('../messages/customer-zh-CN.json')).default : (await import('../messages/customer-en.json')).default;
+  return { locale, messages: { ...messages, Customer: customer }, timeZone: 'Asia/Dhaka' };
 });

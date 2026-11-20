@@ -1,7 +1,9 @@
 'use client';
 
-import { useTransition, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useTransition, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+
+let reloadHandled = false;
 
 export function CatalogForm({
   action,
@@ -22,6 +24,15 @@ export function CatalogForm({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!autoSubmitOnSelect || reloadHandled) return;
+    reloadHandled = true;
+    const entry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    if (entry?.type === 'reload' && window.location.search) {
+      startTransition(() => router.replace(action));
+    }
+  }, [action, autoSubmitOnSelect, router]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

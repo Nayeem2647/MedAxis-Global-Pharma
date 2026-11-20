@@ -4,6 +4,8 @@ Source: [Database.md](Database.md). Section numbering is preserved for cross-ref
 
 ## 2. Schema
 
+**20 November 2026 customer-account extension:** The contact-only `customers` document below remains unchanged. Credentials, sessions, saved requirements and account activity live in the additional `customer_accounts`, `customer_sessions`, `customer_drafts` and `customer_events` collections. Their canonical fields/validators are in `backend/src/modules/customer/account.schema.ts` and `account.validators.ts`; see [Customer-Dashboard.md](Customer-Dashboard.md). This extension is explicitly owner-approved and supersedes the earlier account deferral.
+
 ### 2.1 Common conventions
 
 - Preserve the DFD/PRD UUID decision: `_id` and references are UUID v4 strings, not ObjectIds. Store dates as UTC BSON Date, expose ISO 8601 strings.

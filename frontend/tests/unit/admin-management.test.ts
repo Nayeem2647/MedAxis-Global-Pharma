@@ -64,7 +64,7 @@ describe('registered management boundaries', () => {
     expect(catalogDeleteBody.parse({ expected_updated_at: '2026-11-19T00:00:00.000Z' })).toHaveProperty('expected_updated_at');
     expect(catalogDeleteReceipt.parse({ id: ids.rfq, deleted: true }).deleted).toBe(true);
     expect(catalogDeleteReceipt.safeParse({ id: ids.rfq, deleted: false }).success).toBe(false);
-    expect(adminProxyRule(`cms/banners/${ids.rfq}`, 'DELETE')).toBeNull();
+    expect(adminProxyRule(`cms/banners/${ids.rfq}`, 'DELETE')).not.toBeNull();
   });
   it.each(['generics', 'categories'] as const)('allows %s pictures, explicit removal and omission without clearing other fields', (kind) => {
     const schema = kind === 'categories' ? categoryBody : genericBody;

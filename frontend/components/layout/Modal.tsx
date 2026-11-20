@@ -4,7 +4,7 @@ import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-export function Modal({ title, children, onClose, drawer = false, closeDisabled = false }: { title: string; children: ReactNode; onClose(): void; drawer?: boolean; closeDisabled?: boolean }) {
+export function Modal({ title, children, onClose, drawer = false, closeDisabled = false, className = '' }: { title: string; children: ReactNode; onClose(): void; drawer?: boolean; closeDisabled?: boolean; className?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const t = useTranslations('Shell');
   useEffect(() => {
@@ -26,8 +26,8 @@ export function Modal({ title, children, onClose, drawer = false, closeDisabled 
     if (event.shiftKey && (document.activeElement === first || outside)) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && (document.activeElement === last || outside)) { event.preventDefault(); first.focus(); }
   }
-  return <dialog ref={ref} className={drawer ? 'modal drawer' : 'modal'} aria-label={title} tabIndex={-1} onKeyDown={containTab} onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => {
-    if (event.target !== event.currentTarget) return;
+  return <dialog ref={ref} className={`${drawer ? 'modal drawer' : 'modal'} ${className}`.trim()} aria-label={title} tabIndex={-1} onKeyDown={containTab} onCancel={(event) => { event.preventDefault(); if (!closeDisabled) onClose(); }} onClick={(event) => {
+    if (closeDisabled || event.target !== event.currentTarget) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
   }}>

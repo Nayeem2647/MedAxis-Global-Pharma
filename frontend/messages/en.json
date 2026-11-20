@@ -1,4 +1,16 @@
 {
+  "ProductTools": {
+    "actionsNamed": "Actions for {name}", "addQuote": "Add to Quote", "addQuoteNamed": "Add {name} to quote", "quoteAdded": "Added to your RFQ list",
+    "addCompare": "Add to Compare", "addCompareNamed": "Add {name} to comparison", "removeCompare": "Remove from comparison", "removeCompareNamed": "Remove {name} from comparison",
+    "quickView": "Quick View", "quickViewNamed": "Quick view of {name}", "viewDetails": "View product details", "requestQuote": "Request a quote",
+    "comparisonTitle": "Compare products", "comparisonHelp": "Compare published specifications for sourcing. This comparison does not recommend treatment or medicine substitution.",
+    "comparisonLimit": "You can compare up to 3 products. Remove one to add another.", "selectedCount": "{count} of 3 selected", "compareCount": "Compare ({count})", "chooseAnother": "Choose one more product to compare.",
+    "removeNamed": "Remove {name}", "loadingComparison": "Loading product specifications…", "productUnavailable": "This product is no longer available or could not be loaded.", "specification": "Specification", "notListed": "Not listed", "retry": "Try again",
+    "rateProduct": "Rate this product", "rateNamed": "Rate {name}", "noRatings": "No customer ratings yet", "ratingSummary": "{average} out of 5 from {count} customer ratings",
+    "chooseStars": "Your rating", "starCount": "{count, plural, one {# star} other {# stars}}", "loadingRating": "Loading your rating…", "savingRating": "Saving…", "submitRating": "Submit rating", "updateRating": "Update rating", "ratingSaved": "Thank you. Your rating has been saved.",
+    "ratingHelp": "Share your experience with this product. You can update your rating later. Ratings do not replace advice from a healthcare professional.",
+    "ratingUnavailable": "Ratings are temporarily unavailable. Please try again.", "ratingRateLimited": "Please wait a minute before rating again."
+  },
   "Home": {
     "eyebrow": "MedAxis Global Pharma",
     "title": "Pharmaceutical sourcing, connected across borders.",
@@ -40,6 +52,21 @@
     "tileRfqKicker": "ONE CLEAR LIST", "tileRfqTitle": "Your RFQ, your needs", "tileRfqBody": "Bring catalog products and custom medicine requirements together.", "prepareList": "Prepare your list"
   },
   "Catalog": {
+    "productPhotos": "Product photo",
+    "productMedia": "Product photos and video",
+    "productVideo": "Product video",
+    "namedVideo": "{name} product video",
+    "previousMedia": "Previous photo or video",
+    "nextMedia": "Next photo or video",
+    "showImage": "Show product photo {number}",
+    "videoHint": "Select the video to take a closer look at the packaging.",
+    "orderWhatsapp": "Enquire on WhatsApp",
+    "priceInquiry": "Price inquiry",
+    "whatsappMessage": "Hello MedAxis, I would like to enquire about {name} ({strength}). Please share availability and a quotation.",
+    "preferWechat": "Prefer WeChat?",
+    "scanForEnquiry": "Scan to discuss this product with our team.",
+    "contactOptions": "View contact options",
+    "productDetails": "Product details",
     "products": "Products",
     "manufacturers": "Manufacturers",
     "generics": "Active ingredients",
@@ -104,6 +131,11 @@
     "sku": "Product reference",
     "storage": "Storage conditions",
     "description": "Product information",
+    "seeMore": "See More", "seeLess": "See Less",
+    "similarProducts": "Similar Products", "browseProducts": "View all products",
+    "similarProductsEmpty": "No similar products are published yet.",
+    "similarProductsUnavailable": "Similar products are temporarily unavailable. Please try again shortly.",
+    "previousSimilar": "Previous similar products", "nextSimilar": "Next similar products",
     "indications": "Indication summary",
     "usageNotes": "Usage notes",
     "medicalNotice": "Product and ingredient information supports sourcing enquiries. It is not treatment or substitution advice; consult a qualified healthcare professional.",
@@ -127,6 +159,7 @@
     "description": "Pharmaceutical sourcing from licensed manufacturers in Bangladesh for international buyers."
   },
   "Shell": {
+    "login": "Login", "register": "Register", "myAccount": "My account", "logout": "Sign out", "phoneLabel": "Phone: {phone}", "emailLabel": "Email: {email}", "socialMedia": "Social media",
     "language": "Language", "navigation": "Main navigation", "mobileNavigation": "Mobile navigation", "utilityNavigation": "Utility links",
     "home": "Home", "products": "Products", "manufacturers": "Manufacturers", "generics": "Generics", "services": "Services",
     "blog": "Blog", "about": "About Us", "contact": "Contact", "toggleSubmenu": "Toggle {section} menu",
@@ -138,7 +171,17 @@
     "directSourcing": "Direct sourcing from licensed Bangladeshi manufacturers",
     "headerNote": "For institutions, wholesale buyers, patients & caregivers",
     "sourcingStatement": "Bangladesh-based pharmaceutical sourcing, exclusively from licensed manufacturers, for international wholesale buyers and individual patients.",
-    "stayConnected": "Speak with our sourcing team", "privacy": "Privacy & cookies", "terms": "Website notice", "admin": "Admin access",
+    "stayConnected": "Contact Us", "privacy": "Privacy & cookies", "terms": "Website notice", "admin": "Admin access",
+    "footerInfoHeading": "Information",
+    "footerHelpfulHeading": "Helpful Links",
+    "footerServicesHeading": "Our Services",
+    "subscribeNow": "Subscribe Now",
+    "subscribePlaceholder": "Enter your Email",
+    "subscribeAction": "Subscribe",
+    "subscribeInvalid": "Please enter a valid email address.",
+    "subscribeSuccess": "Subscribed for catalog updates.",
+    "regulatoryNotice": "Regulatory Notice",
+    "allRightsReserved": "All rights reserved.",
     "disclaimer": "Product information is provided for sourcing enquiries and does not replace advice from a qualified healthcare professional. Related medicines are not recommendations for substitution.",
     "prescriptionDisclaimer": "Prescription uploads are optional. Supply and import arrangements remain subject to applicable destination requirements and professional review."
   },
@@ -154,6 +197,8 @@
     "cartFull": "Your list can contain up to 100 different items. Remove an item before adding another.", "invalidItem": "Please check the medicine name, packaging unit and quantity."
   },
   "Contact": {
+    "openChat": "Chat with our team", "chatHint": "Let’s chat", "closeChat": "Close chat", "supportTitle": "Contact support", "supportIntro": "Choose how you would like to reach us.",
+    "wechatChatHint": "Scan our contact QR code", "callUs": "Call us", "emailUs": "Email us",
     "title": "Contact MedAxis", "intro": "Discuss your medicine requirements with our sourcing team through an official contact channel.",
     "openWhatsapp": "Chat on WhatsApp", "unavailable": "Contact details for this channel will be available soon.",
     "copy": "Copy WeChat ID", "copied": "Copied", "qrAlt": "Official MedAxis WeChat contact QR code",
@@ -181,6 +226,9 @@
   },
   "Quotation": {
     "title": "Quotation", "proformaTitle": "Accepted quotation / proforma", "privateDocument": "Private commercial document", "version": "Version {number}", "privacy": "Private access · Keep this link confidential", "contact": "Contact our team",
+    "copy": "Copy", "copied": "Copied", "copyField": "Copy {label}",
+    "steps": { "SENT": "Quoted", "ACCEPTED": "Accepted", "PAYMENT_RECEIVED": "Payment verified", "DISPATCHED": "Dispatched", "DELIVERED": "Delivered" },
+    "progressLabel": "Quotation progress",
     "preparedFor": "Prepared for", "issued": "Issued", "validUntil": "Quotation valid until", "billingCurrency": "Billing currency", "acceptedHeading": "Quotation accepted", "acceptedAt": "Accepted on", "reservationStatus": "Reservation status", "reservationDeadline": "Reservation deadline",
     "reservationHelp": "The deadline shown is set by MedAxis. Reopening this page does not extend the reservation. Contact our team about bank payment and fulfilment.",
     "itemsTitle": "Quoted medicines", "availabilityCount": "{available} available · {unavailable} unavailable · {sourcing} sourcing", "medicine": "Medicine / specification", "quantity": "Quantity / unit", "availability": "Availability", "unitPrice": "Unit quoted price", "lineTotal": "Line total", "notPayable": "Not payable", "unavailableHelp": "Unavailable or sourcing lines do not carry a payable amount here. Use the confirmed server totals below.",

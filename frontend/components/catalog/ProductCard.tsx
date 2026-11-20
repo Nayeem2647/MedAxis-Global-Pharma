@@ -6,6 +6,8 @@ import { publicAssetUrl, type HomeProduct } from '../../lib/public-catalog';
 import { catalogEntityPath } from '../../lib/catalog-path';
 import { ProductActions } from '../home/ProductActions';
 import { CatalogImage } from './CatalogImage';
+import { ProductHoverActions } from './ProductHoverActions';
+import { CustomerRating } from './ProductRating';
 
 export function cartInput(product: HomeProduct) {
   return { productId: product.id, name: product.brand_name,
@@ -19,11 +21,22 @@ export async function ProductCard({ product, locale }: { product: HomeProduct; l
   const image = publicAssetUrl(product.primary_image_url);
   const href = catalogEntityPath(locale, 'products', product.alternate_slugs);
   return <article className="product-card">
-    <Link className="product-image" href={href} aria-label={c('viewNamed', { name: product.brand_name })}>{image
-      ? <CatalogImage src={image} alt={product.image_alt_text ?? `${product.brand_name} · ${product.generic.name} · ${product.manufacturer.name}`} width={360} height={240} sizes="(max-width: 640px) 90vw, (max-width: 1000px) 45vw, 30vw" fallbackLabel={c('imageUnavailable')}/>
+    <div className="product-media"><Link className="product-image" href={href} aria-label={c('viewNamed', { name: product.brand_name })}>{image
+      ? <CatalogImage src={image} alt={product.image_alt_text ?? `${product.brand_name} · ${product.generic.name} · ${product.manufacturer.name}`} width={640} height={640} sizes="(max-width: 480px) 90vw, (max-width: 760px) 45vw, (max-width: 1100px) 32vw, 25vw" fallbackLabel={c('imageUnavailable')}/>
       : <div className="product-placeholder" aria-hidden="true"><Pill size={43} strokeWidth={1.2}/></div>}
       {product.cold_chain_required && <span className="cold-badge"><Snowflake size={14}/>{t('coldChain')}</span>}
-    </Link>
-    <div className="product-body"><p className="product-manufacturer"><Link href={catalogEntityPath(locale, 'manufacturers', product.manufacturer.alternate_slugs)}>{product.manufacturer.name}</Link></p><h3><Link href={href}>{product.brand_name}</Link></h3><p className="product-generic"><Link href={catalogEntityPath(locale, 'generics', product.generic.alternate_slugs)}>{product.generic.name}</Link></p><p className="product-spec">{product.strength} · {product.dosage_form} · {product.pack_size}</p><span className="availability"><span/>{t('onRequest')}</span><ProductActions product={cartInput(product)}/></div>
+    </Link><ProductHoverActions product={product}/></div>
+    <div className="product-body">
+      <div className="product-card-copy">
+        <p className="product-manufacturer" title={product.manufacturer.name}>{product.manufacturer.name}</p>
+        <h3><Link className="product-card-link" href={href} title={product.brand_name}>{product.brand_name}</Link></h3>
+        <p className="product-generic" title={product.generic.name}>{product.generic.name}</p>
+        <p className="product-spec">
+          {[[c('strength'), product.strength], [c('dosageForm'), product.dosage_form], [c('packSize'), product.pack_size]].map(([label, value]) => <span key={label} title={label} aria-label={`${label}: ${value}`}>{value}</span>)}
+        </p>
+      </div>
+      <CustomerRating product={product}/>
+      <ProductActions product={cartInput(product)}/>
+    </div>
   </article>;
 }

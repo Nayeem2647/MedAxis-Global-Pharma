@@ -5,8 +5,10 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { BookOpen, ClipboardCheck, FileCheck2, Newspaper, Snowflake } from 'lucide-react';
 import { isLocale } from '../../../i18n/routing';
 import { buildLocalizedMetadata } from '../../../lib/seo';
+import { getBanners } from '../../../lib/public-catalog';
 import { QuoteButton } from '../../../components/layout/PublicShell';
 import { Breadcrumbs } from '../../../components/catalog/Breadcrumbs';
+import { PlacementBanner } from '../../../components/home/PlacementBanner';
 
 type Props = { params: Promise<{ locale: string }> };
 
@@ -30,20 +32,46 @@ export default async function BlogPage({ params }: Props) {
   const t = await getTranslations({ locale, namespace: 'Blog' });
   const h = await getTranslations({ locale, namespace: 'Home' });
   const s = await getTranslations({ locale, namespace: 'Shell' });
+  const allBanners = await getBanners(locale);
+  const blogBanners = allBanners.filter((banner) => banner.placement === 'BLOG_BANNER' && banner.media_url);
 
   return (
     <main id="main-content">
       <div className="section site-container">
         <Breadcrumbs locale={locale} entries={[{ name: s('blog'), href: `/${locale}/blog` }]} />
-        <header className="service-hero">
-          <p className="eyebrow">MEDAXIS GLOBAL PHARMA</p>
-          <h1>{t('title')}</h1>
-          <p>{t('description')}</p>
-          <div className="state-actions">
-            <QuoteButton>{h('request')}</QuoteButton>
-            <Link className="button secondary" href={`/${locale}/products`}>{h('browse')}</Link>
+        {blogBanners.length > 0 ? (
+          <div className="blog-banner-slot">
+            <PlacementBanner banners={blogBanners} locale={locale} variant="blog">
+              {blogBanners.some((b) => b.show_overlay) ? (
+                <div className="service-hero-overlay">
+                  <p className="eyebrow">MEDAXIS GLOBAL PHARMA</p>
+                  <h1>{t('title')}</h1>
+                  <p>{t('description')}</p>
+                  <div className="state-actions">
+                    <QuoteButton>{h('request')}</QuoteButton>
+                    <Link className="button secondary" href={`/${locale}/products`}>{h('browse')}</Link>
+                  </div>
+                </div>
+              ) : undefined}
+            </PlacementBanner>
+            {!blogBanners.some((b) => b.show_overlay) && (
+              <div className="blog-banner-caption">
+                <h1>{t('title')}</h1>
+                <p className="muted">{t('description')}</p>
+              </div>
+            )}
           </div>
-        </header>
+        ) : (
+          <header className="service-hero">
+            <p className="eyebrow">MEDAXIS GLOBAL PHARMA</p>
+            <h1>{t('title')}</h1>
+            <p>{t('description')}</p>
+            <div className="state-actions">
+              <QuoteButton>{h('request')}</QuoteButton>
+              <Link className="button secondary" href={`/${locale}/products`}>{h('browse')}</Link>
+            </div>
+          </header>
+        )}
 
         <section id="articles" className="info-section">
           <h2>{t('articlesTitle')}</h2>

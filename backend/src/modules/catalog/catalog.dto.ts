@@ -86,11 +86,13 @@ export interface PublicMaster {
   therapeutic_indications?: string[];
 }
 export interface JoinedProduct extends IProduct {
+  customer_ratings?: Array<{ average: number; count: number }>;
   manufacturer_profile: MasterRecord;
   generic_profile: MasterRecord;
   category_profiles: MasterRecord[];
 }
 export interface PublicProduct extends PublicProductTranslation {
+  customer_rating: { average: number; count: number };
   review_metadata?: IProduct['review_metadata'];
   id: string;
   sku: string;
@@ -152,6 +154,7 @@ export function publicProduct(record: JoinedProduct, locale: Locale, imageBase?:
   return {
     id: record._id,
     sku: record.sku,
+    customer_rating: record.customer_ratings?.[0] ?? { average: 0, count: 0 },
     ...translation,
     locale: locale === 'zh-CN' && record.translations.zhCN ? 'zh-CN' : 'en',
     alternate_slugs: alternateSlugs(record),

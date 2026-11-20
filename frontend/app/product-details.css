@@ -1,0 +1,25 @@
+.product-description-preview p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; line-height: 1.8; }
+.product-description-toggle { display: flex; justify-content: center; padding: 0 24px 24px; }
+.product-description-toggle .button { gap: 9px; min-width: 144px; min-height: 46px; border-radius: 6px; }
+.product-details-disclosure [hidden] { display: none; }
+.similar-products { position: relative; margin-top: 48px; }
+.similar-products-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+.similar-products-heading h2 { margin: 0; font-size: clamp(1.3rem, 2vw, 1.75rem); letter-spacing: -.025em; }
+.similar-products-heading > a { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; min-height: 44px; color: var(--color-action); font-size: .875rem; font-weight: 600; }
+.similar-products-heading > a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.similar-products-controls { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
+.similar-products-controls button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid #cfe4e9; border-radius: 8px; background: #fff; color: var(--color-action); }
+.similar-products-controls button:hover:not(:disabled) { background: #edf8fa; border-color: var(--color-action); }
+.similar-products-controls button:disabled { opacity: .4; cursor: default; }
+.similar-products-track { display: flex; align-items: stretch; gap: 20px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; padding: 2px 1px 20px; scrollbar-width: thin; scrollbar-color: #bad7df #f1f7f8; }
+.similar-product-item { flex: 0 0 calc((100% - 60px) / 4); min-width: 0; scroll-snap-align: start; }
+.similar-product-item > .product-card { height: 100%; }
+.similar-products-empty { margin: 0; padding: 25px; border: 1px solid #e1eaf0; border-radius: 8px; background: #fff; color: var(--color-muted); font-size: .9375rem; line-height: 1.7; }
+@media (max-width: 1100px) { .similar-product-item { flex-basis: calc((100% - 40px) / 3); } }
+@media (max-width: 760px) { .similar-product-item { flex-basis: calc((100% - 20px) / 2); } }
+@media (max-width: 480px) {
+  .similar-products { margin-top: 32px; }
+  .similar-products-heading { flex-wrap: wrap; gap: 4px 16px; margin-bottom: 16px; }
+  .similar-products-track { gap: 14px; }
+  .similar-product-item { flex-basis: 85%; }
+}

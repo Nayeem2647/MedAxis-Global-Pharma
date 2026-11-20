@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { ApiError, apiRequest, paginationSchema } from './api-client';
 import { catalogEntityPath, slugSchema, type CatalogKind } from './catalog-path';
 import { catalogQueryString, catalogQuerySchema, type CatalogQuery } from './catalog-query';
-import { catalogListSchema, homeProductSchema, masterDetailSchema, masterSchema, type CatalogMaster } from './public-catalog';
+import { catalogListSchema, homeProductSchema, masterDetailSchema, masterSchema, type CatalogMaster, type HomeProduct } from './public-catalog';
 import { getSitemapCatalog } from './sitemap';
 import type { Locale } from '../i18n/routing';
 
@@ -32,6 +32,23 @@ export const getProduct = cache(async (locale: Locale, slug: string) => {
   if (response.data.slug !== slug) throw new ApiError('Catalog identity does not match this URL.', { status: 200, code: 'INVALID_API_RESPONSE' });
   return response.data;
 });
+
+export async function getSimilarProducts(locale: Locale, product: HomeProduct) {
+  const localizedSlug = (profile: CatalogMaster) => locale === 'zh-CN' ? profile.alternate_slugs.zhCN ?? profile.alternate_slugs.en : profile.alternate_slugs.en;
+  const filters = [new URLSearchParams({ generic: localizedSlug(product.generic) }), ...product.categories.slice(0, 3).map((category) => new URLSearchParams({ category: localizedSlug(category) }))];
+  const signal = AbortSignal.timeout(5000);
+  const responses = await Promise.allSettled(filters.map((filter) => apiRequest(`/v1/public/products?locale=${locale}&page=1&limit=7&${filter}`, catalogListSchema, { next: catalogCache, signal, timeoutMs: 5000 })));
+  const categories = new Set(product.categories.map((category) => category.id));
+  const candidates = new Map<string, HomeProduct>();
+  for (const response of responses) {
+    if (response.status !== 'fulfilled') continue;
+    for (const item of response.value.data.products) {
+      if (item.id !== product.id && (item.generic.id === product.generic.id || item.categories.some((category) => categories.has(category.id)))) candidates.set(item.id, item);
+    }
+  }
+  const products = [...candidates.values()].sort((a, b) => Number(b.generic.id === product.generic.id) - Number(a.generic.id === product.generic.id)).slice(0, 6);
+  return { products, unavailable: products.length === 0 && responses.some((response) => response.status === 'rejected') };
+}
 
 export const getMaster = cache(async (locale: Locale, kind: MasterKind, slug: string, serialized: string) => {
   slugSchema.parse(slug);

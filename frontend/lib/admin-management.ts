@@ -113,9 +113,50 @@ const bannerTranslation = z.strictObject({
   title: publicCopy.refine((value) => value.length <= 200),
   body: publicCopy,
 });
+export const bannerPlacements = ['MAIN_HERO', 'PRODUCTS_BANNER', 'BLOG_BANNER', 'ANNOUNCEMENT'] as const;
+export type BannerPlacement = (typeof bannerPlacements)[number];
+export const bannerMediaTypes = ['IMAGE', 'VIDEO'] as const;
+export type BannerMediaType = (typeof bannerMediaTypes)[number];
+export const bannerResourceTypes = ['CUSTOM', 'PRODUCT', 'CATEGORY', 'MANUFACTURER', 'GENERIC'] as const;
+export type BannerResourceType = (typeof bannerResourceTypes)[number];
+export const bannerPlacementLabels: Record<BannerPlacement, string> = {
+  MAIN_HERO: 'Main Banner',
+  PRODUCTS_BANNER: 'Products Page Banner',
+  BLOG_BANNER: 'Blog Page Banner',
+  ANNOUNCEMENT: 'Announcement Bar',
+};
+export const bannerRatioGuides: Record<BannerPlacement, { ratio: string; note: string }> = {
+  MAIN_HERO: {
+    ratio: '3:1',
+    note: 'Banner Image/Video Ratio 3:1 (recommended 1440×480 px, JPG/PNG/WebP or MP4/WebM animation).',
+  },
+  PRODUCTS_BANNER: {
+    ratio: '4:1',
+    note: 'Banner Image/Video Ratio 4:1 (recommended 1400×350 px, JPG/PNG/WebP or MP4/WebM animation).',
+  },
+  BLOG_BANNER: {
+    ratio: '3:1',
+    note: 'Banner Image/Video Ratio 3:1 (recommended 1200×400 px, JPG/PNG/WebP or MP4/WebM animation).',
+  },
+  ANNOUNCEMENT: {
+    ratio: 'Text Strip',
+    note: 'Optional top utility announcement bar. Media upload is optional for text-only notices.',
+  },
+};
+
 export const bannerBody = z
   .strictObject({
     id: uuid.optional(),
+    placement: z.enum(bannerPlacements).default('ANNOUNCEMENT'),
+    media_type: z.enum(bannerMediaTypes).optional(),
+    media_key: z
+      .string()
+      .max(500)
+      .regex(/^products\/(?:local|s3)\/(?:videos\/)?[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp|mp4|webm)$/)
+      .optional(),
+    resource_type: z.enum(bannerResourceTypes).optional(),
+    resource_id: uuid.optional(),
+    show_overlay: z.boolean().optional(),
     translations: z.strictObject({
       en: bannerTranslation,
       zhCN: bannerTranslation.optional(),
@@ -155,7 +196,12 @@ export const masterRecord = z
   })
   .transform(({ _id, ...value }) => ({ id: _id, ...value }));
 export const bannerRecord = z
-  .object({ ...wireIdentity, ...bannerBody.shape, id: z.never().optional() })
+  .object({
+    ...wireIdentity,
+    ...bannerBody.shape,
+    id: z.never().optional(),
+    media_url: z.string().refine((value) => publicAssetUrl(value) !== null || publicVideoUrl(value) !== null).optional(),
+  })
   .transform(({ _id, ...value }) => ({ ...value, id: _id }));
 export type ResourceRecord =
   z.infer<typeof productRecord> | z.infer<typeof masterRecord> | z.infer<typeof bannerRecord>;
@@ -196,6 +242,7 @@ export const resourceQuery = z.strictObject({
   q: text(100).optional(),
   status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
   is_active: z.enum(['true', 'false']).optional(),
+  placement: z.enum(bannerPlacements).optional(),
   manufacturer_id: uuid.optional(),
   generic_id: uuid.optional(),
   category_id: uuid.optional(),

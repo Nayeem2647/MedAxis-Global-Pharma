@@ -71,7 +71,7 @@ const config = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         ],
       },
-      ...['/q/:path*', '/admin/:path*'].map((source) => ({
+      ...['/q/:path*', '/admin/:path*', '/api/customer/:path*', '/:locale(en|zh-CN)/account/:path*', '/:locale(en|zh-CN)/:auth(login|register)'].map((source) => ({
         source,
         headers: [
           { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },

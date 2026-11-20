@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { pathToFileURL } from 'node:url';
-import validators from '../shared/persistence/validators.json' with { type: 'json' };
+import validators from '../shared/persistence/validators.js';
 import { persistenceModels } from '../shared/persistence/models.js';
 
 /** Explicit, repeatable migration: never drops indexes or silently weakens validation. */

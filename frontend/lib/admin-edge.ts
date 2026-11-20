@@ -6,6 +6,21 @@ import { adminCookieHeader, adminFrontendOrigin, adminPrivateHeaders, expiredAdm
 /** Page response renewal complements fresh server guards; never authenticates locally. */
 export async function adminPageBoundary(request: NextRequest): Promise<NextResponse> {
   const secure = (response: NextResponse) => { for (const [key, value] of Object.entries(adminPrivateHeaders)) response.headers.set(key, value); return response; };
+  // A second local dev server may use another port. Send the browser to the
+  // configured admin origin before it submits credentials; the BFF stays strict.
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const current = new URL(request.url);
+      const configured = adminFrontendOrigin();
+      const loopback = new Set(['localhost', '127.0.0.1', '[::1]']);
+      if (loopback.has(current.hostname) && loopback.has(configured.hostname) && current.origin !== configured.origin) {
+        const destination = new URL(configured.origin);
+        destination.pathname = current.pathname;
+        destination.search = current.search;
+        return secure(NextResponse.redirect(destination, 307));
+      }
+    } catch { /* Existing configuration feedback is handled by the admin adapter. */ }
+  }
   if (new URL(request.url).pathname === '/admin/login') return secure(NextResponse.next());
   const denied = () => { const url = new URL(request.url); url.pathname = '/admin/login'; url.search = ''; const response = secure(NextResponse.redirect(url, 307)); response.headers.append('Set-Cookie', expiredAdminCookie()); return response; };
   let cookie: string; try { cookie = adminCookieHeader(request.headers.get('cookie')); } catch { return denied(); }

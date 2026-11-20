@@ -64,6 +64,8 @@ export interface ApiRequestOptions {
   catalogRedirect?: { sourcePath: string };
   /** HttpOnly prescription staging ownership, restricted to the RFQ intake endpoints. */
   prescriptionSession?: boolean;
+  /** Anonymous signed cookie, restricted to the product-rating endpoints. */
+  ratingSession?: boolean;
   successStatuses?: readonly number[];
   /** Per-attempt deadline; an interrupted write remains an uncertain outcome. */
   timeoutMs?: number;
@@ -150,6 +152,9 @@ export async function parseApiResponse<T>(response: Response, schema: RuntimeSch
 async function request<T>(path: string, options: ApiRequestOptions, read: (response: Response) => Promise<T>, accept = 'application/json'): Promise<T> {
   const url = apiUrl(path);
   const method = options.method ?? 'GET';
+  if (options.ratingSession && (!['GET', 'PUT'].includes(method) || !/^\/v1\/public\/products\/[0-9a-f-]{36}\/ratings$/.test(url.pathname))) {
+    throw new Error('Rating credentials are restricted to product-rating endpoints.');
+  }
   const admin = path.startsWith('/v1/admin/');
   const privateQuotation = url.pathname.startsWith('/v1/public/quotation/');
   if (options.prescriptionSession && (method !== 'POST' || !/^\/v1\/public\/rfq\/(?:quick-quote|cart)$/.test(url.pathname))) {
@@ -174,10 +179,10 @@ async function request<T>(path: string, options: ApiRequestOptions, read: (respo
   const body = options.json === undefined ? undefined : JSON.stringify(options.json);
   const init: RequestInit & { next?: NextFetchOptions } = {
     method, headers, body, signal: options.signal, redirect: options.catalogRedirect ? 'manual' : 'error',
-    credentials: admin || options.prescriptionSession ? 'include' : 'omit',
-    cache: admin || privateQuotation || method !== 'GET' ? 'no-store' : options.cache,
+    credentials: admin || options.prescriptionSession || options.ratingSession ? 'include' : 'omit',
+    cache: admin || privateQuotation || options.ratingSession || method !== 'GET' ? 'no-store' : options.cache,
     ...(privateQuotation || admin ? { referrerPolicy: 'no-referrer' as const } : {}),
-    ...(!admin && !privateQuotation && method === 'GET' && options.next ? { next: options.next } : {}),
+    ...(!admin && !privateQuotation && !options.ratingSession && method === 'GET' && options.next ? { next: options.next } : {}),
   };
 
   for (let attempt = 0; ; attempt += 1) {
