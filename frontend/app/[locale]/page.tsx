@@ -11,7 +11,6 @@ import { Hero } from '../../components/home/Hero';
 import { SourcingTiles } from '../../components/home/SourcingTiles';
 import { Categories } from '../../components/home/Categories';
 import { ProductCard } from '../../components/home/ProductCard';
-import { Announcements } from '../../components/home/Announcements';
 import { QuoteButton } from '../../components/layout/PublicShell';
 
 export const revalidate = 300;
@@ -33,7 +32,6 @@ export default async function Home({ params }: Props) {
   const data = await getHomeData(locale);
   return (
     <main id="main-content">
-      <Announcements banners={data.banners}/>
       <Hero locale={locale} banners={data.banners}/>
       <SourcingTiles locale={locale}/>
       <Categories locale={locale} categories={data.categories}/>

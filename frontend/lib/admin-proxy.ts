@@ -48,7 +48,8 @@ export async function proxyAdmin(request: Request, segments: readonly string[]):
       const type = request.headers.get('content-type') ?? '';
       if (rule.kind === 'multipart' ? !/^multipart\/form-data\s*;.*boundary=/i.test(type) : !/^application\/json(?:\s*;|$)/i.test(type)) return failure(415, 'UNSUPPORTED_MEDIA_TYPE');
       headers.set('Content-Type', type);
-      body = new Uint8Array(await bodyBytes(request, rule.kind === 'multipart' ? (path === 'catalog/videos' ? 51 : 6) * 1024 * 1024 : 1024 * 1024));
+      const multipartLimitBytes = (path === 'catalog/videos' ? 102 : path === 'catalog/images' ? 26 : 6) * 1024 * 1024;
+      body = new Uint8Array(await bodyBytes(request, rule.kind === 'multipart' ? multipartLimitBytes : 1024 * 1024));
       if (rule.kind !== 'multipart') {
         let input: unknown; try { input = JSON.parse(new TextDecoder().decode(body)); } catch { return failure(400, 'INVALID_REQUEST'); }
         const schema = path === 'auth/login' ? loginBody : path === 'auth/forgot-password' ? forgotPasswordBody : path === 'auth/reset-password' ? resetPasswordBody : path === 'auth/verify-totp' ? totpBody : path === 'auth/verify-backup-code' ? backupBody : path === 'auth/profile' ? adminProfileBody : path === 'auth/change-password' ? adminPasswordBody : /^auth\//.test(path) ? z.strictObject({}) : null;
@@ -57,7 +58,7 @@ export async function proxyAdmin(request: Request, segments: readonly string[]):
     }
   } catch (error: unknown) { return error instanceof ApiError ? failure(error.status, error.code) : failure(400, 'INVALID_REQUEST'); }
   const controller = new AbortController(); const abort = () => controller.abort(); request.signal.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(abort, rule.kind === 'sse' ? 55_000 : path === 'catalog/videos' ? 50_000 : 25_000);
+  const timeout = setTimeout(abort, rule.kind === 'sse' || path === 'catalog/videos' || path === 'catalog/images' ? 55_000 : 25_000);
   const clean = () => { clearTimeout(timeout); request.signal.removeEventListener('abort', abort); };
   let cookieValues: string[] = [];
   try {

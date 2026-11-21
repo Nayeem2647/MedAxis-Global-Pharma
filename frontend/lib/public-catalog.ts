@@ -17,6 +17,10 @@ export const masterSchema = z.object({
   description: content.optional(), seo_title: text.optional(), meta_description: text.optional(),
   country: z.string().regex(/^[A-Z]{2}$/).optional(), certifications: z.array(text).max(100).optional(),
   therapeutic_indications: z.array(z.string().min(1).max(5000).transform(plainText)).max(100).optional(),
+  image_url: z.string().refine(
+    (value) => /^data:image\/(?:webp|png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value) || publicAssetUrl(value) !== null,
+  ).optional(),
+  product_count: z.number().int().nonnegative().optional(),
 });
 const translationFields = {
   brand_name: text, slug: slugSchema, description: content.optional(), description_html: z.string().max(5000).optional(), seo_title: text.optional(), meta_description: text.optional(),
@@ -39,6 +43,7 @@ export const homeProductSchema = z.object({
 export type HomeProduct = z.infer<typeof homeProductSchema>;
 export type CatalogMaster = z.infer<typeof masterSchema>;
 export const homeProductsSchema = z.object({ products: z.array(homeProductSchema).max(100) });
+export const publicCategoriesSchema = z.object({ categories: z.array(masterSchema).max(100) });
 export const facetsSchema = z.object({
   dosage_forms: z.array(z.object({ name: text, count: z.number().int().nonnegative() })).max(1000),
   cold_chain: z.array(z.object({ required: z.boolean(), count: z.number().int().nonnegative() })).max(2),
@@ -58,6 +63,18 @@ export const bannersSchema = z.array(z.object({
   sort_order: z.number().int().nonnegative(), link_path: z.string().max(500).optional(),
 }));
 export type Banner = z.infer<typeof bannersSchema>[number];
+export const blogCategories = ['GUIDE', 'UPDATE', 'COMPLIANCE', 'SOURCING'] as const;
+export const blogsSchema = z.array(z.object({
+  id: z.uuid(),
+  slug: z.string().min(1).max(200),
+  category: z.enum(blogCategories).default('GUIDE'),
+  cover_image_url: z.string().refine((value) => publicAssetUrl(value) !== null).optional(),
+  title: z.string().max(200).transform(plainText),
+  summary: z.string().max(500).transform(plainText),
+  body_html: z.string().max(15000),
+  published_at: z.iso.datetime(),
+}));
+export type PublicBlogPost = z.infer<typeof blogsSchema>[number];
 
 function cmsFetchCache(): Pick<import('./api-client').ApiRequestOptions, 'cache' | 'next'> {
   if (process.env.NODE_ENV !== 'production' || !process.env.REVALIDATE_WEBHOOK_SECRET) {
@@ -74,16 +91,30 @@ export async function getBanners(locale: Locale): Promise<Banner[]> {
   }
 }
 
+export async function getBlogPosts(locale: Locale): Promise<PublicBlogPost[]> {
+  try {
+    return (await apiRequest(`/v1/public/cms/blogs?locale=${locale}`, blogsSchema, cmsFetchCache())).data;
+  } catch {
+    return [];
+  }
+}
+
 export async function getHomeData(locale: Locale) {
-  const [catalog, cms] = await Promise.allSettled([
-    apiRequest(`/v1/public/products?locale=${locale}&page=1&limit=6`, homeProductsSchema, { next: { revalidate: 3600, tags: ['catalog'] } }),
+  const catalogFetch: Pick<import('./api-client').ApiRequestOptions, 'cache' | 'next'> =
+    process.env.NODE_ENV !== 'production' || !process.env.REVALIDATE_WEBHOOK_SECRET
+      ? { cache: 'no-store' }
+      : { next: { revalidate: 3600, tags: ['catalog'] } };
+  const [catalog, cms, catList] = await Promise.allSettled([
+    apiRequest(`/v1/public/products?locale=${locale}&page=1&limit=6`, homeProductsSchema, catalogFetch),
     apiRequest(`/v1/public/cms/banners?locale=${locale}`, bannersSchema, cmsFetchCache()),
+    apiRequest(`/v1/public/categories?locale=${locale}`, publicCategoriesSchema, catalogFetch),
   ]);
   const products = catalog.status === 'fulfilled' ? catalog.value.data.products : [];
   const unique = (values: CatalogMaster[]) => [...new Map(values.map((item) => [item.id, item])).values()];
+  const fetchedCategories = catList.status === 'fulfilled' ? catList.value.data.categories : [];
   return {
     products, banners: cms.status === 'fulfilled' ? cms.value.data : [],
-    categories: unique(products.flatMap((product) => product.categories)),
+    categories: fetchedCategories.length > 0 ? fetchedCategories : unique(products.flatMap((product) => product.categories)),
     manufacturers: unique(products.map((product) => product.manufacturer)),
     generics: unique(products.map((product) => product.generic)),
     catalogUnavailable: catalog.status === 'rejected',

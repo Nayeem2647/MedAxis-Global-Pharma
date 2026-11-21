@@ -138,3 +138,80 @@ export const UrlRedirectSchema = new Schema<IUrlRedirect>(
 UrlRedirectSchema.index({ source_path: 1 }, { unique: true });
 installPersistenceGuards(UrlRedirectSchema, 'url_redirects');
 export const UrlRedirectModel = model<IUrlRedirect>('UrlRedirect', UrlRedirectSchema, 'url_redirects');
+
+export type BlogCategory = 'GUIDE' | 'UPDATE' | 'COMPLIANCE' | 'SOURCING';
+
+export interface ICmsBlog {
+  _id: string;
+  slug: string;
+  category: BlogCategory;
+  cover_image_key?: string;
+  translations: {
+    en: { title: string; summary: string; body: string };
+    zhCN?: { title: string; summary: string; body: string };
+  };
+  is_active: boolean;
+  published_at: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+const blogTranslationSchema = new Schema(
+  {
+    title: { type: String, required: true, trim: true, maxlength: 200 },
+    summary: { type: String, required: true, trim: true, maxlength: 500 },
+    body: { type: String, required: true, trim: true, maxlength: 15000 },
+  },
+  { _id: false, strict: 'throw' },
+);
+
+export const CmsBlogSchema = new Schema<ICmsBlog>(
+  {
+    _id: {
+      type: String,
+      required: true,
+      default: () => randomUUID(),
+      trim: true,
+      maxlength: 200,
+      match: new RegExp('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'),
+    },
+    slug: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 200,
+      match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+    },
+    category: {
+      type: String,
+      required: true,
+      enum: ['GUIDE', 'UPDATE', 'COMPLIANCE', 'SOURCING'],
+      default: 'GUIDE',
+    },
+    cover_image_key: { type: String, required: false, trim: true, maxlength: 500 },
+    translations: {
+      type: new Schema(
+        {
+          en: { type: blogTranslationSchema, required: true },
+          zhCN: { type: blogTranslationSchema, required: false },
+        },
+        { _id: false, strict: 'throw' },
+      ),
+      required: true,
+    },
+    is_active: { type: Boolean, required: true, default: true },
+    published_at: { type: Date, required: true, default: () => new Date() },
+  },
+  {
+    collection: 'cms_blogs',
+    strict: 'throw',
+    versionKey: false,
+    autoIndex: false,
+    autoCreate: false,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+  },
+);
+CmsBlogSchema.index({ slug: 1 }, { unique: true });
+CmsBlogSchema.index({ is_active: 1, published_at: -1, _id: 1 }, {});
+installPersistenceGuards(CmsBlogSchema, 'cms_blogs');
+export const CmsBlogModel = model<ICmsBlog>('CmsBlog', CmsBlogSchema, 'cms_blogs');

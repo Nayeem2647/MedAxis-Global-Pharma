@@ -23,7 +23,7 @@ import { useAdminOperation } from "../../hooks/useAdminOperation";
 import { AdminLink, useAdminLive } from "./AdminShell";
 import { AdminOperationFeedback } from "./AdminOperationFeedback";
 import { BankFields, bankFromForm, QuoteEditor } from "./FastQuoteEditor";
-import { QuoteSummary } from "./QuoteSummary";
+import { QuoteSummary, FxRatesCard } from "./QuoteSummary";
 import { quotationDate, quotationStatus } from "../../lib/admin-quotations";
 
 export function QuotationWorkspace({
@@ -47,6 +47,7 @@ export function QuotationWorkspace({
   const [selected, setSelected] = useState<string>();
   const [revisionMode, setRevisionMode] = useState(false);
   const [magicLink, setMagicLink] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [now, setNow] = useState(Date.now());
   const { operation, state } = useAdminOperation();
   const { revision, expire } = useAdminLive();
@@ -123,6 +124,7 @@ export function QuotationWorkspace({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setMagicLink(null);
+    setLinkCopied(false);
     await operation.run(
       async () => {
         let body;
@@ -270,7 +272,7 @@ export function QuotationWorkspace({
         </p>
       )}
       {magicLink && (
-        <section className="admin-panel">
+        <section className="admin-panel quotation-link-banner">
           <h2>Private customer link</h2>
           <p>
             Sharing this link gives access to the customer quotation. Keep it
@@ -288,14 +290,23 @@ export function QuotationWorkspace({
               onClick={() =>
                 void navigator.clipboard
                   .writeText(magicLink)
+                  .then(() => setLinkCopied(true))
                   .catch(() => undefined)
               }
             >
               Copy private link
             </button>
+            {linkCopied && (
+              <span className="quotation-copy-status" role="status">
+                Copied to clipboard
+              </span>
+            )}
             <button
               className="button secondary"
-              onClick={() => setMagicLink(null)}
+              onClick={() => {
+                setMagicLink(null);
+                setLinkCopied(false);
+              }}
             >
               Dismiss link
             </button>
@@ -392,188 +403,239 @@ export function QuotationWorkspace({
             <small>Dhaka time</small>
           </div>
         </section>
-        {isCurrent && active && current.status === "DRAFT" && (
-          <section className="admin-panel">
-            <h2>Issue saved draft</h2>
-            <p>
-              Review the saved draft total below. Current FX rates are locked
-              when issuing, so the final customer total may change. Use
-              Medicines & pricing to edit the draft.
-            </p>
-            <button
-              className="button secondary"
-              disabled={disabled || !settings || !fx}
-              onClick={() => setTab("Medicines & pricing")}
-            >
-              Edit draft
-            </button>
-            {blockers.length > 0 && (
-              <ul className="admin-feedback">
-                {blockers.map((message) => (
-                  <li key={String(message)}>{message}</li>
-                ))}
-              </ul>
+
+        <div className="quotation-workspace-grid">
+          <div className="quotation-workspace-main">
+            <QuoteSummary version={shown} />
+          </div>
+
+          <aside
+            className="quotation-workspace-aside"
+            aria-label="Quotation actions and summary"
+          >
+            {isCurrent && active && current.status === "DRAFT" && (
+              <section className="admin-panel">
+                <h2>Issue saved draft</h2>
+                <p>
+                  Review the saved draft total alongside. Current FX rates are
+                  locked when issuing, so the final customer total may change.
+                  Use Medicines &amp; pricing to edit the draft.
+                </p>
+                <button
+                  className="button secondary"
+                  disabled={disabled || !settings || !fx}
+                  onClick={() => setTab("Medicines & pricing")}
+                >
+                  Edit draft
+                </button>
+                {blockers.length > 0 && (
+                  <ul className="admin-feedback">
+                    {blockers.map((message) => (
+                      <li key={String(message)}>{message}</li>
+                    ))}
+                  </ul>
+                )}
+                <form
+                  className="stack-form"
+                  onSubmit={(event) => void action(event, "send")}
+                >
+                  <fieldset
+                    disabled={disabled || !canIssue}
+                    className="admin-form-grid"
+                  >
+                    <div className="quotation-send-review">
+                      <strong>Recipient: {current.contact.full_name}</strong>
+                      <p>{current.contact.email ?? "Email required"}</p>
+                      <p>
+                        Customer total: {current.billing_currency}{" "}
+                        {current.total_amount} · Version{" "}
+                        {current.version_number}
+                      </p>
+                    </div>
+                    <label>
+                      Validity days
+                      <input
+                        name="validity"
+                        type="number"
+                        min={1}
+                        max={365}
+                        required
+                        defaultValue={
+                          settings?.payment_presets?.value.quote_validity_days ??
+                          7
+                        }
+                      />
+                    </label>
+                    <label className="admin-check">
+                      <input name="allow_stale" type="checkbox" />
+                      Allow stale server FX rates
+                    </label>
+                    <BankFields
+                      bank={
+                        current.bank_details ?? settings?.wire_instructions?.value
+                      }
+                    />
+                    <label className="admin-check">
+                      <input type="checkbox" required />I reviewed the recipient,
+                      currency, total and validity above.
+                    </label>
+                    <button className="button primary">Issue quotation</button>
+                  </fieldset>
+                </form>
+              </section>
             )}
-            <form
-              className="stack-form"
-              onSubmit={(event) => void action(event, "send")}
-            >
-              <fieldset
-                disabled={disabled || !canIssue}
-                className="admin-form-grid"
-              >
-                <div className="quotation-send-review">
-                  <strong>Recipient: {current.contact.full_name}</strong>
-                  <p>{current.contact.email ?? "Email required"}</p>
-                  <p>
-                    Customer total: {current.billing_currency}{" "}
-                    {current.total_amount} · Version {current.version_number}
-                  </p>
-                </div>
-                <label>
-                  Validity days
-                  <input
-                    name="validity"
-                    type="number"
-                    min={1}
-                    max={365}
-                    required
-                    defaultValue={
-                      settings?.payment_presets?.value.quote_validity_days ?? 7
-                    }
-                  />
-                </label>
-                <label className="admin-check">
-                  <input name="allow_stale" type="checkbox" />
-                  Allow stale server FX rates
-                </label>
-                <BankFields
-                  bank={
-                    current.bank_details ?? settings?.wire_instructions?.value
-                  }
-                />
-                <label className="admin-check">
-                  <input type="checkbox" required />I reviewed the recipient,
-                  currency, total and validity above.
-                </label>
-                <button className="button primary">Issue quotation</button>
-              </fieldset>
-            </form>
-          </section>
-        )}
-        {isCurrent && active && current.status === "SENT" && (
-          <section className="admin-panel">
-            <h2>Sent quotation actions</h2>
-            <p>
-              The customer can review this version until{" "}
-              {quotationDate(current.valid_until)} (Dhaka).
-            </p>
-            <button
-              className="button secondary"
-              disabled={disabled || revisionMode || !settings || !fx}
-              onClick={() => {
-                setMagicLink(null);
-                setRevisionMode(true);
-                setTab("Medicines & pricing");
-              }}
-            >
-              Prepare revision
-            </button>
-            <form
-              className="stack-form"
-              onSubmit={(event) => void action(event, "resend")}
-            >
-              <fieldset disabled={disabled}>
-                <label className="admin-check">
-                  <input type="checkbox" required />
-                  Rotate the secret link and invalidate the previous link.
-                </label>
-                <button className="button secondary">
-                  Resend with new link
+            {isCurrent && active && current.status === "SENT" && (
+              <section className="admin-panel">
+                <h2>Sent quotation actions</h2>
+                <p>
+                  The customer can review this version until{" "}
+                  {quotationDate(current.valid_until)} (Dhaka).
+                </p>
+                <button
+                  className="button secondary"
+                  disabled={disabled || revisionMode || !settings || !fx}
+                  onClick={() => {
+                    setMagicLink(null);
+    setLinkCopied(false);
+                    setLinkCopied(false);
+                    setRevisionMode(true);
+                    setTab("Medicines & pricing");
+                  }}
+                >
+                  Prepare revision
                 </button>
-              </fieldset>
-            </form>
-          </section>
-        )}
-        {isCurrent && active && next && (
-          <section className="admin-panel">
-            <h2>Fulfillment: {next.replaceAll("_", " ")}</h2>
-            <p>
-              {next === "PAYMENT_RECEIVED"
-                ? "Verify the bank transfer before recording payment."
-                : next === "DISPATCHED"
-                  ? "Add the courier and tracking details for this shipment."
-                  : "Confirm delivery using the supporting records."}
-            </p>
-            <form
-              key={`${current.id}-${current.status}`}
-              className="stack-form"
-              onSubmit={(event) => void action(event, "fulfillment")}
-            >
-              <fieldset disabled={disabled} className="admin-form-grid">
-                {next === "PAYMENT_RECEIVED" && (
+                <form
+                  className="stack-form"
+                  onSubmit={(event) => void action(event, "resend")}
+                >
+                  <fieldset disabled={disabled}>
+                    <label className="admin-check">
+                      <input type="checkbox" required />
+                      Rotate the secret link and invalidate the previous link.
+                    </label>
+                    <button className="button secondary">
+                      Resend with new link
+                    </button>
+                  </fieldset>
+                </form>
+              </section>
+            )}
+            {isCurrent && active && next && (
+              <section className="admin-panel">
+                <h2>Fulfillment: {next.replaceAll("_", " ")}</h2>
+                <p>
+                  {next === "PAYMENT_RECEIVED"
+                    ? "Verify the bank transfer before recording payment."
+                    : next === "DISPATCHED"
+                      ? "Add the courier and tracking details for this shipment."
+                      : "Confirm delivery using the supporting records."}
+                </p>
+                <form
+                  key={`${current.id}-${current.status}`}
+                  className="stack-form"
+                  onSubmit={(event) => void action(event, "fulfillment")}
+                >
+                  <fieldset disabled={disabled} className="admin-form-grid">
+                    {next === "PAYMENT_RECEIVED" && (
+                      <>
+                        <label>
+                          Wire reference
+                          <input
+                            name="wire_reference"
+                            required
+                            maxLength={200}
+                          />
+                        </label>
+                        <label>
+                          Verified payment amount
+                          <input
+                            name="amount"
+                            required
+                            inputMode="decimal"
+                            defaultValue={decimalForInput(current.total_amount)}
+                          />
+                        </label>
+                        <label>
+                          Payment currency
+                          <input
+                            name="currency"
+                            readOnly
+                            value={current.billing_currency}
+                          />
+                        </label>
+                      </>
+                    )}
+                    {next === "DISPATCHED" && (
+                      <>
+                        <label>
+                          Courier name
+                          <input name="courier_name" required maxLength={200} />
+                        </label>
+                        <label>
+                          AWB tracking number
+                          <input
+                            name="awb_tracking_number"
+                            required
+                            maxLength={200}
+                          />
+                        </label>
+                        <label>
+                          Estimated delivery (Dhaka, optional)
+                          <input
+                            name="estimated_delivery"
+                            type="datetime-local"
+                          />
+                        </label>
+                      </>
+                    )}
+                    <label className="admin-check">
+                      <input type="checkbox" required />I verified this
+                      transition and its supporting records.
+                    </label>
+                    <button className="button primary">
+                      Record {next.replaceAll("_", " ").toLowerCase()}
+                    </button>
+                  </fieldset>
+                </form>
+              </section>
+            )}
+            {isCurrent && current.status === "ACCEPTED" && !next && (
+              <p className="admin-feedback">
+                The server reservation is expired or unavailable. Payment cannot
+                be recorded through this state. Refresh to confirm.
+              </p>
+            )}
+            <section className="admin-panel quotation-aside-contact">
+              <div className="admin-section-heading">
+                <h2>Buyer snapshot</h2>
+                <button
+                  type="button"
+                  className="quotation-bank-toggle"
+                  onClick={() => setTab("Customer & delivery")}
+                >
+                  Full details
+                </button>
+              </div>
+              <dl className="admin-facts">
+                <dt>Email</dt>
+                <dd>{shown.contact.email ?? "Not supplied"}</dd>
+                <dt>Destination</dt>
+                <dd>
+                  {rfq.destination_country}
+                  {rfq.destination_city_port
+                    ? ` · ${rfq.destination_city_port}`
+                    : ""}
+                </dd>
+                {shown.contact.whatsapp_number && (
                   <>
-                    <label>
-                      Wire reference
-                      <input name="wire_reference" required maxLength={200} />
-                    </label>
-                    <label>
-                      Verified payment amount
-                      <input
-                        name="amount"
-                        required
-                        inputMode="decimal"
-                        defaultValue={decimalForInput(current.total_amount)}
-                      />
-                    </label>
-                    <label>
-                      Payment currency
-                      <input
-                        name="currency"
-                        readOnly
-                        value={current.billing_currency}
-                      />
-                    </label>
+                    <dt>WhatsApp</dt>
+                    <dd>{shown.contact.whatsapp_number}</dd>
                   </>
                 )}
-                {next === "DISPATCHED" && (
-                  <>
-                    <label>
-                      Courier name
-                      <input name="courier_name" required maxLength={200} />
-                    </label>
-                    <label>
-                      AWB tracking number
-                      <input
-                        name="awb_tracking_number"
-                        required
-                        maxLength={200}
-                      />
-                    </label>
-                    <label>
-                      Estimated delivery (Dhaka, optional)
-                      <input name="estimated_delivery" type="datetime-local" />
-                    </label>
-                  </>
-                )}
-                <label className="admin-check">
-                  <input type="checkbox" required />I verified this transition
-                  and its supporting records.
-                </label>
-                <button className="button primary">
-                  Record {next.replaceAll("_", " ").toLowerCase()}
-                </button>
-              </fieldset>
-            </form>
-          </section>
-        )}
-        {isCurrent && current.status === "ACCEPTED" && !next && (
-          <p className="admin-feedback">
-            The server reservation is expired or unavailable. Payment cannot be
-            recorded through this state. Refresh to confirm.
-          </p>
-        )}
-        <QuoteSummary version={shown} />
+              </dl>
+            </section>
+          </aside>
+        </div>
       </div>
       <div
         role="tabpanel"
@@ -690,9 +752,14 @@ export function QuotationWorkspace({
         {shown.locked_fx_rates && (
           <details className="admin-panel">
             <summary>Server-locked FX · admin only</summary>
-            <pre className="admin-prewrap">
-              {JSON.stringify(shown.locked_fx_rates, null, 2)}
-            </pre>
+            <FxRatesCard
+              title="Locked exchange rates"
+              capturedAt={shown.locked_fx_rates.captured_at}
+              stale={shown.locked_fx_rates.stale_rates_used}
+              ratesToBdt={shown.locked_fx_rates.rates_to_bdt}
+              modes={shown.locked_fx_rates.modes}
+              fetchedAt={shown.locked_fx_rates.fetched_at}
+            />
           </details>
         )}
       </div>
@@ -787,6 +854,7 @@ export function QuotationWorkspace({
                   onClick={() => {
                     setSelected(version.id);
                     setMagicLink(null);
+    setLinkCopied(false);
                     setTab("Overview");
                   }}
                 >

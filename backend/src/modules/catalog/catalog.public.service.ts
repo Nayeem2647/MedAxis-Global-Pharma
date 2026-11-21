@@ -212,6 +212,29 @@ export function createPublicCatalogService(env: AppEnv) {
     return publicProduct(rows[0], 'en', publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL);
   }
 
+  async function categories(locale: Locale) {
+    const [records, counts] = await Promise.all([
+      masterModel('categories')
+        .find({ is_active: true, deleted_at: { $exists: false } })
+        .select(PUBLIC_MASTER_PROJECTION)
+        .sort({ sort_order: 1, _id: 1 })
+        .limit(50)
+        .lean<MasterRecord[]>(),
+      ProductModel.aggregate<{ _id: string; count: number }>([
+        { $match: { status: 'PUBLISHED', deleted_at: { $exists: false } } },
+        { $unwind: '$category_ids' },
+        { $group: { _id: '$category_ids', count: { $sum: 1 } } },
+      ]).option({ maxTimeMS: 10_000 }),
+    ]);
+    const countMap = new Map(counts.map((entry) => [entry._id, entry.count]));
+    return {
+      categories: records.map((record) => ({
+        ...publicMaster(record, locale, publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL),
+        product_count: countMap.get(record._id) ?? 0,
+      })),
+    };
+  }
+
   async function master(kind: MasterKind, slug: string, query: CatalogQuery) {
     const record = await masterModel(kind)
       .findOne({ is_active: true, deleted_at: { $exists: false }, ...localizedSlug(query.locale, slug) })
@@ -221,7 +244,7 @@ export function createPublicCatalogService(env: AppEnv) {
     const field = { manufacturers: 'manufacturer_id', generics: 'generic_id', categories: 'category_ids' }[kind];
     const products = await list(query, { [field]: record._id });
     return {
-      ...publicMaster(record, query.locale),
+      ...publicMaster(record, query.locale, publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL),
       products: products.products,
       facets: products.facets,
       total: products.total,
@@ -253,5 +276,5 @@ export function createPublicCatalogService(env: AppEnv) {
       categories: categories!.map(pair),
     };
   }
-  return { list, product, productById, master, sitemap };
+  return { list, product, productById, master, categories, sitemap };
 }

@@ -1,12 +1,81 @@
 import { quotationDate, quotationStatus } from "../../lib/admin-quotations";
 import type { AdminVersion } from "../../lib/admin-workflow";
+
+export function FxRatesCard({
+  title,
+  capturedAt,
+  stale,
+  ratesToBdt,
+  modes,
+  fetchedAt,
+}: {
+  title: string;
+  capturedAt: string;
+  stale: boolean;
+  ratesToBdt: Record<"USD" | "EUR" | "CNY", string>;
+  modes?: Record<"USD" | "EUR" | "CNY", string>;
+  fetchedAt?: Record<"USD" | "EUR" | "CNY", string>;
+}) {
+  return (
+    <section className="admin-panel quotation-fx-panel">
+      <div className="admin-section-heading">
+        <h2>{title}</h2>
+        <span
+          className={`quotation-status ${stale ? "quotation-status-accepted" : "quotation-status-payment_received"}`}
+        >
+          {stale ? "Stale rates used" : "Fresh rates"}
+        </span>
+      </div>
+      <p className="small muted">
+        Captured {quotationDate(capturedAt)} (Dhaka)
+      </p>
+      <div className="admin-table-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Currency</th>
+              <th>Rate to BDT</th>
+              {modes && <th>Mode</th>}
+              {fetchedAt && <th>Fetched (Dhaka)</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {(["USD", "EUR", "CNY"] as const).map((currency) => (
+              <tr key={currency}>
+                <td>
+                  <strong>{currency}</strong>
+                </td>
+                <td className="quotation-amount">{ratesToBdt[currency]}</td>
+                {modes && <td>{modes[currency].replaceAll("_", " ")}</td>}
+                {fetchedAt && <td>{quotationDate(fetchedAt[currency])}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function QuoteSummary({ version }: { version: AdminVersion }) {
   return (
-    <section className="admin-panel">
+    <section className="admin-panel quotation-summary-card">
       <div className="admin-section-heading">
-        <h2>Commercial version {version.version_number}</h2>
-        <span className="admin-status">{quotationStatus(version.status)}</span>
+        <div>
+          <h2>Commercial version {version.version_number}</h2>
+          <p className="small muted">
+            {version.items.length}{" "}
+            {version.items.length === 1 ? "medicine line" : "medicine lines"} ·{" "}
+            {version.billing_currency}
+          </p>
+        </div>
+        <span
+          className={`quotation-status quotation-status-${version.status.toLowerCase()}`}
+        >
+          {quotationStatus(version.status)}
+        </span>
       </div>
+
       <div
         className="admin-table-scroll"
         role="region"
@@ -27,25 +96,37 @@ export function QuoteSummary({ version }: { version: AdminVersion }) {
             {version.items.map((line) => (
               <tr key={line.id}>
                 <td>
-                  {line.brand_name}
+                  <strong>{line.brand_name}</strong>
                   <span>
                     {line.generic_name} · {line.strength} · {line.dosage_form} ·{" "}
                     {line.pack_size}
                   </span>
                   {line.customer_facing_note && (
-                    <p>{line.customer_facing_note}</p>
+                    <p className="small muted">{line.customer_facing_note}</p>
                   )}
                 </td>
                 <td>
                   {line.quantity} {line.packaging_unit}
                 </td>
-                <td>{line.availability_status}</td>
                 <td>
+                  <span
+                    className={`quotation-status ${
+                      line.availability_status === "AVAILABLE"
+                        ? "quotation-status-payment_received"
+                        : line.availability_status === "SOURCING"
+                          ? "quotation-status-accepted"
+                          : "quotation-status-declined"
+                    }`}
+                  >
+                    {quotationStatus(line.availability_status)}
+                  </span>
+                </td>
+                <td className="quotation-amount">
                   {line.availability_status === "AVAILABLE"
                     ? `${version.billing_currency} ${line.unit_quoted_price}`
                     : "Not payable"}
                 </td>
-                <td>
+                <td className="quotation-amount">
                   {line.availability_status === "AVAILABLE"
                     ? `${version.billing_currency} ${line.total_line_price}`
                     : "Not payable"}
@@ -55,24 +136,31 @@ export function QuoteSummary({ version }: { version: AdminVersion }) {
           </tbody>
         </table>
       </div>
+
+      <div className="quotation-totals-box">
+        <dl className="admin-facts">
+          <dt>Subtotal</dt>
+          <dd className="quotation-amount">
+            {version.billing_currency} {version.subtotal_amount}
+          </dd>
+          <dt>Freight</dt>
+          <dd className="quotation-amount">{version.freight_cost}</dd>
+          <dt>Insurance</dt>
+          <dd className="quotation-amount">{version.insurance_cost}</dd>
+          <dt>Server total</dt>
+          <dd className="quotation-amount quotation-server-total">
+            <strong>
+              {version.billing_currency} {version.total_amount}
+            </strong>
+          </dd>
+        </dl>
+      </div>
+
       <dl className="admin-facts">
-        <dt>Subtotal</dt>
-        <dd>
-          {version.billing_currency} {version.subtotal_amount}
-        </dd>
-        <dt>Freight</dt>
-        <dd>{version.freight_cost}</dd>
-        <dt>Insurance</dt>
-        <dd>{version.insurance_cost}</dd>
-        <dt>Server total</dt>
-        <dd>
-          <strong>
-            {version.billing_currency} {version.total_amount}
-          </strong>
-        </dd>
         <dt>Shipping</dt>
         <dd>
-          {version.shipping_terms.method} {version.shipping_terms.incoterm} ·{" "}
+          {version.shipping_terms.method.replaceAll("_", " ")}{" "}
+          {version.shipping_terms.incoterm} ·{" "}
           {version.shipping_terms.named_place}
           {version.shipping_terms.cold_chain_required
             ? " · Cold-chain handling"
@@ -80,7 +168,7 @@ export function QuoteSummary({ version }: { version: AdminVersion }) {
           {version.shipping_terms.temperature_range}
         </dd>
         <dt>Payment</dt>
-        <dd>{version.payment_terms}</dd>
+        <dd>{version.payment_terms.replaceAll("_", " ")}</dd>
         {version.valid_until && (
           <>
             <dt>Valid until</dt>

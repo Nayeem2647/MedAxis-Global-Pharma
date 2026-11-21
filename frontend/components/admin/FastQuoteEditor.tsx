@@ -22,40 +22,68 @@ import { AdminLink } from "./AdminShell";
 import { AdminOperationFeedback } from "./AdminOperationFeedback";
 import { MasterPicker } from "./MasterPicker";
 import { updateDraftBody } from "../../lib/admin-management";
-import { QuoteSummary } from "./QuoteSummary";
+import { QuoteSummary, FxRatesCard } from "./QuoteSummary";
 import { quotationStatus } from "../../lib/admin-quotations";
 
 export function BankFields({ bank }: { bank?: unknown }) {
   const parsed = bankInputSchema.safeParse(bank);
   const value = parsed.success ? parsed.data : undefined;
+  const [editing, setEditing] = useState(!value);
   return (
-    <>
-      <h3>Verified bank wire details</h3>
-      {(
-        [
-          "beneficiary_name",
-          "bank_name",
-          "account_number",
-          "swift_code",
-          "bank_address",
-          "instructions",
-        ] as const
-      ).map((key) => (
-        <label key={key}>
-          {key.replaceAll("_", " ")}
-          <input
-            name={`bank_${key}`}
-            defaultValue={value?.[key] ?? ""}
-            required={key !== "bank_address"}
-            maxLength={key === "instructions" ? 4000 : 500}
-          />
-        </label>
-      ))}
+    <div
+      className="quotation-bank-box"
+      onInvalidCapture={() => setEditing(true)}
+    >
+      <div className="quotation-bank-box-head">
+        <h3>Verified bank wire details</h3>
+        {value && (
+          <button
+            type="button"
+            className="quotation-bank-toggle"
+            aria-expanded={editing}
+            onClick={() => setEditing((open) => !open)}
+          >
+            {editing ? "Hide fields" : "Edit bank details"}
+          </button>
+        )}
+      </div>
+      {value && !editing && (
+        <div className="quotation-bank-summary">
+          <p>
+            <strong>{value.bank_name}</strong> · {value.beneficiary_name}
+          </p>
+          <p className="small muted">
+            Account: {value.account_number} · SWIFT: {value.swift_code}
+          </p>
+        </div>
+      )}
+      <div className="quotation-bank-fields" hidden={!editing}>
+        {(
+          [
+            "beneficiary_name",
+            "bank_name",
+            "account_number",
+            "swift_code",
+            "bank_address",
+            "instructions",
+          ] as const
+        ).map((key) => (
+          <label key={key}>
+            {key.replaceAll("_", " ")}
+            <input
+              name={`bank_${key}`}
+              defaultValue={value?.[key] ?? ""}
+              required={key !== "bank_address"}
+              maxLength={key === "instructions" ? 4000 : 500}
+            />
+          </label>
+        ))}
+      </div>
       <label className="admin-check">
         <input type="checkbox" required />I verified these wire details through
         the authorized company records.
       </label>
-    </>
+    </div>
   );
 }
 export function bankFromForm(form: FormData) {
@@ -109,6 +137,54 @@ export function QuoteEditor({
       settings.shipping_presets?.value.methods[0] ??
       "EXPRESS_COURIER",
   );
+  const [billingCurrency, setBillingCurrency] = useState(
+    current?.billing_currency ?? rfq.preferred_currency,
+  );
+  const [lineInputs, setLineInputs] = useState<
+    Record<string, { cost: string; markup: string }>
+  >(() =>
+    Object.fromEntries(
+      rfq.items.map((line) => {
+        const cost = costs?.items.find((item) => item.rfq_item_id === line.id);
+        return [
+          line.id,
+          {
+            cost: cost ? decimalForInput(cost.procurement_unit_cost_bdt) : "",
+            markup: cost ? decimalForInput(cost.markup_percent) : "",
+          },
+        ];
+      }),
+    ),
+  );
+  const activeFxRate =
+    billingCurrency === "BDT"
+      ? 1
+      : (() => {
+          const entry = fx.rates.find(
+            (rate) => rate.currency === billingCurrency,
+          );
+          return entry?.available ? Number(entry.active_rate_to_bdt) : 0;
+        })();
+  function estimateLine(lineId: string, quantity: number) {
+    if (!(activeFxRate > 0)) return null;
+    const entry = lineInputs[lineId];
+    if (!entry?.cost.trim() || !entry?.markup.trim()) return null;
+    const cost = Number(entry.cost);
+    const markup = Number(entry.markup);
+    if (!Number.isFinite(cost) || !Number.isFinite(markup) || cost < 0 || markup < 0)
+      return null;
+    const unitBdt = cost * (1 + markup / 100);
+    const unitBilling = unitBdt / activeFxRate;
+    const totalBilling = unitBilling * quantity;
+    if (!Number.isFinite(unitBilling) || !Number.isFinite(totalBilling))
+      return null;
+    return { unitBilling, totalBilling };
+  }
+  const estimatedSubtotal = rfq.items.reduce((sum, line) => {
+    if (statuses[line.id] !== "AVAILABLE") return sum;
+    const calc = estimateLine(line.id, line.quantity);
+    return calc ? sum + calc.totalBilling : sum;
+  }, 0);
   const [created, setCreated] =
     useState<ReturnType<typeof quoteWriteResult.parse>>();
   const [step, setStep] = useState(0);
@@ -385,8 +461,11 @@ export function QuoteEditor({
                   <select
                     name="billing_currency"
                     aria-label="Billing currency"
-                    defaultValue={
-                      current?.billing_currency ?? rfq.preferred_currency
+                    value={billingCurrency}
+                    onChange={(event) =>
+                      setBillingCurrency(
+                        event.currentTarget.value as typeof billingCurrency,
+                      )
                     }
                   >
                     {currencies.map((currency) => (
@@ -402,17 +481,37 @@ export function QuoteEditor({
                 const cost = costs?.items.find(
                   (item) => item.rfq_item_id === line.id,
                 );
+                const lineEstimate =
+                  statuses[line.id] === "AVAILABLE"
+                    ? estimateLine(line.id, line.quantity)
+                    : null;
                 return (
                   <section className="admin-pricing-line" key={line.id}>
-                    <h3>
-                      Line {index + 1}:{" "}
-                      {line.product_snapshot?.brand_name ??
-                        line.custom_medicine_name}
-                    </h3>
-                    <p>
-                      {line.quantity} {line.packaging_unit} · Original RFQ
-                      quantity and packaging are retained.
-                    </p>
+                    <div className="quotation-line-top">
+                      <div>
+                        <h3>
+                          Line {index + 1}:{" "}
+                          {line.product_snapshot?.brand_name ??
+                            line.custom_medicine_name}
+                        </h3>
+                        <p>
+                          {line.quantity} {line.packaging_unit} · Original RFQ
+                          quantity and packaging are retained.
+                        </p>
+                      </div>
+                      {lineEstimate && (
+                        <div className="quotation-line-estimate">
+                          <span>
+                            Est. unit: {billingCurrency}{" "}
+                            {lineEstimate.unitBilling.toFixed(2)}
+                          </span>
+                          <strong>
+                            Est. line: {billingCurrency}{" "}
+                            {lineEstimate.totalBilling.toFixed(2)}
+                          </strong>
+                        </div>
+                      )}
+                    </div>
                     <div className="admin-form-grid">
                       <MasterPicker
                         kind="manufacturers"
@@ -455,6 +554,16 @@ export function QuoteEditor({
                                     )
                                   : undefined
                               }
+                              onChange={(event) => {
+                                const val = event.currentTarget.value;
+                                setLineInputs((prev) => ({
+                                  ...prev,
+                                  [line.id]: {
+                                    cost: val,
+                                    markup: prev[line.id]?.markup ?? "",
+                                  },
+                                }));
+                              }}
                             />
                           </label>
                           <label>
@@ -470,6 +579,16 @@ export function QuoteEditor({
                                   ? decimalForInput(cost.markup_percent)
                                   : undefined
                               }
+                              onChange={(event) => {
+                                const val = event.currentTarget.value;
+                                setLineInputs((prev) => ({
+                                  ...prev,
+                                  [line.id]: {
+                                    cost: prev[line.id]?.cost ?? "",
+                                    markup: val,
+                                  },
+                                }));
+                              }}
                             />
                           </label>
                         </>
@@ -517,6 +636,20 @@ export function QuoteEditor({
                   </section>
                 );
               })}
+              {activeFxRate > 0 && (
+                <div className="quotation-estimate-strip">
+                  <div>
+                    <span>Estimated items subtotal</span>
+                    <strong>
+                      {billingCurrency} {estimatedSubtotal.toFixed(2)}
+                    </strong>
+                  </div>
+                  <p className="small muted">
+                    Live preview only — exact Decimal128 totals and FX lock are
+                    computed server-side when saved.
+                  </p>
+                </div>
+              )}
             </div>
             <div data-quote-step="1" hidden={step !== 1}>
               <h3>Shipping & terms</h3>
@@ -674,31 +807,45 @@ export function QuoteEditor({
                       <th>Availability</th>
                       <th>Cost per unit (BDT)</th>
                       <th>Markup %</th>
+                      <th>Est. line ({review.billing_currency ?? billingCurrency})</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rfq.items.map((line) => (
-                      <tr key={line.id}>
-                        <td>
-                          {line.product_snapshot?.brand_name ??
-                            review[`${line.id}_brand_name`]}
-                        </td>
-                        <td>
-                          {line.quantity} {line.packaging_unit}
-                        </td>
-                        <td>{quotationStatus(statuses[line.id]!)}</td>
-                        <td>
-                          {statuses[line.id] === "AVAILABLE"
-                            ? review[`${line.id}_cost`]
-                            : "Not payable"}
-                        </td>
-                        <td>
-                          {statuses[line.id] === "AVAILABLE"
-                            ? review[`${line.id}_markup`]
-                            : "—"}
-                        </td>
-                      </tr>
-                    ))}
+                    {rfq.items.map((line) => {
+                      const lineEst =
+                        statuses[line.id] === "AVAILABLE"
+                          ? estimateLine(line.id, line.quantity)
+                          : null;
+                      return (
+                        <tr key={line.id}>
+                          <td>
+                            {line.product_snapshot?.brand_name ??
+                              review[`${line.id}_brand_name`]}
+                          </td>
+                          <td>
+                            {line.quantity} {line.packaging_unit}
+                          </td>
+                          <td>{quotationStatus(statuses[line.id]!)}</td>
+                          <td>
+                            {statuses[line.id] === "AVAILABLE"
+                              ? review[`${line.id}_cost`]
+                              : "Not payable"}
+                          </td>
+                          <td>
+                            {statuses[line.id] === "AVAILABLE"
+                              ? review[`${line.id}_markup`]
+                              : "—"}
+                          </td>
+                          <td className="quotation-amount">
+                            {statuses[line.id] === "AVAILABLE"
+                              ? lineEst
+                                ? `${review.billing_currency ?? billingCurrency} ${lineEst.totalBilling.toFixed(2)}`
+                                : "Server-computed"
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -749,12 +896,12 @@ export function QuoteEditor({
         <>
           <QuoteSummary version={created.version} />
           {created.fx_preview && (
-            <section className="admin-panel">
-              <h2>Server FX preview</h2>
-              <pre className="admin-prewrap">
-                {JSON.stringify(created.fx_preview, null, 2)}
-              </pre>
-            </section>
+            <FxRatesCard
+              title="Server FX preview"
+              capturedAt={created.fx_preview.captured_at}
+              stale={created.fx_preview.stale}
+              ratesToBdt={created.fx_preview.rates_to_bdt}
+            />
           )}
           <AdminLink
             className="button primary"

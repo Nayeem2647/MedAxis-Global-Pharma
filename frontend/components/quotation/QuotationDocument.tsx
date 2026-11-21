@@ -7,7 +7,7 @@ import { acceptedStatus, type CustomerQuotation } from '../../lib/quotation';
 
 const lifecycleSteps = ['SENT', 'ACCEPTED', 'PAYMENT_RECEIVED', 'DISPATCHED', 'DELIVERED'] as const;
 
-function CopyFieldButton({ value, label }: { value: string; label: string }) {
+export function CopyFieldButton({ value, label }: { value: string; label: string }) {
   const t = useTranslations('Quotation');
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,6 +38,124 @@ function CopyFieldButton({ value, label }: { value: string; label: string }) {
   );
 }
 
+export function QuotationProgress({ status }: { status: CustomerQuotation['status'] }) {
+  const t = useTranslations('Quotation');
+  const currentStepIndex = lifecycleSteps.indexOf(status as (typeof lifecycleSteps)[number]);
+  if (currentStepIndex < 0) return null;
+  return (
+    <ol className="quotation-progress" aria-label={t('progressLabel')}>
+      {lifecycleSteps.map((step, index) => {
+        const done = index < currentStepIndex || (index === currentStepIndex && status === 'DELIVERED');
+        const active = index === currentStepIndex && status !== 'DELIVERED';
+        return (
+          <li key={step} className={`quotation-progress-step${done ? ' is-done' : active ? ' is-active' : ''}`}>
+            <span className="quotation-progress-marker" aria-hidden="true">
+              {done ? <Check size={14} /> : index + 1}
+            </span>
+            <span className="quotation-progress-label">{t(`steps.${step}`)}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+export function QuotationCommercialCards({ quotation: q }: { quotation: CustomerQuotation }) {
+  const t = useTranslations('Quotation');
+  const locale = useLocale();
+  const stamp = (value: string) => (
+    <time dateTime={value}>
+      {new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value))} UTC
+    </time>
+  );
+  return (
+    <div className="quotation-commercial-terms">
+      <section className="quotation-card">
+        <h2><Truck size={17} aria-hidden="true" />{t('shippingTitle')}</h2>
+        <p>{q.shipping_terms.method === 'INCOTERM' ? q.shipping_terms.incoterm : t('expressCourier')} · {q.shipping_terms.named_place}</p>
+        {q.shipping_terms.cold_chain_required && (
+          <p className="quotation-cold-chain">
+            <Snowflake size={17} aria-hidden="true" />
+            {t('coldChain')}{q.shipping_terms.temperature_range ? ` · ${q.shipping_terms.temperature_range}` : ''}
+          </p>
+        )}
+        {q.shipment && (
+          <div className="quotation-shipment-box">
+            <p>{t('courier')}: <strong>{q.shipment.courier_name}</strong></p>
+            <div className="quotation-copy-row">
+              <p>{t('tracking')}: <strong>{q.shipment.awb_tracking_number}</strong></p>
+              <CopyFieldButton value={q.shipment.awb_tracking_number} label={t('tracking')} />
+            </div>
+            <p>{t('dispatched')}: {stamp(q.shipment.dispatched_at)}</p>
+            {q.shipment.estimated_delivery && <p>{t('estimatedDelivery')}: {stamp(q.shipment.estimated_delivery)}</p>}
+          </div>
+        )}
+        {q.delivered_at && <p>{t('delivered')}: {stamp(q.delivered_at)}</p>}
+      </section>
+
+      <section className="quotation-card">
+        <h2><CreditCard size={17} aria-hidden="true" />{t('paymentTitle')}</h2>
+        <p>{t('wireTerms')}</p>
+        {q.payment && (
+          <div className="quotation-shipment-box">
+            <p>{t('paymentReference')}: <strong>{q.payment.reference}</strong></p>
+            <p>{q.payment.currency} {q.payment.amount}</p>
+            <p>{t('received')}: {stamp(q.payment.received_at)}</p>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+export function QuotationBankCard({ bankDetails }: { bankDetails?: CustomerQuotation['bank_details'] }) {
+  const t = useTranslations('Quotation');
+  return (
+    <section className="quotation-bank quotation-card">
+      <h2>{t('bankTitle')}</h2>
+      {bankDetails ? (
+        <>
+          <p className="small muted quotation-bank-help">{t('bankHelp')}</p>
+          <dl>
+            <dt>{t('beneficiary')}</dt>
+            <dd className="quotation-copy-row">
+              <span>{bankDetails.beneficiary_name}</span>
+              <CopyFieldButton value={bankDetails.beneficiary_name} label={t('beneficiary')} />
+            </dd>
+            <dt>{t('bankName')}</dt>
+            <dd>{bankDetails.bank_name}</dd>
+            <dt>{t('accountNumber')}</dt>
+            <dd className="quotation-copy-row">
+              <span>{bankDetails.account_number}</span>
+              <CopyFieldButton value={bankDetails.account_number} label={t('accountNumber')} />
+            </dd>
+            <dt>SWIFT</dt>
+            <dd className="quotation-copy-row">
+              <span>{bankDetails.swift_code}</span>
+              <CopyFieldButton value={bankDetails.swift_code} label="SWIFT" />
+            </dd>
+            {bankDetails.bank_address && (
+              <>
+                <dt>{t('bankAddress')}</dt>
+                <dd>{bankDetails.bank_address}</dd>
+              </>
+            )}
+            {bankDetails.currency && (
+              <>
+                <dt>{t('bankCurrency')}</dt>
+                <dd>{bankDetails.currency}</dd>
+              </>
+            )}
+          </dl>
+          <p className="quotation-bank-instructions">{bankDetails.instructions}</p>
+        </>
+      ) : (
+        <p className="muted">{t('bankUnavailable')}</p>
+      )}
+    </section>
+  );
+}
+
 export function QuotationDocument({ quotation: q }: { quotation: CustomerQuotation }) {
   const t = useTranslations('Quotation');
   const locale = useLocale();
@@ -48,7 +166,6 @@ export function QuotationDocument({ quotation: q }: { quotation: CustomerQuotati
   );
   const money = (amount: string) => <span className="commercial-amount">{q.billing_currency} {amount}</span>;
   const accepted = acceptedStatus(q.status);
-  const currentStepIndex = lifecycleSteps.indexOf(q.status as (typeof lifecycleSteps)[number]);
 
   return <>
     <div className="quotation-document-title">
@@ -60,22 +177,7 @@ export function QuotationDocument({ quotation: q }: { quotation: CustomerQuotati
       <span className={`quotation-status is-${q.status.toLowerCase()}`}>{t(`status.${q.status}`)}</span>
     </div>
 
-    {currentStepIndex >= 0 && (
-      <ol className="quotation-progress" aria-label={t('progressLabel')}>
-        {lifecycleSteps.map((step, index) => {
-          const done = index < currentStepIndex || (index === currentStepIndex && q.status === 'DELIVERED');
-          const active = index === currentStepIndex && q.status !== 'DELIVERED';
-          return (
-            <li key={step} className={`quotation-progress-step${done ? ' is-done' : active ? ' is-active' : ''}`}>
-              <span className="quotation-progress-marker" aria-hidden="true">
-                {done ? <Check size={14} /> : index + 1}
-              </span>
-              <span className="quotation-progress-label">{t(`steps.${step}`)}</span>
-            </li>
-          );
-        })}
-      </ol>
-    )}
+    <QuotationProgress status={q.status} />
 
     <div className="quotation-facts">
       <section className="quotation-card">
@@ -163,84 +265,7 @@ export function QuotationDocument({ quotation: q }: { quotation: CustomerQuotati
       <div className="quotation-total"><dt>{t('total')}</dt><dd>{money(q.total_amount)}</dd></div>
     </dl>
 
-    <div className="quotation-commercial-terms">
-      <section className="quotation-card">
-        <h2><Truck size={17} aria-hidden="true" />{t('shippingTitle')}</h2>
-        <p>{q.shipping_terms.method === 'INCOTERM' ? q.shipping_terms.incoterm : t('expressCourier')} · {q.shipping_terms.named_place}</p>
-        {q.shipping_terms.cold_chain_required && (
-          <p className="quotation-cold-chain">
-            <Snowflake size={17} aria-hidden="true" />
-            {t('coldChain')}{q.shipping_terms.temperature_range ? ` · ${q.shipping_terms.temperature_range}` : ''}
-          </p>
-        )}
-        {q.shipment && (
-          <div className="quotation-shipment-box">
-            <p>{t('courier')}: <strong>{q.shipment.courier_name}</strong></p>
-            <div className="quotation-copy-row">
-              <p>{t('tracking')}: <strong>{q.shipment.awb_tracking_number}</strong></p>
-              <CopyFieldButton value={q.shipment.awb_tracking_number} label={t('tracking')} />
-            </div>
-            <p>{t('dispatched')}: {stamp(q.shipment.dispatched_at)}</p>
-            {q.shipment.estimated_delivery && <p>{t('estimatedDelivery')}: {stamp(q.shipment.estimated_delivery)}</p>}
-          </div>
-        )}
-        {q.delivered_at && <p>{t('delivered')}: {stamp(q.delivered_at)}</p>}
-      </section>
-
-      <section className="quotation-card">
-        <h2><CreditCard size={17} aria-hidden="true" />{t('paymentTitle')}</h2>
-        <p>{t('wireTerms')}</p>
-        {q.payment && (
-          <div className="quotation-shipment-box">
-            <p>{t('paymentReference')}: <strong>{q.payment.reference}</strong></p>
-            <p>{q.payment.currency} {q.payment.amount}</p>
-            <p>{t('received')}: {stamp(q.payment.received_at)}</p>
-          </div>
-        )}
-      </section>
-    </div>
-
-    <section className="quotation-bank quotation-card">
-      <h2>{t('bankTitle')}</h2>
-      {q.bank_details ? (
-        <>
-          <p className="small muted quotation-bank-help">{t('bankHelp')}</p>
-          <dl>
-            <dt>{t('beneficiary')}</dt>
-            <dd className="quotation-copy-row">
-              <span>{q.bank_details.beneficiary_name}</span>
-              <CopyFieldButton value={q.bank_details.beneficiary_name} label={t('beneficiary')} />
-            </dd>
-            <dt>{t('bankName')}</dt>
-            <dd>{q.bank_details.bank_name}</dd>
-            <dt>{t('accountNumber')}</dt>
-            <dd className="quotation-copy-row">
-              <span>{q.bank_details.account_number}</span>
-              <CopyFieldButton value={q.bank_details.account_number} label={t('accountNumber')} />
-            </dd>
-            <dt>SWIFT</dt>
-            <dd className="quotation-copy-row">
-              <span>{q.bank_details.swift_code}</span>
-              <CopyFieldButton value={q.bank_details.swift_code} label="SWIFT" />
-            </dd>
-            {q.bank_details.bank_address && (
-              <>
-                <dt>{t('bankAddress')}</dt>
-                <dd>{q.bank_details.bank_address}</dd>
-              </>
-            )}
-            {q.bank_details.currency && (
-              <>
-                <dt>{t('bankCurrency')}</dt>
-                <dd>{q.bank_details.currency}</dd>
-              </>
-            )}
-          </dl>
-          <p className="quotation-bank-instructions">{q.bank_details.instructions}</p>
-        </>
-      ) : (
-        <p className="muted">{t('bankUnavailable')}</p>
-      )}
-    </section>
+    <QuotationCommercialCards quotation={q} />
+    <QuotationBankCard bankDetails={q.bank_details} />
   </>;
 }

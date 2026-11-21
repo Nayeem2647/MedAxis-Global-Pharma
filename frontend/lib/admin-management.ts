@@ -128,7 +128,7 @@ export const bannerPlacementLabels: Record<BannerPlacement, string> = {
 export const bannerRatioGuides: Record<BannerPlacement, { ratio: string; note: string }> = {
   MAIN_HERO: {
     ratio: '3:1',
-    note: 'Banner Image/Video Ratio 3:1 (recommended 1440×480 px, JPG/PNG/WebP or MP4/WebM animation).',
+    note: 'Background media: 3:1 (recommended 1440×480 px, JPG/PNG/WebP or MP4/WebM). The homepage headline, search and actions always appear in a panel above it.',
   },
   PRODUCTS_BANNER: {
     ratio: '4:1',
@@ -140,7 +140,7 @@ export const bannerRatioGuides: Record<BannerPlacement, { ratio: string; note: s
   },
   ANNOUNCEMENT: {
     ratio: 'Text Strip',
-    note: 'Optional top utility announcement bar. Media upload is optional for text-only notices.',
+    note: 'Text notices between the contact bar and main navigation on public pages. Images and videos are not displayed in this strip.',
   },
 };
 
@@ -203,6 +203,65 @@ export const bannerRecord = z
     media_url: z.string().refine((value) => publicAssetUrl(value) !== null || publicVideoUrl(value) !== null).optional(),
   })
   .transform(({ _id, ...value }) => ({ ...value, id: _id }));
+
+export const blogCategories = ['GUIDE', 'UPDATE', 'COMPLIANCE', 'SOURCING'] as const;
+export type BlogCategory = (typeof blogCategories)[number];
+export const blogCategoryLabels: Record<BlogCategory, string> = {
+  GUIDE: 'Buyer Guide',
+  UPDATE: 'Product Update',
+  COMPLIANCE: 'Compliance & CoA',
+  SOURCING: 'Sourcing & Cold-Chain',
+};
+const blogTranslation = z.strictObject({
+  title: publicCopy.refine((value) => value.length <= 200),
+  summary: publicCopy.refine((value) => value.length <= 500),
+  body: text(15000).refine(
+    (value) =>
+      !/[$€¥৳]\s*\d|\b(?:USD|EUR|CNY|BDT|RMB)\s*\d|\d\s*(?:美元|人民币)|\d+(?:\.\d+)?\s*%\s*(?:off|discount|折扣)/iu.test(
+        value,
+      ),
+    'Public prices and retail discounts are not allowed.',
+  ),
+});
+export const blogPostBody = z.strictObject({
+  id: uuid.optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use lowercase letters, numbers and hyphens only.'),
+  category: z.enum(blogCategories).default('GUIDE'),
+  cover_image_key: z
+    .string()
+    .max(500)
+    .regex(/^products\/(?:local|s3)\/[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/)
+    .optional(),
+  translations: z.strictObject({
+    en: blogTranslation,
+    zhCN: blogTranslation.optional(),
+  }),
+  is_active: z.boolean(),
+  published_at: date.optional(),
+});
+export const blogPostRecord = z
+  .object({
+    ...wireIdentity,
+    ...blogPostBody.shape,
+    id: z.never().optional(),
+    published_at: date,
+    cover_image_url: z.string().refine((value) => publicAssetUrl(value) !== null).optional(),
+  })
+  .transform(({ _id, ...value }) => ({ ...value, id: _id }));
+export type BlogPostRecord = z.infer<typeof blogPostRecord>;
+export function blogSlugFromTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 200);
+}
 export type ResourceRecord =
   z.infer<typeof productRecord> | z.infer<typeof masterRecord> | z.infer<typeof bannerRecord>;
 export type ProductRecord = z.infer<typeof productRecord>;
@@ -272,7 +331,8 @@ export async function resourceList(kind: ResourceKind, query: URLSearchParams, s
   return { items: result.data, pagination: requirePagination(result.meta) };
 }
 export const MAX_PRODUCT_IMAGES = 6;
-export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 export const videoReceipt = z.object({
   object_key: z.string().regex(/^products\/(?:local|s3)\/videos\/[a-zA-Z0-9_-]+\.(?:mp4|webm)$/),
   url: z.url().refine((value) => publicVideoUrl(value) !== null),
@@ -283,7 +343,7 @@ export const imageReceipt = z.object({
   object_key: z.string().regex(/^products\/(?:local|s3)\/[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp)$/),
   url: z.url().refine((value) => publicAssetUrl(value) !== null),
   mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-  file_size_bytes: z.number().int().positive().max(5_242_880),
+  file_size_bytes: z.number().int().positive().max(MAX_IMAGE_BYTES),
 });
 export function validatedInput<T>(schema: { parse(value: unknown): T }, value: unknown): T {
   try {
@@ -314,12 +374,12 @@ export async function validateCatalogImage(file: File) {
         : mime === 'image/webp' &&
           new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' &&
           new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP';
-  if (!valid || !file.size || file.size > 5_242_880)
-    throw new ApiError('Use JPEG, PNG or WebP up to 5 MiB.', {
+  if (!valid || !file.size || file.size > MAX_IMAGE_BYTES)
+    throw new ApiError('Use JPEG, PNG or WebP up to 25 MiB.', {
       status: 422,
       code: 'VALIDATION_FAILED',
       responseValidated: true,
-      details: [{ field: 'image', issue: 'Use JPEG, PNG or WebP up to 5 MiB.' }],
+      details: [{ field: 'image', issue: 'Use JPEG, PNG or WebP up to 25 MiB.' }],
     });
 }
 export async function adminMultipart<T>(

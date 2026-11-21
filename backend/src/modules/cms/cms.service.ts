@@ -9,11 +9,12 @@ import type { Revalidate } from '../../shared/utils/revalidate.js';
 import { localeKey, uuid, type Locale } from '../catalog/catalog.validator.js';
 import { adminPage } from '../catalog/catalog.admin.reads.js';
 import { productImageUrl, productVideoUrl, publicImageBaseUrl } from '../storage/storage.service.js';
-import { CmsBannerModel } from './cms.schema.js';
+import { CmsBannerModel, CmsBlogModel } from './cms.schema.js';
 
 export const bannerPlacement = z.enum(['MAIN_HERO', 'PRODUCTS_BANNER', 'BLOG_BANNER', 'ANNOUNCEMENT']);
 export const bannerMediaType = z.enum(['IMAGE', 'VIDEO']);
 export const bannerResourceType = z.enum(['CUSTOM', 'PRODUCT', 'CATEGORY', 'MANUFACTURER', 'GENERIC']);
+export const blogCategory = z.enum(['GUIDE', 'UPDATE', 'COMPLIANCE', 'SOURCING']);
 
 const IMAGE_KEY_RE = /^products\/(?:local|s3)\/[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp)$/;
 const VIDEO_KEY_RE = /^products\/(?:local|s3)\/videos\/[a-zA-Z0-9_-]+\.(?:mp4|webm)$/;
@@ -48,6 +49,54 @@ const publicCopy = (max: number) =>
       'Public prices and discounts are not allowed.',
     );
 const translation = z.object({ title: publicCopy(200), body: publicCopy(5000).transform(cleanHtml) }).strict();
+
+const blogTranslation = z
+  .object({
+    title: publicCopy(200),
+    summary: publicCopy(500),
+    body: publicCopy(15000).transform(cleanHtml),
+  })
+  .strict();
+
+export const blogQuery = z
+  .object({
+    ...adminPage,
+    q: z.string().trim().min(1).max(100).optional(),
+    is_active: z.enum(['true', 'false']).optional(),
+    category: blogCategory.optional(),
+  })
+  .strict();
+
+export const publicBlogQuery = z
+  .object({
+    locale: z.enum(['en', 'zh-CN']).default('en'),
+    category: blogCategory.optional(),
+  })
+  .strict();
+
+export const blogBody = z
+  .object({
+    id: uuid.optional(),
+    slug: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase letters, numbers and hyphens.'),
+    category: blogCategory.default('GUIDE'),
+    cover_image_key: z
+      .string()
+      .max(500)
+      .refine((value) => IMAGE_KEY_RE.test(value), 'Invalid cover image key.')
+      .optional(),
+    translations: z.object({ en: blogTranslation, zhCN: blogTranslation.optional() }).strict(),
+    is_active: z.boolean().default(true),
+    published_at: z.iso
+      .datetime({ offset: true })
+      .transform((value) => new Date(value))
+      .optional(),
+  })
+  .strict();
 export const bannerBody = z
   .object({
     id: uuid.optional(),
@@ -250,5 +299,152 @@ export function createCmsService(revalidate: Revalidate, mediaEnv?: BannerMediaE
     revalidate(req.requestId);
     return deleted;
   }
-  return { active, save, list, detail, remove };
+
+  const blogProjection = {
+    slug: 1,
+    category: 1,
+    cover_image_key: 1,
+    translations: 1,
+    is_active: 1,
+    published_at: 1,
+    created_at: 1,
+    updated_at: 1,
+  };
+
+  function withBlogMediaUrl<T extends { cover_image_key?: string }>(row: T) {
+    const cover_image_url = resolveMediaUrl(mediaEnv, 'IMAGE', row.cover_image_key);
+    return { ...row, ...(cover_image_url ? { cover_image_url } : {}) };
+  }
+
+  async function listBlogs(query: z.infer<typeof blogQuery>) {
+    const filter: Record<string, unknown> = {};
+    if (query.is_active !== undefined) filter.is_active = query.is_active === 'true';
+    if (query.category) filter.category = query.category;
+    if (query.q) {
+      const escaped = query.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = ['translations.en.title', 'translations.zhCN.title', 'slug'].map((key) => ({
+        [key]: new RegExp(escaped, 'i'),
+      }));
+    }
+    const [items, total] = await Promise.all([
+      CmsBlogModel.find(filter)
+        .select(blogProjection)
+        .sort({ published_at: -1, _id: 1 })
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit)
+        .lean(),
+      CmsBlogModel.countDocuments(filter),
+    ]);
+    return { items: items.map(withBlogMediaUrl), total };
+  }
+
+  async function blogDetail(id: string) {
+    const row = await CmsBlogModel.findById(id).select(blogProjection).lean();
+    if (!row) throw AppError.notFound();
+    return withBlogMediaUrl(row);
+  }
+
+  async function activeBlogs(locale: Locale, category?: z.infer<typeof blogCategory>) {
+    const filter: Record<string, unknown> = { is_active: true };
+    if (category) filter.category = category;
+    const rows = await CmsBlogModel.find(filter)
+      .select({
+        _id: 1,
+        slug: 1,
+        category: 1,
+        cover_image_key: 1,
+        'translations.en.title': 1,
+        'translations.en.summary': 1,
+        'translations.en.body': 1,
+        'translations.zhCN.title': 1,
+        'translations.zhCN.summary': 1,
+        'translations.zhCN.body': 1,
+        published_at: 1,
+      })
+      .sort({ published_at: -1, _id: 1 })
+      .limit(50)
+      .lean();
+    return rows.map((row) => {
+      const content = row.translations[localeKey(locale)] ?? row.translations.en;
+      const cover_image_url = resolveMediaUrl(mediaEnv, 'IMAGE', row.cover_image_key);
+      return {
+        id: row._id,
+        slug: row.slug,
+        category: row.category,
+        ...(cover_image_url ? { cover_image_url } : {}),
+        title: content.title,
+        summary: content.summary,
+        body_html: cleanHtml(content.body),
+        published_at: row.published_at.toISOString(),
+      };
+    });
+  }
+
+  async function saveBlog(req: Request, body: z.infer<typeof blogBody>) {
+    const { id, ...fields } = body;
+    try {
+      const record = await mongoose.connection.transaction(async (session) => {
+        const duplicate = await CmsBlogModel.exists({
+          slug: fields.slug,
+          ...(id ? { _id: { $ne: id } } : {}),
+        }).session(session);
+        if (duplicate) throw AppError.conflict('Another blog post already uses this slug.');
+        const doc = id ? await CmsBlogModel.findById(id).session(session) : new CmsBlogModel();
+        if (!doc) throw AppError.notFound();
+        doc.set({
+          ...fields,
+          published_at: fields.published_at ?? doc.published_at ?? new Date(),
+        });
+        if (!fields.cover_image_key) doc.set('cover_image_key', undefined);
+        if (!fields.translations.zhCN) doc.set('translations.zhCN', undefined);
+        await doc.save({ session });
+        await writeAuditLog(
+          req,
+          {
+            actor_type: 'SUPER_ADMIN',
+            actor_id: req.admin!.id,
+            action: 'CMS_BLOG_SAVED',
+            entity_type: 'cms_blogs',
+            entity_id: doc._id,
+          },
+          session,
+        );
+        return doc.toObject();
+      });
+      revalidate(req.requestId);
+      return withBlogMediaUrl(record);
+    } catch (error: unknown) {
+      if ((error as { code?: number } | null)?.code === 11000) {
+        throw AppError.conflict('Another blog post already uses this slug.');
+      }
+      throw error;
+    }
+  }
+
+  async function removeBlog(req: Request, id: string, expectedUpdatedAt: Date) {
+    const deleted = await mongoose.connection.transaction(async (session) => {
+      const existing = await CmsBlogModel.findById(id).session(session);
+      if (!existing) throw AppError.notFound();
+      if (existing.updated_at.getTime() !== expectedUpdatedAt.getTime())
+        throw AppError.conflict('Blog post changed on the server. Refresh before deleting.');
+      const res = await CmsBlogModel.deleteOne({ _id: id, updated_at: expectedUpdatedAt }).session(session);
+      if (!res.deletedCount) throw AppError.conflict('Blog post changed on the server. Refresh before deleting.');
+      await writeAuditLog(
+        req,
+        {
+          actor_type: 'SUPER_ADMIN',
+          actor_id: req.admin!.id,
+          action: 'CMS_BLOG_DELETED',
+          entity_type: 'cms_blogs',
+          entity_id: id,
+        },
+        session,
+      );
+      return { id, deleted: true as const };
+    });
+    revalidate(req.requestId);
+    return deleted;
+  }
+
+  return { active, save, list, detail, remove, listBlogs, blogDetail, activeBlogs, saveBlog, removeBlog };
 }

@@ -148,7 +148,7 @@ historical source slugs are reserved against reuse to prevent loops. Writes
 touch referenced masters to serialize against concurrent name/deactivation
 changes. Atlas / replica-set transactions are required.
 
-POST `/v1/admin/catalog/images` accepts multipart field `image`, maximum 5 MiB.
+POST `/v1/admin/catalog/images` accepts multipart field `image`, maximum 25 MiB.
 Actual content must be JPEG, PNG or WebP. The response contains an opaque
 `object_key`, public CDN URL, MIME type and size. Put that key into a product's
 `image_keys`; original filenames are not used as storage keys.
@@ -157,7 +157,7 @@ Product writes accept at most six ordered `image_keys`: the first is the main
 picture and the remaining five are additional pictures. Optional `seo_image_key`
 selects a separate social sharing image; metadata falls back to the main image.
 POST `/v1/admin/catalog/videos` accepts one multipart `video` (MP4 or WebM,
-maximum 50 MiB), checks the actual file type, and returns the same upload receipt
+maximum 100 MiB), checks the actual file type, and returns the same upload receipt
 shape. Persist its key as optional `video_key`. Local development stores videos
 under `products/local/videos/` and serves byte ranges for playback and seeking.
 Videos never require a third-party embed or block publishing when omitted.

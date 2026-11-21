@@ -43,12 +43,12 @@ export default async function ProductsPage({ params, searchParams }: Props) {
   } catch (failure: unknown) { error = failure; }
   return <main id="main-content" className="catalog-page"><div className="site-container section">
     <Breadcrumbs locale={locale} entries={[{ name: t('products'), href: path }]}/>
+    <div className="catalog-heading"><p className="eyebrow">MEDAXIS GLOBAL PHARMA</p><h1>{t('products')}</h1><p>{t('catalogDescription')}</p></div>
     {productsBanners.length > 0 && (
       <div className="products-banner-slot">
         <PlacementBanner banners={productsBanners} locale={locale} variant="products" />
       </div>
     )}
-    <div className="catalog-heading"><p className="eyebrow">MEDAXIS GLOBAL PHARMA</p><h1>{t('products')}</h1><p>{t('catalogDescription')}</p></div>
     <Filters locale={locale} path={path} query={query} facets={data?.facets ?? { dosage_forms: [], cold_chain: [] }}/>
     {data?.products.length ? <>
       <CatalogGridShell resultsLabel={t('results', { count: data.pagination.total_items })} viewLabel={t('viewMode')} gridLabel={t('gridView')} listLabel={t('listView')}>

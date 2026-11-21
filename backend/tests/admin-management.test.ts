@@ -7,7 +7,7 @@ import { createLogger } from '../src/shared/utils/logger.js';
 import { validEnv } from './helpers/env.js';
 import { adminCatalogQuery, productAdminProjection } from '../src/modules/catalog/catalog.admin.reads.js';
 import { quotationListQuery, quotationSummaryQuery } from '../src/modules/quotation/quotation.admin.reads.js';
-import { bannerBody, bannerQuery } from '../src/modules/cms/cms.service.js';
+import { bannerBody, bannerQuery, blogBody, blogQuery } from '../src/modules/cms/cms.service.js';
 import { productPatch, reviewMetadata } from '../src/modules/catalog/catalog.validator.js';
 import { csvRow } from '../src/modules/catalog/catalog.csv.service.js';
 describe('registered Step 8 boundaries', () => {
@@ -17,6 +17,7 @@ describe('registered Step 8 boundaries', () => {
     '/v1/admin/catalog/generics',
     '/v1/admin/catalog/categories',
     '/v1/admin/cms/banners',
+    '/v1/admin/cms/blogs',
     '/v1/admin/quotations',
     '/v1/admin/quotations/summary',
   ])('requires full Express auth for %s', async (path) => {
@@ -33,6 +34,24 @@ describe('registered Step 8 boundaries', () => {
     expect(quotationListQuery.safeParse({ sort: 'price' }).success).toBe(false);
     expect(quotationSummaryQuery.safeParse({ window_hours: 169 }).success).toBe(false);
     expect(bannerQuery.safeParse({ featured: true }).success).toBe(false);
+    expect(blogQuery.safeParse({ category: 'GUIDE' }).success).toBe(true);
+    expect(blogQuery.safeParse({ featured: true }).success).toBe(false);
+    expect(
+      blogBody.safeParse({
+        slug: 'cold-chain-guide',
+        category: 'GUIDE',
+        translations: { en: { title: 'Cold-chain export guide', summary: 'Practical SOP.', body: '<p>Guide body</p>' } },
+        is_active: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      blogBody.safeParse({
+        slug: 'Bad Slug!',
+        category: 'GUIDE',
+        translations: { en: { title: 'Guide', summary: 'Summary', body: 'Body' } },
+        is_active: true,
+      }).success,
+    ).toBe(false);
     expect(Object.keys(productAdminProjection).join(' ')).not.toMatch(/price|procurement|margin|token/);
   });
   it('registers real review metadata, explicit clearing, and prevents future/inferred reviews', () => {

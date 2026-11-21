@@ -18,7 +18,8 @@ export interface PrescriptionObject {
   encryption: { algorithm: 'aes-256-gcm'; iv: string; auth_tag: string; key_id: string };
 }
 export const MAX_FILE_BYTES = 5_242_880;
-export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 const DEFAULT_LOCAL_UPLOADS_DIR = fileURLToPath(new URL('../../../uploads', import.meta.url));
 
 export function isS3ObjectKey(kind: StorageBucket, key: string): boolean {
@@ -101,7 +102,12 @@ export async function readLocalMediaFile(
   const filePath = resolveLocalObjectPath(localStorageRoot(env), kind, key);
   try {
     const bytes = await readFile(filePath);
-    if (bytes.length > (/\.(?:mp4|webm)$/.test(key) ? MAX_VIDEO_BYTES : MAX_FILE_BYTES)) throw AppError.unavailable('Storage download failed.');
+    const limit = /\.(?:mp4|webm)$/i.test(key)
+      ? MAX_VIDEO_BYTES
+      : kind === 'products' && /\.(?:jpg|jpeg|png|webp)$/i.test(key)
+        ? MAX_IMAGE_BYTES
+        : MAX_FILE_BYTES;
+    if (bytes.length > limit) throw AppError.unavailable('Storage download failed.');
     return { bytes, contentType: localMimeType(key) };
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') throw AppError.notFound();
@@ -236,7 +242,7 @@ export function createStorageService(
     safeKey(kind, key);
     if (isLocal && source === 's3') {
       const target = resolveLocalObjectPath(localRoot, kind, key);
-      const maximum = kind === 'quotes' ? 25 * 1024 * 1024 : MAX_FILE_BYTES;
+      const maximum = kind === 'quotes' ? 25 * 1024 * 1024 : kind === 'products' ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
       try {
         const bytes = await readFile(target);
         if (bytes.length > maximum) throw new Error();
@@ -253,7 +259,7 @@ export function createStorageService(
       const result = await connection.send(new GetObjectCommand({ Bucket: legacyName ?? bucket(kind), Key: key }));
       if (!result.Body) throw new Error();
       // Bound encrypted medical downloads before buffering a corrupt or replaced object.
-      const maximum = kind === 'quotes' ? 25 * 1024 * 1024 : MAX_FILE_BYTES;
+      const maximum = kind === 'quotes' ? 25 * 1024 * 1024 : kind === 'products' ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
       const chunks: Buffer[] = [];
       let length = 0;
       for await (const chunk of result.Body as AsyncIterable<Uint8Array>) {
@@ -277,8 +283,8 @@ export function createStorageService(
     return (await readObject(kind, key, source)).bytes;
   }
   async function uploadPublicImage(buffer: Buffer, folder?: 'manufacturers' | 'generics' | 'categories') {
-    if (!buffer.length || buffer.length > MAX_FILE_BYTES)
-      throw AppError.validation([{ field: 'image', issue: 'Image must be no larger than 5 MiB.' }]);
+    if (!buffer.length || buffer.length > MAX_IMAGE_BYTES)
+      throw AppError.validation([{ field: 'image', issue: 'Image must be no larger than 25 MiB.' }]);
     const type = await fileTypeFromBuffer(buffer).catch(() => undefined);
     if (!type || !['image/jpeg', 'image/png', 'image/webp'].includes(type.mime))
       throw AppError.validation([{ field: 'image', issue: 'Only JPEG, PNG and WebP images are allowed.' }]);
@@ -292,7 +298,7 @@ export function createStorageService(
   }
   async function uploadPublicVideo(buffer: Buffer) {
     if (!buffer.length || buffer.length > MAX_VIDEO_BYTES)
-      throw AppError.validation([{ field: 'video', issue: 'Video must be no larger than 50 MiB.' }]);
+      throw AppError.validation([{ field: 'video', issue: 'Video must be no larger than 100 MiB.' }]);
     const type = await fileTypeFromBuffer(buffer).catch(() => undefined);
     if (!type || !['video/mp4', 'video/webm'].includes(type.mime))
       throw AppError.validation([{ field: 'video', issue: 'Only MP4 and WebM videos are allowed.' }]);

@@ -28,13 +28,14 @@ test('direct Chinese catalog entry is never redirected by English preferences', 
   expect(response.status()).toBe(200);
 });
 
-test('Chinese direct entry keeps its locale and emits reciprocal metadata without a Link header', async ({ page }) => {
+test('Chinese direct entry keeps its locale and emits reciprocal metadata without HTTP language alternates', async ({ page }) => {
   await page.setExtraHTTPHeaders({ 'cf-ipcountry': 'US', 'accept-language': 'en-US', cookie: 'medaxis_locale=en' });
   const response = await page.goto('/zh-CN');
   expect(response?.status()).toBe(200);
-  expect(response?.headers().link).toBeUndefined();
+  // Next.js may preload styles here; language alternates belong in the HTML metadata.
+  expect(response?.headers().link ?? '').not.toMatch(/rel="?alternate"?|hreflang=/i);
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('连接全球的医药采购服务。');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('您的全球医药采购合作伙伴。');
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://medaxisglobalpharma.com/zh-CN');
   for (const locale of ['en', 'zh-CN', 'x-default']) {
     await expect(page.locator(`link[rel="alternate"][hreflang="${locale}"]`)).toHaveAttribute('href', `https://medaxisglobalpharma.com/${locale === 'zh-CN' ? 'zh-CN' : 'en'}`);
@@ -47,7 +48,7 @@ test('serves bilingual content without Google network dependencies or browser er
   page.on('request', (request) => requests.push(request.url()));
   page.on('pageerror', (error) => errors.push(error.message));
   const response = await page.goto('/en');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Pharmaceutical sourcing');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your Global Partner in Pharmaceutical Sourcing.');
   expect(response?.headers()['content-security-policy']).toContain('https://challenges.cloudflare.com');
   expect(requests.filter((url) => /googleapis\.com|gstatic\.com|google-analytics\.com|googletagmanager\.com|recaptcha/i.test(url))).toEqual([]);
   expect(errors).toEqual([]);

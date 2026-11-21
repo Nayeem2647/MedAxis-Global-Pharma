@@ -6,7 +6,15 @@ import { adminBoundary } from '../../shared/middleware/adminBoundary.js';
 import { sendPaginated, sendSuccess } from '../../shared/utils/response.js';
 import type { Revalidate } from '../../shared/utils/revalidate.js';
 import { catalogDelete, uuid } from '../catalog/catalog.validator.js';
-import { bannerBody, bannerQuery, createCmsService, publicBannerQuery } from './cms.service.js';
+import {
+  bannerBody,
+  bannerQuery,
+  blogBody,
+  blogQuery,
+  createCmsService,
+  publicBannerQuery,
+  publicBlogQuery,
+} from './cms.service.js';
 
 export function createCmsRouters(env: AppEnv, revalidate: Revalidate) {
   const service = createCmsService(revalidate, env);
@@ -15,6 +23,10 @@ export function createCmsRouters(env: AppEnv, revalidate: Revalidate) {
   publicRouter.get('/banners', async (req, res) => {
     const query = publicBannerQuery.parse(req.query);
     sendSuccess(res, await service.active(query.locale, query.placement));
+  });
+  publicRouter.get('/blogs', async (req, res) => {
+    const query = publicBlogQuery.parse(req.query);
+    sendSuccess(res, await service.activeBlogs(query.locale, query.category));
   });
   adminRouter.use(adminBoundary(env), adminAuth(env));
   adminRouter.get('/banners', async (req, res) => {
@@ -33,6 +45,23 @@ export function createCmsRouters(env: AppEnv, revalidate: Revalidate) {
     z.object({}).strict().parse(req.query);
     const input = catalogDelete.parse(req.body);
     sendSuccess(res, await service.remove(req, uuid.parse(req.params.id), new Date(input.expected_updated_at)));
+  });
+  adminRouter.get('/blogs', async (req, res) => {
+    const query = blogQuery.parse(req.query);
+    const result = await service.listBlogs(query);
+    sendPaginated(res, result.items, { ...query, totalItems: result.total });
+  });
+  adminRouter.get('/blogs/:id', async (req, res) => {
+    z.object({}).strict().parse(req.query);
+    sendSuccess(res, await service.blogDetail(uuid.parse(req.params.id)));
+  });
+  adminRouter.post('/blogs', async (req, res) => {
+    sendSuccess(res, await service.saveBlog(req, blogBody.parse(req.body)));
+  });
+  adminRouter.delete('/blogs/:id', async (req, res) => {
+    z.object({}).strict().parse(req.query);
+    const input = catalogDelete.parse(req.body);
+    sendSuccess(res, await service.removeBlog(req, uuid.parse(req.params.id), new Date(input.expected_updated_at)));
   });
   return { publicRouter, adminRouter };
 }

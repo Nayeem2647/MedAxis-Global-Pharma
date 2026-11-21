@@ -466,7 +466,7 @@ function LegacyResourceEditor({
               <section>
                 <h2>Catalog images</h2>
                 <p className="small muted">
-                  JPEG, PNG or WebP, up to 5 MiB each. Upload stores a server-issued asset key. Removing a key here
+                  JPEG, PNG or WebP, up to 25 MiB each. Upload stores a server-issued asset key. Removing a key here
                   removes its product association.
                 </p>
                 <label>

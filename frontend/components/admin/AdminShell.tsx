@@ -3,7 +3,22 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Activity, ChevronDown, FileText, Image as ImageIcon, Layers, LayoutDashboard, LogOut, Pill, Plus, ShieldCheck, Star, Store } from 'lucide-react';
+import {
+  Activity,
+  ChevronDown,
+  ClipboardList,
+  FileText,
+  Image as ImageIcon,
+  Layers,
+  LayoutDashboard,
+  Newspaper,
+  Pill,
+  Settings,
+  ShieldCheck,
+  Star,
+  Store,
+  Users,
+} from 'lucide-react';
 import { z } from 'zod';
 import { useAdminStream } from '../../hooks/useAdminStream';
 import { notifyAdminSessionChange } from '../../lib/admin-auth-events';
@@ -20,7 +35,8 @@ export function AdminLink({ href, children, className, current, title }: { href:
 }
 export function useAdminLive() { const value = useContext(LiveContext); if (!value) throw new Error('Admin live context is required.'); return value; }
 function ProductNavigation({ pathname, active }: { pathname: string; active: boolean }) {
-  const [expanded, setExpanded] = useState(false);
+  const inProducts = pathname.startsWith('/admin/catalog/products') || pathname === '/admin/catalog/import';
+  const [expanded, setExpanded] = useState(inProducts);
   const [count, setCount] = useState<number>();
   useEffect(() => {
     if (!active) return;
@@ -36,7 +52,7 @@ function ProductNavigation({ pathname, active }: { pathname: string; active: boo
   }, [active, pathname]);
   return <div className="admin-catalog-menu">
     <button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-product-links" onClick={() => setExpanded((value) => !value)}>
-      <Store size={20} aria-hidden="true"/><span>Manage Product</span><ChevronDown size={18} className="admin-catalog-chevron" aria-hidden="true"/>
+      <Store size={18} aria-hidden="true"/><span>Manage Product</span><ChevronDown size={16} className="admin-catalog-chevron" aria-hidden="true"/>
     </button>
     <ul id="admin-product-links" className="admin-catalog-links" hidden={!expanded}>
       <li><AdminLink href="/admin/catalog/products" current={pathname === '/admin/catalog/products' || (pathname.startsWith('/admin/catalog/products/') && pathname !== '/admin/catalog/products/new')}><span>Product List</span>{active && count !== undefined && <span className="admin-product-count" aria-label={`${count} products`}>{count}</span>}</AdminLink></li>
@@ -55,9 +71,9 @@ function MasterNavigation({ pathname, kind }: { pathname: string; kind: MasterDi
 
   return <div className={`admin-catalog-menu admin-directory-menu admin-${masterLabels[kind].toLowerCase()}-menu`}>
     <button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls={linksId} onClick={() => setExpanded((value) => !value)}>
-      {manufacturer ? <Star size={20} fill="currentColor" aria-hidden="true" /> : kind === 'categories' ? <Layers size={20} aria-hidden="true" /> : <Pill size={20} aria-hidden="true" />}
+      {manufacturer ? <Star size={18} fill="currentColor" aria-hidden="true" /> : kind === 'categories' ? <Layers size={18} aria-hidden="true" /> : <Pill size={18} aria-hidden="true" />}
       <span>{kind === 'categories' ? 'Categories' : `${masterLabels[kind]}s`}</span>
-      <ChevronDown size={18} className="admin-catalog-chevron" aria-hidden="true" />
+      <ChevronDown size={16} className="admin-catalog-chevron" aria-hidden="true" />
     </button>
     <ul id={linksId} className="admin-catalog-links" hidden={!expanded}>
       <li><AdminLink href={createPath} current={pathname === createPath}>Add new</AdminLink></li>
@@ -72,7 +88,7 @@ function QuotationNavigation({ pathname }: { pathname: string }) {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
   const links = [['/admin/quotations/overview', 'Overview'], ['/admin/quotations', 'All quotations'], ['/admin/quotations/new', 'Create from RFQ'], ['/admin/quotations/follow-ups', 'Follow-ups']];
-  return <div className="admin-catalog-menu admin-directory-menu"><button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-quotation-links" disabled={!ready} onClick={() => setExpanded((value) => !value)}><FileText size={20} aria-hidden="true" /><span>Quotations</span><ChevronDown size={18} className="admin-catalog-chevron" aria-hidden="true" /></button><ul id="admin-quotation-links" className="admin-catalog-links" hidden={!expanded}>{links.map(([href, label]) => <li key={href}><AdminLink href={href} current={pathname === href || href === '/admin/quotations' && inDirectory && !links.some(([route]) => route === pathname)}>{label}</AdminLink></li>)}</ul></div>;
+  return <div className="admin-catalog-menu admin-directory-menu"><button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-quotation-links" disabled={!ready} onClick={() => setExpanded((value) => !value)}><FileText size={18} aria-hidden="true" /><span>Quotations</span><ChevronDown size={16} className="admin-catalog-chevron" aria-hidden="true" /></button><ul id="admin-quotation-links" className="admin-catalog-links" hidden={!expanded}>{links.map(([href, label]) => <li key={href}><AdminLink href={href} current={pathname === href || href === '/admin/quotations' && inDirectory && !links.some(([route]) => route === pathname)}>{label}</AdminLink></li>)}</ul></div>;
 }
 
 export function AdminShell({ session, children }: { session: AdminSession; children: ReactNode }) {
@@ -118,15 +134,29 @@ export function AdminShell({ session, children }: { session: AdminSession; child
     return () => { clearInterval(timer); for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart']) window.removeEventListener(type, activity); window.removeEventListener('pageshow', restore); document.removeEventListener('visibilitychange', tick); void audio.current?.close(); };
     // Human activity controls the client idle deadline; stream messages never reset it.
   }, []);
-  return <LiveContext.Provider value={{ revision, active, expire }}><div className="admin-console"><AdminTopbar session={session} active={active} revision={revision} streamState={state} onLogout={() => void logout()}/><aside className="admin-sidebar"><div className="admin-brand"><span className="brand-mark"><Plus size={25}/></span><span>MedAxis<small>ADMIN CONSOLE</small></span></div><nav aria-label="Admin navigation">
-    <AdminLink href="/admin" current={pathname === '/admin'}><LayoutDashboard size={18}/>Dashboard</AdminLink><AdminLink href="/admin/rfqs" current={pathname === '/admin/rfqs'}><Activity size={18}/>RFQ inbox</AdminLink><QuotationNavigation pathname={pathname}/>
-    <ProductNavigation pathname={pathname} active={active}/>
-    <MasterNavigation pathname={pathname} kind="manufacturers"/>
-    <MasterNavigation pathname={pathname} kind="generics"/>
-    <MasterNavigation pathname={pathname} kind="categories"/>
-    <AdminLink href="/admin/catalog/banners" current={pathname.startsWith('/admin/catalog/banners')}><ImageIcon size={18}/>Banner Setup</AdminLink>
-    {[['/admin/customers','Customers'],['/admin/settings','Settings'],['/admin/audit-logs','Audit logs']].map(([href,label])=><AdminLink key={href} href={href} current={pathname===href}>{label}</AdminLink>)}<AdminLink href="/admin/sessions" current={pathname === '/admin/sessions'}><ShieldCheck size={18}/>Sessions</AdminLink></nav>
-    <div className="admin-sidebar-footer"><label className="admin-sound"><input type="checkbox" checked={sound} disabled={!active} onChange={(event) => void changeSound(event.currentTarget.checked)}/>Sound alerts</label><p className="small">30-minute inactivity limit</p><button type="button" onClick={() => void logout()}><LogOut size={17}/>Sign out</button></div></aside>
+  return <LiveContext.Provider value={{ revision, active, expire }}><div className="admin-console"><AdminTopbar session={session} active={active} revision={revision} streamState={state} sound={sound} onSoundChange={(value) => void changeSound(value)} onLogout={() => void logout()}/>
+    <aside className="admin-sidebar">
+      <nav aria-label="Admin navigation">
+        <p className="admin-nav-group-label">Overview</p>
+        <AdminLink href="/admin" current={pathname === '/admin'}><LayoutDashboard size={18} aria-hidden="true"/><span>Dashboard</span></AdminLink>
+        <AdminLink href="/admin/rfqs" current={pathname.startsWith('/admin/rfqs')}><Activity size={18} aria-hidden="true"/><span>RFQ inbox</span></AdminLink>
+        <QuotationNavigation pathname={pathname}/>
+
+        <p className="admin-nav-group-label">Catalog &amp; Content</p>
+        <ProductNavigation pathname={pathname} active={active}/>
+        <MasterNavigation pathname={pathname} kind="manufacturers"/>
+        <MasterNavigation pathname={pathname} kind="generics"/>
+        <MasterNavigation pathname={pathname} kind="categories"/>
+        <AdminLink href="/admin/catalog/banners" current={pathname.startsWith('/admin/catalog/banners')}><ImageIcon size={18} aria-hidden="true"/><span>Banner Setup</span></AdminLink>
+        <AdminLink href="/admin/blog" current={pathname.startsWith('/admin/blog')}><Newspaper size={18} aria-hidden="true"/><span>Blog</span></AdminLink>
+
+        <p className="admin-nav-group-label">Operations &amp; System</p>
+        <AdminLink href="/admin/customers" current={pathname.startsWith('/admin/customers')}><Users size={18} aria-hidden="true"/><span>Customers</span></AdminLink>
+        <AdminLink href="/admin/settings" current={pathname.startsWith('/admin/settings')}><Settings size={18} aria-hidden="true"/><span>Settings</span></AdminLink>
+        <AdminLink href="/admin/audit-logs" current={pathname.startsWith('/admin/audit-logs')}><ClipboardList size={18} aria-hidden="true"/><span>Audit logs</span></AdminLink>
+        <AdminLink href="/admin/sessions" current={pathname === '/admin/sessions'}><ShieldCheck size={18} aria-hidden="true"/><span>Sessions</span></AdminLink>
+      </nav>
+    </aside>
     <div className="admin-workspace">
       {remaining <= 120_000 && active && <p className="admin-idle-warning" role="status">You will be signed out after {Math.ceil(remaining / 60_000)} minute(s) without activity.</p>}
       {notice && active && <p className="admin-live-notice" role="status">{notice}</p>}

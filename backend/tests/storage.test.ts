@@ -12,6 +12,7 @@ import {
   createStorageService,
   initializeLocalStorage,
   MAX_FILE_BYTES,
+  MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
   productImageUrl,
   validatePrescription,
@@ -131,6 +132,9 @@ describe('S3 object storage with legacy R2 reads', () => {
     expect(productImageUrl(env.S3_PUBLIC_BASE_URL, 'https://attacker.test/a.png')).toBeNull();
     const logo = await storage.uploadPublicImage(png, 'manufacturers');
     expect(logo.url).toMatch(/^https:\/\/cdn\.example\.test\/products\/s3\/manufacturers\/.+\.png$/);
+    const sixMibPng = Buffer.concat([png, Buffer.alloc(6 * 1024 * 1024)]);
+    expect((await storage.uploadPublicImage(sixMibPng)).file_size_bytes).toBe(sixMibPng.length);
+    await expect(storage.uploadPublicImage(Buffer.alloc(MAX_IMAGE_BYTES + 1))).rejects.toMatchObject({ status: 422 });
   });
   it('routes legacy reads to R2 and refuses to issue a legacy delete', async () => {
     const send = vi.fn();

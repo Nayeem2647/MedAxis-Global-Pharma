@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FileText, Plus, Search } from "lucide-react";
+import { AlertTriangle, FileText, Plus, Search } from "lucide-react";
 import { guardedAdminRead } from "../../lib/admin-server";
 import {
   paramsFor,
@@ -23,6 +23,36 @@ import { QuotationMetrics } from "./QuotationMetrics";
 export type QuotationSearch = Promise<
   Record<string, string | string[] | undefined>
 >;
+
+const DIRECTORY_STATUS_TABS = [
+  "DRAFT",
+  "SENT",
+  "ACCEPTED",
+  "PAYMENT_RECEIVED",
+  "DISPATCHED",
+  "DELIVERED",
+  "DECLINED",
+  "VALIDITY_EXPIRED",
+  "PAYMENT_EXPIRED",
+] as const;
+
+function deadlineUrgency(
+  row: z.infer<typeof quotationRow>,
+  referenceMs: number,
+): "urgent" | "overdue" | null {
+  if (!["DRAFT", "SENT", "ACCEPTED"].includes(row.version.status)) return null;
+  const iso =
+    row.version.status === "ACCEPTED"
+      ? row.version.reservation_expires_at
+      : row.version.valid_until;
+  if (!iso) return null;
+  const deadlineMs = Date.parse(iso);
+  if (!Number.isFinite(deadlineMs)) return null;
+  if (deadlineMs <= referenceMs) return "overdue";
+  if (deadlineMs - referenceMs <= 24 * 60 * 60 * 1000) return "urgent";
+  return null;
+}
+
 export async function QuotationDirectory({
   searchParams,
   followUps = false,
@@ -79,14 +109,7 @@ export async function QuotationDirectory({
           filter: {},
           current: !query.status && !query.worklist,
         },
-        ...[
-          "DRAFT",
-          "SENT",
-          "ACCEPTED",
-          "PAYMENT_RECEIVED",
-          "DISPATCHED",
-          "DELIVERED",
-        ].map((status) => ({
+        ...DIRECTORY_STATUS_TABS.map((status) => ({
           label: quotationStatus(status),
           filter: { status },
           current: query.status === status && !query.worklist,
@@ -94,6 +117,10 @@ export async function QuotationDirectory({
       ];
   const rows = list.result.data;
   const first = rows.length ? (pagination.page - 1) * pagination.limit + 1 : 0;
+  const summaryData = summary.ok ? summary.result.data : null;
+  const referenceMs = summaryData
+    ? Date.parse(summaryData.as_of)
+    : Date.now();
   return (
     <div className="admin-products-page quotation-directory">
       <div className="admin-page-heading">
@@ -113,12 +140,22 @@ export async function QuotationDirectory({
               : "Prepare, send and track customer quotations in one place."}
           </p>
         </div>
-        <AdminLink href="/admin/quotations/new" className="button primary">
-          <Plus size={18} aria-hidden="true" />
-          Create from RFQ
-        </AdminLink>
+        <div className="quotation-heading-actions">
+          <AdminLink
+            href={
+              followUps ? "/admin/quotations" : "/admin/quotations/overview"
+            }
+            className="button secondary"
+          >
+            {followUps ? "All quotations" : "Overview & workflow"}
+          </AdminLink>
+          <AdminLink href="/admin/quotations/new" className="button primary">
+            <Plus size={18} aria-hidden="true" />
+            Create from RFQ
+          </AdminLink>
+        </div>
       </div>
-      <QuotationMetrics value={summary.ok ? summary.result.data : null} />
+      <QuotationMetrics value={summaryData} compact />
       <section className="admin-products-list" aria-label="Quotation list">
         <nav className="quotation-tabs" aria-label="Quotation views">
           {tabs.map((tab) => (
@@ -195,7 +232,9 @@ export async function QuotationDirectory({
               Apply filters
             </button>
             {params.size > (followUps ? 1 : 0) && (
-              <AdminLink href={path}>Clear filters</AdminLink>
+              <AdminLink href={path} className="quotation-filter-clear">
+                Clear filters
+              </AdminLink>
             )}
           </form>
         </div>
@@ -222,66 +261,100 @@ export async function QuotationDirectory({
             "Action",
           ]}
         >
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td>
-                <AdminLink
-                  href={`/admin/quotations/${row.id}`}
-                  className="quotation-reference"
-                >
-                  {row.quotation_number}
-                </AdminLink>
-                <span>Version {row.current_version}</span>
-              </td>
-              <td>
-                <strong>
-                  {row.customer?.full_name ?? "Open quotation for customer"}
-                </strong>
-                {row.customer?.company_name && (
-                  <span>{row.customer.company_name}</span>
-                )}
-                {row.customer?.email && <span>{row.customer.email}</span>}
-              </td>
-              <td>
-                <AdminLink href={`/admin/rfqs/${row.rfq_id}`}>
-                  {row.rfq_number ?? "View RFQ"}
-                </AdminLink>
-              </td>
-              <td className="quotation-amount">
-                {row.version.billing_currency} {row.version.total_amount}
-              </td>
-              <td>
-                <span
-                  className={`quotation-status quotation-status-${row.version.status.toLowerCase()}`}
-                >
-                  {quotationStatus(row.version.status)}
-                </span>
-                <span>{quotationStatus(row.overall_status)}</span>
-              </td>
-              <td>
-                {quotationDate(
-                  row.version.status === "ACCEPTED"
-                    ? row.version.reservation_expires_at
-                    : row.version.valid_until,
-                )}
-                <span>
-                  {row.version.status === "ACCEPTED"
-                    ? "Payment deadline"
-                    : row.version.valid_until
-                      ? "Quote validity"
-                      : "Not issued"}
-                </span>
-              </td>
-              <td>
-                <AdminLink
-                  className="quotation-row-action"
-                  href={`/admin/quotations/${row.id}`}
-                >
-                  {quotationAction(row.version.status)}
-                </AdminLink>
-              </td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const urgency = deadlineUrgency(row, referenceMs);
+            return (
+              <tr key={row.id}>
+                <td>
+                  <div className="quotation-ref-cell">
+                    <AdminLink
+                      href={`/admin/quotations/${row.id}`}
+                      className="quotation-reference"
+                    >
+                      {row.quotation_number}
+                    </AdminLink>
+                    <span className="quotation-version-tag">
+                      Version {row.current_version}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <strong>
+                    {row.customer?.full_name ?? "Open quotation for customer"}
+                  </strong>
+                  {(row.customer?.company_name || row.customer?.email) && (
+                    <span className="quotation-customer-meta">
+                      {[row.customer.company_name, row.customer.email]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  )}
+                </td>
+                <td>
+                  <AdminLink
+                    href={`/admin/rfqs/${row.rfq_id}`}
+                    className="quotation-rfq-link"
+                  >
+                    {row.rfq_number ?? "View RFQ"}
+                  </AdminLink>
+                </td>
+                <td className="quotation-amount">
+                  {row.version.billing_currency} {row.version.total_amount}
+                </td>
+                <td>
+                  <div className="quotation-status-cell">
+                    <span
+                      className={`quotation-status quotation-status-${row.version.status.toLowerCase()}`}
+                    >
+                      {quotationStatus(row.version.status)}
+                    </span>
+                    <span className="quotation-overall-note">
+                      {quotationStatus(row.overall_status)}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div className="quotation-deadline-cell">
+                    <span>
+                      {quotationDate(
+                        row.version.status === "ACCEPTED"
+                          ? row.version.reservation_expires_at
+                          : row.version.valid_until,
+                      )}
+                    </span>
+                    <div className="quotation-deadline-meta">
+                      <span>
+                        {row.version.status === "ACCEPTED"
+                          ? "Payment deadline"
+                          : row.version.valid_until
+                            ? "Quote validity"
+                            : "Not issued"}
+                      </span>
+                      {urgency === "urgent" && (
+                        <span className="quotation-deadline-badge is-urgent">
+                          <AlertTriangle size={12} aria-hidden="true" />
+                          Within 24h
+                        </span>
+                      )}
+                      {urgency === "overdue" && (
+                        <span className="quotation-deadline-badge is-overdue">
+                          Deadline passed
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <AdminLink
+                    className="quotation-row-action"
+                    href={`/admin/quotations/${row.id}`}
+                  >
+                    {quotationAction(row.version.status)}
+                  </AdminLink>
+                </td>
+              </tr>
+            );
+          })}
         </ManagementTable>
         {!rows.length && (
           <div className="quotation-empty">

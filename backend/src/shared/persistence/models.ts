@@ -15,8 +15,7 @@ import { ExchangeRateModel } from '../../modules/fx/fx.schema.js';
 import { AuditLogModel } from '../../modules/audit/audit.schema.js';
 import { NotificationLogModel } from '../../modules/notification/notification.schema.js';
 import { ClarificationMessageModel } from '../../modules/rfq/rfq.schema.js';
-import { CmsBannerModel } from '../../modules/cms/cms.schema.js';
-import { UrlRedirectModel } from '../../modules/cms/cms.schema.js';
+import { CmsBannerModel, CmsBlogModel, UrlRedirectModel } from '../../modules/cms/cms.schema.js';
 import { AdminModel } from '../../modules/auth/auth.schema.js';
 import { AdminSessionModel } from '../../modules/auth/auth.schema.js';
 import { AuthAttemptModel } from '../../modules/auth/auth.schema.js';
@@ -44,6 +43,7 @@ export const persistenceModels = [
   NotificationLogModel,
   ClarificationMessageModel,
   CmsBannerModel,
+  CmsBlogModel,
   UrlRedirectModel,
   AdminModel,
   AdminSessionModel,

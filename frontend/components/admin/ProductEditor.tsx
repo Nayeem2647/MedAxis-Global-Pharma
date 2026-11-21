@@ -241,7 +241,7 @@ export function ProductEditor({
     } catch (error: unknown) {
       setMediaError(
         error instanceof ApiError && error.status === 422
-          ? "Choose valid JPEG, PNG or WebP pictures, up to 5 MiB each."
+          ? "Choose valid JPEG, PNG or WebP pictures, up to 25 MiB each."
           : "Image upload could not be completed. Check the connection and select the file again to retry.",
       );
     } finally {
@@ -257,7 +257,7 @@ export function ProductEditor({
       !file.size ||
       file.size > MAX_VIDEO_BYTES
     ) {
-      setMediaError("Choose an MP4 or WebM video up to 50 MiB.");
+      setMediaError("Choose an MP4 or WebM video up to 100 MiB.");
       return;
     }
     uploadLock.current = true;
@@ -274,7 +274,7 @@ export function ProductEditor({
       setVideo(receipt.object_key);
     } catch {
       setMediaError(
-        "Video upload could not be completed. Use a readable MP4 or WebM up to 50 MiB, then select it again to retry.",
+        "Video upload could not be completed. Use a readable MP4 or WebM up to 100 MiB, then select it again to retry.",
       );
     } finally {
       uploadLock.current = false;
@@ -703,7 +703,7 @@ export function ProductEditor({
           <Card
             title="Product images"
             icon={<ImageIcon size={21} />}
-            subtitle="One main image and up to 5 additional pictures. JPEG, PNG or WebP, up to 5 MiB each."
+            subtitle="One main image and up to 5 additional pictures. JPEG, PNG or WebP, up to 25 MiB each."
           >
             <div className="product-media-grid">
               <div className="product-main-media">
@@ -858,7 +858,7 @@ export function ProductEditor({
           <Card
             title="Product video"
             icon={<Video size={21} />}
-            subtitle="Optional. Upload one MP4 or WebM video, up to 50 MiB."
+            subtitle="Optional. Upload one MP4 or WebM video, up to 100 MiB."
           >
             {video && mediaUrl(video) && (
               <video

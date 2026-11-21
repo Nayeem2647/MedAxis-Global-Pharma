@@ -115,10 +115,13 @@ export function adminProxyRule(path: string, method: string): AdminProxyRule | n
   if (path === 'cms/banners' && method === 'GET') return json(['page','limit','q','is_active','placement']);
   if (new RegExp(`^cms/banners/${uuid}$`).test(path) && method === 'GET') return json();
   if (new RegExp(`^cms/banners/${uuid}$`).test(path) && method === 'DELETE') return json();
+  if (path === 'cms/blogs' && method === 'GET') return json(['page','limit','q','is_active','category']);
+  if (new RegExp(`^cms/blogs/${uuid}$`).test(path) && method === 'GET') return json();
+  if (new RegExp(`^cms/blogs/${uuid}$`).test(path) && method === 'DELETE') return json();
   if (path === 'quotations' && method === 'GET') return json(['page','limit','q','rfq_id','overall_status','status','reservation_before','worklist']);
   if (path === 'quotations/summary' && method === 'GET') return json(['window_hours']);
   if (new RegExp(`^quotations/${uuid}/draft$`).test(path) && method === 'PATCH') return json();
-  if (/^catalog\/(?:products|generics|manufacturers|categories)$/.test(path) && method === 'POST' || new RegExp(`^catalog/products/${uuid}$`).test(path) && method === 'PATCH' || path === 'cms/banners' && method === 'POST') return json();
+  if (/^catalog\/(?:products|generics|manufacturers|categories)$/.test(path) && method === 'POST' || new RegExp(`^catalog/products/${uuid}$`).test(path) && method === 'PATCH' || (path === 'cms/banners' || path === 'cms/blogs') && method === 'POST') return json();
   if (path === 'customers' && method === 'GET') return json(['page', 'limit', 'q', 'buyer_type', 'country']);
   if (new RegExp(`^customers/${uuid}$`).test(path) && method === 'GET') return json(['page', 'limit']);
   if (path === 'audit-logs' && method === 'GET') return json(['page', 'limit', 'actor_type', 'actor_id', 'action', 'entity_type', 'entity_id', 'date_from', 'date_to']);

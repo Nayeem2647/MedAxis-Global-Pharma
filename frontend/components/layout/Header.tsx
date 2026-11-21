@@ -38,6 +38,8 @@ import { LocaleSwitcher } from './LocaleSwitcher';
 import { useProductTools } from '../catalog/ProductToolsProvider';
 import type { ContactConfig } from '../../lib/public-config';
 import { useCustomerAccount } from '../customer/CustomerAccountProvider';
+import { Announcements } from '../home/Announcements';
+import type { Banner } from '../../lib/public-catalog';
 
 interface HeaderProps {
   itemCount: number;
@@ -47,6 +49,7 @@ interface HeaderProps {
   onQuickQuote(): void;
   contact?: ContactConfig;
   contactOpen?: boolean;
+  announcements?: Banner[];
 }
 
 type DropdownKey = 'products' | 'services' | 'blog' | 'about';
@@ -67,7 +70,7 @@ interface DropdownGroup {
   items: DropdownItem[];
 }
 
-export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, contact, contactOpen = false }: HeaderProps) {
+export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, contact, contactOpen = false, announcements = [] }: HeaderProps) {
   const locale = useLocale();
   const pathname = usePathname();
   const t = useTranslations('Shell');
@@ -209,6 +212,7 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
         </div>
       </div>
     </div>
+    <Announcements banners={announcements} />
     <header className="site-header">
       <div className="site-container header-main">
         <Link href={`/${locale}`} className="brand" aria-label="MedAxis Global Pharma">

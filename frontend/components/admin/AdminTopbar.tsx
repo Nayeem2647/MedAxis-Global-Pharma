@@ -23,7 +23,8 @@ const menuItems = [
   { href: '/admin/catalog/manufacturers/new', label: 'Add new manufacturer' },
   { href: '/admin/catalog/generics', label: 'Generics' },
   { href: '/admin/catalog/categories', label: 'Categories' },
-  { href: '/admin/catalog/banners', label: 'Announcements' },
+  { href: '/admin/catalog/banners', label: 'Banner Setup' },
+  { href: '/admin/blog', label: 'Blog' },
   { href: '/admin/customers', label: 'Customers' },
   { href: '/admin/settings', label: 'Settings' },
   { href: '/admin/settings/security', label: 'Security settings' },
@@ -31,11 +32,13 @@ const menuItems = [
   { href: '/admin/sessions', label: 'Sessions' },
 ];
 
-export function AdminTopbar({ session, active, revision, streamState, onLogout }: {
+export function AdminTopbar({ session, active, revision, streamState, sound, onSoundChange, onLogout }: {
   session: AdminSession;
   active: boolean;
   revision: number;
   streamState: StreamState;
+  sound: boolean;
+  onSoundChange(value: boolean): void;
   onLogout(): void;
 }) {
   const [query, setQuery] = useState('');
@@ -121,7 +124,11 @@ export function AdminTopbar({ session, active, revision, streamState, onLogout }
             <div><strong>{account?.display_name || 'Admin'}</strong><span>{account?.email || 'MedAxis administrator'}</span><span className="sr-only">Current session: {session.ip_address}</span></div>
           </div>
           <AdminLink href="/admin/settings/profile">Settings</AdminLink>
-          <button type="button" className="admin-account-logout" disabled={!active} onClick={onLogout}>Logout</button>
+          <label className="admin-account-sound">
+            <input type="checkbox" checked={sound} disabled={!active} onChange={(event) => onSoundChange(event.currentTarget.checked)} />
+            <span>Sound alerts</span>
+          </label>
+          <button type="button" className="admin-account-logout" disabled={!active} onClick={onLogout}>Sign out</button>
         </div>
       </details>
     </div>

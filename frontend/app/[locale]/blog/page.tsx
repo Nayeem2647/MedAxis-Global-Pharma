@@ -5,10 +5,11 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { BookOpen, ClipboardCheck, FileCheck2, Newspaper, Snowflake } from 'lucide-react';
 import { isLocale } from '../../../i18n/routing';
 import { buildLocalizedMetadata } from '../../../lib/seo';
-import { getBanners } from '../../../lib/public-catalog';
+import { getBanners, getBlogPosts } from '../../../lib/public-catalog';
 import { QuoteButton } from '../../../components/layout/PublicShell';
 import { Breadcrumbs } from '../../../components/catalog/Breadcrumbs';
 import { PlacementBanner } from '../../../components/home/PlacementBanner';
+import { ProductRichDescription } from '../../../components/catalog/ProductRichDescription';
 
 type Props = { params: Promise<{ locale: string }> };
 
@@ -32,7 +33,7 @@ export default async function BlogPage({ params }: Props) {
   const t = await getTranslations({ locale, namespace: 'Blog' });
   const h = await getTranslations({ locale, namespace: 'Home' });
   const s = await getTranslations({ locale, namespace: 'Shell' });
-  const allBanners = await getBanners(locale);
+  const [allBanners, posts] = await Promise.all([getBanners(locale), getBlogPosts(locale)]);
   const blogBanners = allBanners.filter((banner) => banner.placement === 'BLOG_BANNER' && banner.media_url);
 
   return (
@@ -41,25 +42,15 @@ export default async function BlogPage({ params }: Props) {
         <Breadcrumbs locale={locale} entries={[{ name: s('blog'), href: `/${locale}/blog` }]} />
         {blogBanners.length > 0 ? (
           <div className="blog-banner-slot">
-            <PlacementBanner banners={blogBanners} locale={locale} variant="blog">
-              {blogBanners.some((b) => b.show_overlay) ? (
-                <div className="service-hero-overlay">
-                  <p className="eyebrow">MEDAXIS GLOBAL PHARMA</p>
-                  <h1>{t('title')}</h1>
-                  <p>{t('description')}</p>
-                  <div className="state-actions">
-                    <QuoteButton>{h('request')}</QuoteButton>
-                    <Link className="button secondary" href={`/${locale}/products`}>{h('browse')}</Link>
-                  </div>
-                </div>
-              ) : undefined}
-            </PlacementBanner>
-            {!blogBanners.some((b) => b.show_overlay) && (
-              <div className="blog-banner-caption">
-                <h1>{t('title')}</h1>
-                <p className="muted">{t('description')}</p>
+            <PlacementBanner banners={blogBanners} locale={locale} variant="blog" />
+            <header className="blog-banner-caption">
+              <h1>{t('title')}</h1>
+              <p className="muted">{t('description')}</p>
+              <div className="state-actions">
+                <QuoteButton>{h('request')}</QuoteButton>
+                <Link className="button secondary" href={`/${locale}/products`}>{h('browse')}</Link>
               </div>
-            )}
+            </header>
           </div>
         ) : (
           <header className="service-hero">
@@ -73,8 +64,40 @@ export default async function BlogPage({ params }: Props) {
           </header>
         )}
 
+        {posts.length > 0 && (
+          <section id="published-posts" className="info-section">
+            <h2>{t('articlesTitle')}</h2>
+            <div className="blog-posts-grid">
+              {posts.map((post) => (
+                <article className="blog-post-card" key={post.id}>
+                  {post.cover_image_url && (
+                    <div className="blog-post-cover">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={post.cover_image_url} alt={post.title} width={640} height={360} loading="lazy" />
+                    </div>
+                  )}
+                  <div className="blog-post-body">
+                    <div className="blog-post-meta">
+                      <span className="blog-category-badge">{t(`category_${post.category}`)}</span>
+                      <time dateTime={post.published_at}>{post.published_at.slice(0, 10)}</time>
+                    </div>
+                    <h3>{post.title}</h3>
+                    <p>{post.summary}</p>
+                    <details className="blog-article-expand">
+                      <summary>{t('readArticle')}</summary>
+                      <div className="blog-article-content">
+                        <ProductRichDescription html={post.body_html} />
+                      </div>
+                    </details>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section id="articles" className="info-section">
-          <h2>{t('articlesTitle')}</h2>
+          <h2>{posts.length > 0 ? t('guidesTitle') : t('articlesTitle')}</h2>
           <div className="service-cards">
             <article>
               <Snowflake size={30} />

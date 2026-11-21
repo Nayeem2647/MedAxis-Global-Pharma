@@ -9,7 +9,7 @@ import { adminBoundary } from '../../shared/middleware/adminBoundary.js';
 import { sendPaginated, sendSuccess } from '../../shared/utils/response.js';
 import { adminCatalogQuery, createAdminCatalogReads } from './catalog.admin.reads.js';
 import type { Revalidate } from '../../shared/utils/revalidate.js';
-import { MAX_FILE_BYTES, MAX_VIDEO_BYTES, publicImageBaseUrl, type StorageService } from '../storage/storage.service.js';
+import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, publicImageBaseUrl, type StorageService } from '../storage/storage.service.js';
 import { createAdminCatalogService } from './catalog.admin.service.js';
 import { createIndicationsTranslator } from './catalog.translation.js';
 import { createCsvImportService } from './catalog.csv.service.js';
@@ -62,6 +62,10 @@ export function createPublicCatalogRouter(env: AppEnv) {
     const query = localeQuery.parse(req.query);
     detail(res, await service.product(slug.parse(req.params.slug), query.locale));
   });
+  router.get('/categories', limiter, async (req, res) => {
+    const query = localeQuery.parse(req.query);
+    sendSuccess(res, await service.categories(query.locale));
+  });
   for (const kind of ['generics', 'manufacturers', 'categories'] as const)
     router.get(`/${kind}/:slug`, async (req, res) => {
       const query = catalogQuery.parse(req.query);
@@ -87,6 +91,10 @@ export function createAdminCatalogRouter(env: AppEnv, revalidate: Revalidate, st
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_FILE_BYTES, files: 1, fields: 1, parts: 2 },
+  });
+  const imageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 1, parts: 2 },
   });
   router.use(adminBoundary(env), adminAuth(env));
   const translateIndications = createIndicationsTranslator(env);
@@ -136,7 +144,7 @@ export function createAdminCatalogRouter(env: AppEnv, revalidate: Revalidate, st
     if (!req.file) throw AppError.validation([{ field: 'video', issue: 'Choose an MP4 or WebM video.' }]);
     sendSuccess(res, await service.uploadVideo(req.file.buffer), { status: 201 });
   });
-  router.post('/images', upload.single('image'), async (req, res) => {
+  router.post('/images', imageUpload.single('image'), async (req, res) => {
     if (!req.file) throw AppError.validation([{ field: 'image', issue: 'Image file is required.' }]);
     sendSuccess(res, await storage.uploadPublicImage(req.file.buffer), { status: 201 });
   });

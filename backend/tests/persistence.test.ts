@@ -104,7 +104,7 @@ describe('persistence contracts', () => {
     try {
       await migrate();
       await migrate();
-      expect(command).toHaveBeenCalledTimes(52);
+      expect(command).toHaveBeenCalledTimes(persistenceModels.length * 2);
       const indexCount = persistenceModels.reduce((sum, model) => sum + model.schema.indexes().length, 0);
       expect(createIndex).toHaveBeenCalledTimes(indexCount * 2);
       for (const [value] of command.mock.calls)
@@ -118,9 +118,9 @@ describe('persistence contracts', () => {
       Reflect.set(mongoose.connection, 'db', previousDb);
     }
   });
-  it('registers exactly 26 explicitly named UUID collections and complete strict validators', () => {
-    expect(persistenceModels).toHaveLength(26);
-    expect(new Set(persistenceModels.map((m) => m.collection.name)).size).toBe(26);
+  it('registers exactly 27 explicitly named UUID collections and complete strict validators', () => {
+    expect(persistenceModels).toHaveLength(27);
+    expect(new Set(persistenceModels.map((m) => m.collection.name)).size).toBe(27);
     for (const model of persistenceModels) {
       expect(model.schema.options.autoIndex).toBe(false);
       expect(model.schema.options.strict).toBe('throw');

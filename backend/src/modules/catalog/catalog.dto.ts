@@ -40,6 +40,8 @@ export const PUBLIC_MASTER_PROJECTION = {
   country: 1,
   certifications: 1,
   therapeutic_indications: 1,
+  logo_object_key: 1,
+  logo_data_url: 1,
   sort_order: 1,
 };
 export const PUBLIC_PRODUCT_PROJECTION = {
@@ -84,6 +86,8 @@ export interface PublicMaster {
   country?: string;
   certifications?: string[];
   therapeutic_indications?: string[];
+  image_url?: string;
+  product_count?: number;
 }
 export interface JoinedProduct extends IProduct {
   customer_ratings?: Array<{ average: number; count: number }>;
@@ -117,8 +121,23 @@ export const alternateSlugs = (record: { translations: { en: { slug: string }; z
   zhCN: record.translations.zhCN?.slug ?? null,
 });
 
-export function publicMaster(record: MasterRecord, locale: Locale): PublicMaster {
+export function publicMaster(
+  record: MasterRecord,
+  locale: Locale,
+  imageBase?: string,
+  legacyImageBase?: string,
+): PublicMaster {
   const translation = record.translations[localeKey(locale)] ?? record.translations.en;
+  const resolvedObjectUrl = record.logo_object_key
+    ? productImageUrl(imageBase, record.logo_object_key, legacyImageBase) ?? undefined
+    : undefined;
+  const resolvedDataUrl =
+    !resolvedObjectUrl &&
+    record.logo_data_url &&
+    /^data:image\/(?:webp|png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(record.logo_data_url)
+      ? record.logo_data_url
+      : undefined;
+  const image_url = resolvedObjectUrl ?? resolvedDataUrl;
   return {
     id: record._id,
     name: translation.name,
@@ -130,6 +149,7 @@ export function publicMaster(record: MasterRecord, locale: Locale): PublicMaster
     country: record.country,
     certifications: record.certifications?.map(String),
     therapeutic_indications: record.therapeutic_indications?.map(String),
+    ...(image_url ? { image_url } : {}),
   };
 }
 function publicTranslation(value: IProduct['translations']['en']): PublicProductTranslation {
@@ -162,9 +182,9 @@ export function publicProduct(record: JoinedProduct, locale: Locale, imageBase?:
       en: publicTranslation(record.translations.en),
       ...(record.translations.zhCN ? { zhCN: publicTranslation(record.translations.zhCN) } : {}),
     },
-    generic: publicMaster(record.generic_profile, locale),
-    manufacturer: publicMaster(record.manufacturer_profile, locale),
-    categories: record.category_profiles.map((category) => publicMaster(category, locale)),
+    generic: publicMaster(record.generic_profile, locale, imageBase, legacyImageBase),
+    manufacturer: publicMaster(record.manufacturer_profile, locale, imageBase, legacyImageBase),
+    categories: record.category_profiles.map((category) => publicMaster(category, locale, imageBase, legacyImageBase)),
     strength: record.strength,
     dosage_form: record.dosage_form,
     pack_size: record.pack_size,

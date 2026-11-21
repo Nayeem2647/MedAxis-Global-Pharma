@@ -8,6 +8,7 @@ import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicAnalytics } from '../../components/layout/PublicAnalytics';
 import { CustomerAccountProvider } from '../../components/customer/CustomerAccountProvider';
 import { getAnalyticsConfig, getContactConfig } from '../../lib/public-config';
+import { getBanners } from '../../lib/public-catalog';
 import '../globals.css';
 
 export function generateStaticParams() { return locales.map((locale) => ({ locale })); }
@@ -17,6 +18,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   if (!isLocale(locale)) notFound();
   setRequestLocale(locale);
   const analytics = getAnalyticsConfig();
-  return <html lang={locale}><body><NextIntlClientProvider><CartProvider><CustomerAccountProvider><PublicShell contact={getContactConfig()}>{children}</PublicShell></CustomerAccountProvider></CartProvider>
+  const announcements = (await getBanners(locale)).filter((banner) => banner.placement === 'ANNOUNCEMENT');
+  return <html lang={locale}><body><NextIntlClientProvider><CartProvider><CustomerAccountProvider><PublicShell contact={getContactConfig()} announcements={announcements}>{children}</PublicShell></CustomerAccountProvider></CartProvider>
     {analytics && <PublicAnalytics {...analytics}/>}</NextIntlClientProvider></body></html>;
 }

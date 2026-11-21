@@ -2,10 +2,10 @@
 
 The default storage driver is `local`, for development and test only.
 
-Product videos use the same local driver: optional MP4/WebM uploads up to 50 MiB
+Product videos use the same local driver: optional MP4/WebM uploads up to 100 MiB
 are stored in `uploads/products/local/videos/`. Public delivery supports byte
-ranges for browser playback and seeking. Product images remain limited to
-5 MiB each, with one main image and up to five additional pictures.
+ranges for browser playback and seeking. Catalog and banner images allow up to
+25 MiB each, with one main image and up to five additional pictures per product.
 No AWS account, S3 bucket, R2 bucket or cloud credentials are needed locally.
 Production rejects the local driver at startup. Production storage configuration
 is a separate deployment decision; the historical S3 driver remains available.

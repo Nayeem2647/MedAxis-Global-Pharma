@@ -4,6 +4,9 @@ import {
   adminMultipart,
   auditRecord,
   bannerBody,
+  blogPostBody,
+  blogPostRecord,
+  blogSlugFromTitle,
   categoryBody,
   catalogDeleteBody,
   catalogDeleteReceipt,
@@ -242,5 +245,29 @@ describe('registered management boundaries', () => {
       expect(error).toBeInstanceOf(ApiError);
       if (error instanceof ApiError) expect(error.responseValidated).toBe(true);
     }
+  });
+  it('validates CMS blog articles, safe slugs and proxy rules', () => {
+    expect(blogSlugFromTitle('Cold-Chain Oncology Guide 2026!')).toBe('cold-chain-oncology-guide-2026');
+    expect(adminProxyRule('cms/blogs', 'GET')).toEqual({ kind: 'json', query: ['page', 'limit', 'q', 'is_active', 'category'] });
+    expect(adminProxyRule('cms/blogs', 'POST')).toEqual({ kind: 'json', query: [] });
+    expect(adminProxyRule(`cms/blogs/${ids.manufacturer}`, 'DELETE')).toEqual({ kind: 'json', query: [] });
+    const draft = {
+      slug: 'cold-chain-oncology-guide',
+      category: 'GUIDE' as const,
+      translations: { en: { title: 'Cold-chain guide', summary: 'Overview', body: '<p>Full guidance</p>' } },
+      is_active: true,
+    };
+    expect(blogPostBody.safeParse(draft).success).toBe(true);
+    expect(blogPostBody.safeParse({ ...draft, slug: 'Invalid Slug' }).success).toBe(false);
+    expect(blogPostBody.safeParse({ ...draft, translations: { en: { title: 'Price $20', summary: 'Ok', body: 'Ok' } } }).success).toBe(false);
+    expect(
+      blogPostRecord.parse({
+        _id: ids.manufacturer,
+        ...draft,
+        published_at: meta.timestamp,
+        created_at: meta.timestamp,
+        updated_at: meta.timestamp,
+      }).id,
+    ).toBe(ids.manufacturer);
   });
 });

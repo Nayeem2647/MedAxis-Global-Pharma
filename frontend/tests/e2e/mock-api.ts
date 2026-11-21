@@ -220,6 +220,7 @@ createServer(async (req, res) => {
           return;
         }
         let rows=records.filter((row)=>!row.deleted_at).filter((row)=>!url.searchParams.has('is_active')||String(row.is_active)===url.searchParams.get('is_active')).filter((row)=>!url.searchParams.has('status')||row.status===url.searchParams.get('status'));
+        if(kind==='banners' && url.searchParams.has('placement')) rows=rows.filter((row)=>(row.placement??'ANNOUNCEMENT')===url.searchParams.get('placement'));
         const q=url.searchParams.get('q')?.toLowerCase();if(q)rows=rows.filter((row)=>JSON.stringify(row.translations).toLowerCase().includes(q));
         const pg=Number(url.searchParams.get('page')??1),limit=Number(url.searchParams.get('limit')??20);
         success(res,rows.slice((pg-1)*limit,pg*limit),pg,limit,rows.length);return;
@@ -244,6 +245,11 @@ createServer(async (req, res) => {
         success(res,{id,deleted:true});return;
       }
       const recordId=id??(typeof mgBody.id==='string'?mgBody.id:randomUUID());const old=records.find((row)=>row._id===recordId);const record:Record<string,unknown>={...old,...mgBody,_id:recordId,created_at:old?.created_at??timestamp,updated_at:new Date().toISOString()};delete record.id;if(record.logo_data_url===null)delete record.logo_data_url;if(record.review_metadata===null)delete record.review_metadata;const translations=z.record(z.string(),z.unknown()).safeParse(record.translations);if(translations.success&&translations.data.zhCN===null)delete translations.data.zhCN;if(translations.success){for(const value of Object.values(translations.data)){if(value&&typeof value==='object')for(const [key,entry]of Object.entries(value))if(entry===null)delete (value as Record<string,unknown>)[key];}record.translations=translations.data;}
+      if(kind==='banners') {
+        for(const key of ['starts_at','ends_at','link_path','media_type','media_key','resource_type','resource_id','show_overlay'])if(mgBody[key]===undefined)delete record[key];
+        if(typeof record.media_key==='string') record.media_url='https://cdn.medaxisglobalpharma.com/'+record.media_key;
+        else delete record.media_url;
+      }
       for(const key of ['video_key','seo_image_key','storage_condition'])if(record[key]===null)delete record[key];const index=records.findIndex((row)=>row._id===recordId);if(index<0)records.push(record);else records[index]=record;success(res,record);return;
     }
     if(path==='catalog/images'){
@@ -429,6 +435,24 @@ createServer(async (req, res) => {
   const facets = { dosage_forms: rows.length ? [{ name: 'Tablet', count: rows.length }] : [], cold_chain: [true, false].flatMap((required) => { const count = rows.filter((product) => product.cold_chain_required === required).length; return count ? [{ required, count }] : []; }), unknown_prices: ['NEVER_RENDER_PRIVATE_PRICE'] };
   if (url.pathname === '/v1/public/products') { success(res, { products: rows.slice((page - 1) * limit, page * limit), facets }, page, limit, rows.length); return; }
   if (url.pathname === '/v1/public/cms/banners') {
+    if (process.env.ANNOUNCEMENT_E2E_FIXTURES === '1') {
+      success(res, [
+        { id: 'a2f591d0-346b-4cc4-8d67-e25358fa0290', placement: 'ANNOUNCEMENT', title: chinese ? '采购服务公告' : 'Sourcing desk update', body: chinese ? '欢迎提交您的采购需求。' : 'Medicine sourcing enquiries welcome.', sort_order: 0, link_path: '/en/products' },
+        { id: 'a2f591d0-346b-4cc4-8d67-e25358fa0291', placement: 'ANNOUNCEMENT', title: chinese ? '产品目录更新' : 'Catalog updates', body: chinese ? '浏览已发布的产品。' : 'Browse our published products.', sort_order: 1, link_path: '/en/products' },
+        { id: 'a2f591d0-346b-4cc4-8d67-e25358fa0292', placement: 'ANNOUNCEMENT', title: chinese ? '文件咨询' : 'Documentation enquiries', body: chinese ? '与团队沟通您的需求。' : 'Share your documentation requirements.', sort_order: 2, link_path: '/en/services' },
+        { id: 'a2f591d0-346b-4cc4-8d67-e25358fa0293', placement: 'ANNOUNCEMENT', title: chinese ? '联系采购团队' : 'Contact our sourcing team', body: chinese ? '按目的地协调运输。' : 'Coordinate your destination requirements.', sort_order: 3 },
+      ]); return;
+    }
+    if (process.env.BANNER_E2E_FIXTURES === '1') {
+      const visual = { media_type: 'IMAGE', media_url: 'https://cdn.medaxisglobalpharma.com/products/s3/banner-fixture.png', sort_order: 0, body: 'Documented sourcing support for your next enquiry.', link_path: '/en/products' };
+      success(res, [
+        { ...visual, id: 'a2f591d0-346b-4cc4-8d67-e25358fa0280', placement: 'MAIN_HERO', title: 'Your sourcing partner', show_overlay: true },
+        { ...visual, id: 'a2f591d0-346b-4cc4-8d67-e25358fa0281', placement: 'MAIN_HERO', title: 'Manufacturer connections', media_type: 'VIDEO', media_url: 'https://cdn.medaxisglobalpharma.com/products/s3/videos/banner-fixture.webm', show_overlay: false },
+        { ...visual, id: 'a2f591d0-346b-4cc4-8d67-e25358fa0282', placement: 'PRODUCTS_BANNER', title: 'Explore the catalog', show_overlay: true },
+        { ...visual, id: 'a2f591d0-346b-4cc4-8d67-e25358fa0283', placement: 'BLOG_BANNER', title: 'Sourcing insights', show_overlay: true },
+        { ...visual, id: 'a2f591d0-346b-4cc4-8d67-e25358fa0284', placement: 'BLOG_BANNER', title: 'Sourcing in motion', media_type: 'VIDEO', media_url: 'https://cdn.medaxisglobalpharma.com/products/s3/videos/banner-fixture.webm', show_overlay: false },
+      ]); return;
+    }
     success(res, [{ id: '4d5e6f7a-8b9c-4d1e-8f3a-4b5c6d7e8f9a', title: chinese ? '采购服务公告' : 'Sourcing desk update', body: chinese ? '<p>欢迎提交医药采购需求。</p>' : '<p>Medicine sourcing enquiries are welcome.</p>', sort_order: 0 }]); return;
   }
   if (url.pathname === '/v1/public/sitemap-catalog') { success(res, catalog); return; }

@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { CatalogCartInput } from '../../lib/cart';
 import type { ContactConfig } from '../../lib/public-config';
+import type { Banner } from '../../lib/public-catalog';
 import type { RfqKind } from '../../lib/rfq';
 import { CartDrawer } from '../rfq/CartDrawer';
 import { RfqDialog } from '../rfq/RfqDialog';
@@ -26,14 +27,14 @@ export function QuoteButton({ children, className = 'button primary', product, i
   return <button className={className} onClick={() => openQuickQuote(product, initialName)}>{children}</button>;
 }
 
-export function PublicShell({ children, contact }: { children: ReactNode; contact: ContactConfig }) {
+export function PublicShell({ children, contact, announcements = [] }: { children: ReactNode; contact: ContactConfig; announcements?: Banner[] }) {
   const { itemCount, hydrated, setDrawerOpen } = useCart();
   const [quote, setQuote] = useState<{ kind: RfqKind; product?: CatalogCartInput; initialName?: string } | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const openQuickQuote = (product?: CatalogCartInput, initialName?: string) => { if (quote) return; setDrawerOpen(false); setContactOpen(false); setQuote({ kind: 'quick-quote', product, initialName }); };
   const openContact = () => { if (quote) return; setDrawerOpen(false); setContactOpen(true); };
   return <ShellContext.Provider value={{ openQuickQuote, openContact }}><ProductToolsProvider>
-    <Header itemCount={itemCount} hydrated={hydrated} onCart={() => { if (!quote) { setContactOpen(false); setDrawerOpen(true); } }} onContact={openContact} onQuickQuote={() => openQuickQuote()} contact={contact} contactOpen={contactOpen}/>
+    <Header itemCount={itemCount} hydrated={hydrated} onCart={() => { if (!quote) { setContactOpen(false); setDrawerOpen(true); } }} onContact={openContact} onQuickQuote={() => openQuickQuote()} contact={contact} contactOpen={contactOpen} announcements={announcements}/>
     {children}
     <Footer contact={contact} onContact={openContact} onQuickQuote={() => openQuickQuote()}/>
     <FloatingChat contact={contact}/>

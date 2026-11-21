@@ -2505,5 +2505,64 @@
         "bsonType": "date"
       }
     }
+  },
+  "cms_blogs": {
+    "bsonType": "object",
+    "additionalProperties": false,
+    "required": ["_id", "slug", "category", "translations", "is_active", "published_at", "created_at", "updated_at"],
+    "properties": {
+      "_id": {
+        "bsonType": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "slug": {
+        "bsonType": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "category": {
+        "bsonType": "string",
+        "enum": ["GUIDE", "UPDATE", "COMPLIANCE", "SOURCING"]
+      },
+      "cover_image_key": {
+        "bsonType": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "translations": {
+        "bsonType": "object",
+        "additionalProperties": false,
+        "required": ["en"],
+        "properties": {
+          "en": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["title", "summary", "body"],
+            "properties": {
+              "title": { "bsonType": "string", "minLength": 1, "maxLength": 200 },
+              "summary": { "bsonType": "string", "minLength": 1, "maxLength": 500 },
+              "body": { "bsonType": "string", "minLength": 1, "maxLength": 15000 }
+            }
+          },
+          "zhCN": {
+            "bsonType": "object",
+            "additionalProperties": false,
+            "required": ["title", "summary", "body"],
+            "properties": {
+              "title": { "bsonType": "string", "minLength": 1, "maxLength": 200 },
+              "summary": { "bsonType": "string", "minLength": 1, "maxLength": 500 },
+              "body": { "bsonType": "string", "minLength": 1, "maxLength": 15000 }
+            }
+          }
+        }
+      },
+      "is_active": { "bsonType": "bool" },
+      "published_at": { "bsonType": "date" },
+      "created_at": { "bsonType": "date" },
+      "updated_at": { "bsonType": "date" }
+    }
   }
 }

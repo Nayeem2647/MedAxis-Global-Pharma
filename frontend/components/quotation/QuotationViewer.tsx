@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from 'react';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { LockKeyhole, MessageCircle, RefreshCw } from 'lucide-react';
+import { ArrowDown, LockKeyhole, MessageCircle, RefreshCw } from 'lucide-react';
 import { QuotationSession, declineBody, refreshBody, revisionBody, type Decision, type QuotationInitial, type QuotationProblem } from '../../lib/quotation';
 import type { ContactConfig } from '../../lib/public-config';
 import { ContactDialog } from '../layout/ContactDialog';
@@ -67,11 +67,20 @@ export function QuotationViewer({ token, initial, contact }: { token?: string; i
     </div></header>
     <main className="quotation-main"><div className="quotation-privacy"><LockKeyhole size={15}/><span>{t('privacy')}</span></div>
       <article className="quotation-paper" aria-busy={state.busy}>
+        {q?.status === 'SENT' && token && (
+          <div className="quotation-top-cta-bar">
+            <p className="small muted">{t('decisionBarNote')}</p>
+            <a href="#quotation-decision" className="button primary quotation-jump-link">
+              {t('reviewDecisionCta')}
+              <ArrowDown size={16} aria-hidden="true" />
+            </a>
+          </div>
+        )}
         {q ? <QuotationDocument quotation={q}/> : <section className="quotation-error-state"><p className="eyebrow">{t('privateDocument')}</p><h1>{t(`errorTitle.${state.problem?.kind ?? 'unknown'}`)}</h1><p>{t(`errorHelp.${state.problem?.kind ?? 'unknown'}`)}</p></section>}
         {state.notice && <div role="status" className="quotation-notice"><p>{t(`notice.${state.notice}`)}</p></div>}
         {problem && <div className="quotation-recovery" role="alert">{q && <p>{t(`errorHelp.${problem.kind}`)}</p>}{problem.requestId && <p className="small">{t('requestId')}: {problem.requestId}</p>}</div>}
         {state.busy && <p className="small muted" role="status">{t('busy')}</p>}
-        {q?.status === 'SENT' && token && <section className="quotation-actions"><h2>{t('decisionTitle')}</h2>
+        {q?.status === 'SENT' && token && <section id="quotation-decision" className="quotation-actions quotation-actions-card"><h2>{t('decisionTitle')}</h2>
           <form onSubmit={(event) => { event.preventDefault(); if (interactive) { setPdfProblem(null); void session.accept(terms); } }}>
             <label className="quotation-terms"><input type="checkbox" checked={terms} disabled={!interactive || state.busy || !!state.pending && state.pending !== 'accept'} onChange={(event) => setTerms(event.currentTarget.checked)}/><span>{t('acceptTerms')}</span></label>
             <button type="submit" className="button primary" disabled={!interactive || !terms || state.busy || !!state.pending && state.pending !== 'accept'}>{t(state.pending === 'accept' ? 'retryAccept' : 'accept')}</button>

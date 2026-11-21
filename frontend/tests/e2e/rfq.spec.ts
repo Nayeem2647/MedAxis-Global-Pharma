@@ -27,12 +27,16 @@ async function api(page: Page, handler: (route: Route) => Promise<void>) {
     await handler(route);
   });
 }
-async function quick(page: Page, locale = 'en') {
+async function quick(page: Page, locale = 'en', opts?: { quantity?: string; lineNotes?: string }) {
   await page.goto(`/${locale}`); await page.locator('.header-quote').click();
   const dialog = page.getByRole('dialog');
   await dialog.locator('input[name=name]').fill('Uncatalogued medicine');
-  await dialog.locator('input[name=full_name]').fill('Private Buyer');
+  if (opts?.quantity) await dialog.locator('input[name=quantity]').fill(opts.quantity);
+  if (opts?.lineNotes) await dialog.locator('textarea[name="items.0.line_notes"]').fill(opts.lineNotes);
+  await dialog.getByRole('button', { name: locale === 'zh-CN' ? '下一步：配送信息' : 'Continue to delivery', exact: true }).click();
   await dialog.locator('input[name=destination_country]').fill('BD');
+  await dialog.getByRole('button', { name: locale === 'zh-CN' ? '下一步：用户信息' : 'Continue to user info', exact: true }).click();
+  await dialog.locator('input[name=full_name]').fill('Private Buyer');
   await dialog.locator('input[name=email]').fill('buyer@example.test');
   await expect(dialog.locator('button[type=submit]')).toBeEnabled();
   return dialog;
@@ -45,10 +49,7 @@ test.beforeEach(async ({ page }) => {
 test('Quick Quote sends one nested line, locks duplicate submits and confirms the actual reference', async ({ page }) => {
   const requests: ReturnType<typeof body>[] = [];
   await api(page, async (route) => { requests.push(body(route)); await new Promise((resolve) => setTimeout(resolve, 300)); await confirmed(route); });
-  const dialog = await quick(page);
-  await dialog.locator('input[name=quantity]').fill('3');
-  await dialog.getByText('Optional delivery details & notes', { exact: true }).click();
-  await dialog.locator('textarea[name="items.0.line_notes"]').fill('Line-specific requirement');
+  const dialog = await quick(page, 'en', { quantity: '3', lineNotes: 'Line-specific requirement' });
   await dialog.locator('button[type=submit]').evaluate((element) => { if (!(element instanceof HTMLButtonElement)) throw new Error('Expected button'); element.click(); element.click(); });
   await expect(dialog.getByText('RFQ-2026-00001', { exact: true })).toBeVisible();
   expect(requests).toHaveLength(1);
@@ -91,7 +92,6 @@ test('a committed enquiry whose response is lost is replayed once without creati
     const previous = committed.get(input.idempotency_key);
     if (!previous) {
       committed.set(input.idempotency_key, { serialized, number: `RFQ-2026-${String(committed.size + 1).padStart(5, '0')}` });
-      // The controlled upstream commits, then loses its first HTTP response.
       await route.abort('connectionreset'); return;
     }
     expect(serialized).toBe(previous.serialized);
@@ -170,9 +170,12 @@ test('nested 422 errors map to fields and permit a corrected, newly verified enq
   });
   const dialog = await quick(page); await dialog.locator('button[type=submit]').click();
   await expect(dialog.locator('input[name=unit]')).toHaveAttribute('aria-invalid', 'true');
-  await expect(dialog.locator('input[name=email]')).toHaveAttribute('aria-invalid', 'true');
   await expect(dialog).toContainText('This packaging unit was not accepted'); expect(await dialog.innerText()).not.toContain('NEVER_RENDER_UPSTREAM_SECRET');
-  await dialog.locator('input[name=unit]').fill('PACK'); await expect(dialog.locator('button[type=submit]')).toBeEnabled(); await dialog.locator('button[type=submit]').click();
+  await dialog.locator('input[name=unit]').fill('PACK');
+  await dialog.getByRole('button', { name: 'Continue to delivery', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Continue to user info', exact: true }).click();
+  await expect(dialog.locator('input[name=email]')).toHaveAttribute('aria-invalid', 'true');
+  await expect(dialog.locator('button[type=submit]')).toBeEnabled(); await dialog.locator('button[type=submit]').click();
   await expect(dialog.getByText('RFQ-2026-00001', { exact: true })).toBeVisible(); expect(keys[1]).not.toBe(keys[0]);
 });
 
@@ -180,11 +183,15 @@ test('Chinese patient and B2B rules require email/company while prescriptions re
   const requests: ReturnType<typeof body>[] = [];
   await api(page, async (route) => { requests.push(body(route)); await confirmed(route); });
   const dialog = await quick(page, 'zh-CN');
-  await dialog.locator('input[name=destination_country]').fill('CN'); await dialog.locator('input[name=email]').fill('');
+  await dialog.getByRole('button', { name: /配送信息/ }).click();
+  await dialog.locator('input[name=destination_country]').fill('CN');
+  await dialog.getByRole('button', { name: '下一步：用户信息', exact: true }).click();
+  await dialog.locator('input[name=email]').fill('');
   await dialog.locator('input[name=whatsapp_number]').fill('+8801560066410');
   await dialog.locator('button[type=submit]').click(); await expect(dialog.locator('input[name=email]')).toHaveAttribute('aria-invalid', 'true'); expect(requests).toHaveLength(0);
   await dialog.locator('input[name=email]').fill('buyer@example.test');
-  await dialog.locator('select').first().selectOption('B2B_WHOLESALE'); await dialog.locator('button[type=submit]').click();
+  await dialog.getByRole('combobox', { name: '询价身份', exact: true }).selectOption('B2B_WHOLESALE');
+  await dialog.locator('button[type=submit]').click();
   await expect(dialog.locator('input[name=company_name]')).toHaveAttribute('aria-invalid', 'true'); expect(requests).toHaveLength(0);
   await dialog.locator('input[name=company_name]').fill('Buyer Company'); await dialog.locator('button[type=submit]').click();
   await expect(dialog.getByText('RFQ-2026-00001', { exact: true })).toBeVisible();
@@ -199,8 +206,13 @@ test('an English page independently requires email for Chinese preference or Chi
     const dialog = await quick(page);
     await dialog.locator('input[name=email]').fill('');
     await dialog.locator('input[name=whatsapp_number]').fill('+8801560066410');
-    if (reason === 'preferred_locale') await dialog.locator('select').nth(1).selectOption('zh-CN');
-    else await dialog.locator('input[name=destination_country]').fill('CN');
+    if (reason === 'preferred_locale') {
+      await dialog.getByRole('combobox', { name: 'Preferred contact language', exact: true }).selectOption('zh-CN');
+    } else {
+      await dialog.getByRole('button', { name: /Delivery/ }).click();
+      await dialog.locator('input[name=destination_country]').fill('CN');
+      await dialog.getByRole('button', { name: 'Continue to user info', exact: true }).click();
+    }
     const before = requests.length;
     await dialog.locator('button[type=submit]').click();
     await expect(dialog.locator('input[name=email]')).toHaveAttribute('aria-invalid', 'true'); expect(requests).toHaveLength(before);
@@ -221,7 +233,11 @@ test('cart confirmation removes submitted quantities and preserves newer medicin
   const add = page.getByRole('button', { name: 'Add Osimert 80mg to RFQ list', exact: true }); await add.click(); await add.click();
   await page.getByRole('button', { name: 'Quotation cart, 1 items', exact: true }).click();
   await page.getByRole('button', { name: 'Submit this RFQ list', exact: true }).click();
-  const dialog = page.getByRole('dialog'); await dialog.locator('input[name=full_name]').fill('Cart Buyer'); await dialog.locator('input[name=destination_country]').fill('BD'); await dialog.locator('input[name=email]').fill('buyer@example.test');
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Continue to delivery', exact: true }).click();
+  await dialog.locator('input[name=destination_country]').fill('BD');
+  await dialog.getByRole('button', { name: 'Continue to user info', exact: true }).click();
+  await dialog.locator('input[name=full_name]').fill('Cart Buyer'); await dialog.locator('input[name=email]').fill('buyer@example.test');
   await expect(dialog.locator('button[type=submit]')).toBeEnabled(); await dialog.locator('button[type=submit]').click(); await expect.poll(() => submitted).toBe(true);
   await page.evaluate(() => {
     const raw = localStorage.getItem('medaxis_rfq_cart'); if (!raw) throw new Error('Cart missing');
@@ -285,7 +301,6 @@ test('bilingual RFQ fields, optional sections and contact artwork fit desktop/ta
   for (const locale of ['en', 'zh-CN']) for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     const dialog = await quick(page, locale);
-    const text = locale === 'en' ? 'Optional delivery details & notes' : '选填：配送信息与备注'; await dialog.getByText(text, { exact: true }).click();
     await dialog.getByText(locale === 'en' ? 'Optional prescription attachments' : '选填：处方附件', { exact: true }).click();
     await dialog.getByText(locale === 'en' ? 'Official WeChat & WhatsApp contact' : '官方微信与 WhatsApp', { exact: true }).click();
     const geometry = await dialog.evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth, right: element.getBoundingClientRect().right, viewport: innerWidth }));

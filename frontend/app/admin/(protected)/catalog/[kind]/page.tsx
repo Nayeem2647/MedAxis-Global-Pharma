@@ -18,6 +18,7 @@ import { ManagementTable, ManagementPagination } from '../../../../../components
 import { AdminMasterList } from '../../../../../components/admin/AdminMasterList';
 import { AdminProductList } from '../../../../../components/admin/AdminProductList';
 import { AdminBannerSetup } from '../../../../../components/admin/AdminBannerSetup';
+import { getHeroCopy } from '../../../../../lib/hero-copy';
 import { notFound } from 'next/navigation';
 export default async function ResourceListPage({
   params,
@@ -58,11 +59,13 @@ export default async function ResourceListPage({
       return <AdminUnavailable problem={{ status: 502 }} />;
     }
     const placementParam = z.enum(bannerPlacements).safeParse(query.get('placement'));
+    const [englishHero, chineseHero] = await Promise.all([getHeroCopy('en'), getHeroCopy('zh-CN')]);
     return (
       <AdminBannerSetup
         initialItems={bannersResult.result.data}
         initialPagination={bannersPagination}
         initialFilterPlacement={placementParam.success ? placementParam.data : ''}
+        heroCopyByLocale={{ en: englishHero, 'zh-CN': chineseHero }}
       />
     );
   }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
-import { Film, Image as ImageIcon, Pencil, Plus, Trash2, UploadCloud, X } from 'lucide-react';
+import { ArrowUpRight, CalendarClock, Check, Film, Image as ImageIcon, LayoutTemplate, Megaphone, Monitor, Newspaper, Package, Pencil, Plus, Smartphone, Trash2, UploadCloud, X } from 'lucide-react';
 import { z } from 'zod';
 import { apiRequest, ApiError } from '../../lib/api-client';
 import type { paginationSchema } from '../../lib/api-client';
@@ -19,6 +19,7 @@ import {
   MAX_VIDEO_BYTES,
   resourceList,
   resourceName,
+  requirePagination,
   validateCatalogImage,
   validatedInput,
   videoReceipt,
@@ -31,6 +32,10 @@ import {
 import { useAdminOperation } from '../../hooks/useAdminOperation';
 import { AdminOperationFeedback } from './AdminOperationFeedback';
 import { AdminLink } from './AdminShell';
+import { PlacementBanner } from '../home/PlacementBanner';
+import { AnnouncementStrip } from '../home/Announcements';
+import { HeroPanel, type HeroPanelCopy } from '../home/HeroPanel';
+import { plainText, type Banner } from '../../lib/public-catalog';
 
 type PaginationMeta = z.infer<typeof paginationSchema>;
 
@@ -55,6 +60,13 @@ const RESOURCE_LABELS: Record<BannerResourceType, string> = {
   GENERIC: 'Generic',
 };
 
+const PLACEMENT_INFO = {
+  MAIN_HERO: { icon: LayoutTemplate, label: 'Home hero', description: 'First impression on your homepage', path: '/en', variant: 'hero' },
+  PRODUCTS_BANNER: { icon: Package, label: 'Products', description: 'Above the product catalog', path: '/en/products', variant: 'products' },
+  BLOG_BANNER: { icon: Newspaper, label: 'Blog', description: 'Above your insights and updates', path: '/en/blog', variant: 'blog' },
+  ANNOUNCEMENT: { icon: Megaphone, label: 'Announcement', description: 'Between the contact and navigation bars', path: '/en', variant: 'hero' },
+} as const;
+
 function toResourceOption(type: Exclude<BannerResourceType, 'CUSTOM'>, item: ResourceRecord): ResourceOption {
   const segment = RESOURCE_SEGMENT[type];
   const label = resourceName(item);
@@ -70,10 +82,12 @@ export function AdminBannerSetup({
   initialItems,
   initialPagination,
   initialFilterPlacement,
+  heroCopyByLocale,
 }: {
   initialItems: BannerRecord[];
   initialPagination: PaginationMeta;
   initialFilterPlacement: BannerPlacement | '';
+  heroCopyByLocale: Record<'en' | 'zh-CN', HeroPanelCopy>;
 }) {
   const { operation, state } = useAdminOperation();
   const [ready, setReady] = useState(false);
@@ -82,6 +96,7 @@ export function AdminBannerSetup({
   const [banners, setBanners] = useState<BannerRecord[]>(initialItems);
   const [pagination, setPagination] = useState<PaginationMeta>(initialPagination);
   const [filterPlacement, setFilterPlacement] = useState<BannerPlacement | ''>(initialFilterPlacement);
+  const [appliedPlacement, setAppliedPlacement] = useState<BannerPlacement | ''>(initialFilterPlacement);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [placement, setPlacement] = useState<BannerPlacement>('MAIN_HERO');
@@ -97,6 +112,8 @@ export function AdminBannerSetup({
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaError, setMediaError] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [previewLocale, setPreviewLocale] = useState<'en' | 'zh-CN'>('en');
 
   const [enTitle, setEnTitle] = useState('');
   const [enBody, setEnBody] = useState('');
@@ -116,6 +133,7 @@ export function AdminBannerSetup({
   useEffect(() => {
     if (resourceType === 'CUSTOM') {
       setResourceOptions([]);
+      setLoadingResources(false);
       return;
     }
     const controller = new AbortController();
@@ -182,23 +200,27 @@ export function AdminBannerSetup({
     formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  async function refreshList(nextPlacement: BannerPlacement | '' = filterPlacement) {
-    const query = new URLSearchParams({ page: '1', limit: '50' });
+  async function refreshList(nextPlacement: BannerPlacement | '' = appliedPlacement, page = pagination.page): Promise<void> {
+    const query = new URLSearchParams({ page: String(page), limit: String(pagination.limit) });
     if (nextPlacement) query.set('placement', nextPlacement);
     const result = await apiRequest(`/v1/admin/cms/banners?${query}`, z.array(bannerRecord).max(100));
+    const nextPagination = requirePagination(result.meta);
+    const lastPage = Math.max(1, nextPagination.total_pages);
+    if (page > lastPage) return refreshList(nextPlacement, lastPage);
     setBanners(result.data);
-    if (result.meta.pagination) setPagination(result.meta.pagination);
+    setAppliedPlacement(nextPlacement);
+    setPagination(nextPagination);
   }
 
   async function handleFileSelect(file: File | undefined) {
-    if (!file || uploadingMedia) return;
+    if (!file || !ready || state.busy || state.blocked || uploadingMedia) return;
     setMediaError('');
     const isVideo = ['video/mp4', 'video/webm'].includes(file.type);
     setUploadingMedia(true);
     try {
       if (isVideo) {
         if (!file.size || file.size > MAX_VIDEO_BYTES) {
-          throw new Error('Animation video must be MP4 or WebM up to 50 MiB.');
+          throw new Error('Animation video must be MP4 or WebM up to 100 MiB.');
         }
         const form = new FormData();
         form.set('video', file);
@@ -216,8 +238,10 @@ export function AdminBannerSetup({
         setMediaPreviewUrl(receipt.url);
       }
     } catch (error: unknown) {
-      if (error instanceof ApiError && error.status === 422) {
-        setMediaError('Choose a valid JPEG/PNG/WebP image (up to 5 MiB) or MP4/WebM video (up to 50 MiB).');
+      if (error instanceof ApiError && error.status === 413) {
+        setMediaError('Uploaded file exceeds the size limit (images up to 25 MiB, videos up to 100 MiB).');
+      } else if (error instanceof ApiError && error.status === 422) {
+        setMediaError('Choose a valid JPEG/PNG/WebP image (up to 25 MiB) or MP4/WebM video (up to 100 MiB).');
       } else if (error instanceof Error && error.message) {
         setMediaError(error.message);
       } else {
@@ -225,6 +249,7 @@ export function AdminBannerSetup({
       }
     } finally {
       setUploadingMedia(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -239,6 +264,10 @@ export function AdminBannerSetup({
     setMediaError('');
     if (placement !== 'ANNOUNCEMENT' && !mediaKey) {
       setMediaError('Upload a banner image or animation video for this banner placement.');
+      return;
+    }
+    if (resourceType !== 'CUSTOM' && !resourceId) {
+      setMediaError('Select a resource before saving, or choose Custom URL.');
       return;
     }
     const fallbackTitle = bannerPlacementLabels[placement];
@@ -274,7 +303,7 @@ export function AdminBannerSetup({
         });
         return (await apiRequest('/v1/admin/cms/banners', bannerRecord, { method: 'POST', json: payload })).data;
       },
-      () => refreshList(filterPlacement),
+      () => refreshList(appliedPlacement, editingId ? pagination.page : 1),
       () => {
         resetForm(placement);
       },
@@ -300,7 +329,7 @@ export function AdminBannerSetup({
         });
         return (await apiRequest('/v1/admin/cms/banners', bannerRecord, { method: 'POST', json: payload })).data;
       },
-      () => refreshList(filterPlacement),
+      () => refreshList(appliedPlacement),
     );
   }
 
@@ -313,7 +342,7 @@ export function AdminBannerSetup({
         });
         return receipt.data;
       },
-      () => refreshList(filterPlacement),
+      () => refreshList(appliedPlacement),
       () => {
         setConfirmDeleteId(null);
         if (editingId === row.id) resetForm();
@@ -323,11 +352,22 @@ export function AdminBannerSetup({
 
   const ratioGuide = bannerRatioGuides[placement];
   const disabled = !ready || state.busy || state.blocked || uploadingMedia;
+  const previewTitle = (previewLocale === 'zh-CN' && zhEnabled ? zhTitle.trim() : '') || enTitle.trim() || bannerPlacementLabels[placement];
+  const previewBody = (previewLocale === 'zh-CN' && zhEnabled ? zhBody.trim() : '') || enBody.trim();
+  const previewBanner: Banner = {
+    id: editingId ?? 'banner-preview', placement, media_type: mediaType, media_url: mediaPreviewUrl,
+    show_overlay: showOverlay, title: plainText(previewTitle), body: plainText(previewBody),
+    sort_order: sortOrder, ...(linkPath.trim() ? { link_path: linkPath.trim() } : {}),
+  };
+  const draftStatus = bannerScheduleState({ is_active: isActive, ...(startsAt ? { starts_at: `${startsAt}Z` } : {}), ...(endsAt ? { ends_at: `${endsAt}Z` } : {}) });
+  const liveCount = banners.filter((row) => bannerScheduleState(row) === 'Active').length;
+  const scheduledCount = banners.filter((row) => bannerScheduleState(row) === 'Scheduled').length;
 
   return (
     <div className="admin-products-page banner-setup-page">
       <div className="admin-page-heading">
         <div>
+          <p className="admin-kicker">Website content</p>
           <div className="admin-products-title">
             <span className="admin-products-title-icon">
               <ImageIcon size={24} aria-hidden="true" />
@@ -336,54 +376,66 @@ export function AdminBannerSetup({
             <span className="admin-products-total">{pagination.total_items}</span>
           </div>
           <p className="muted">
-            Upload image or animation video banners and manage placement across Home Hero, Products, Blog, and Announcements.
+            Make every placement count. Create, preview and schedule your website banners in one place.
           </p>
         </div>
-        <AdminLink href="/en" className="button secondary">
-          View Website
-        </AdminLink>
+        <div className="banner-heading-actions">
+          <button type="button" className="button secondary" disabled={!ready || state.busy || uploadingMedia} onClick={() => void operation.refresh(() => refreshList())}>Refresh state</button>
+          <AdminLink href="/en" className="button secondary">
+            View Website <ArrowUpRight size={16} aria-hidden="true" />
+          </AdminLink>
+        </div>
       </div>
 
       <AdminOperationFeedback state={state} />
 
+      <div className="banner-overview" aria-label="Banners on this page">
+        <div><ImageIcon size={20} aria-hidden="true" /><span><strong>{pagination.total_items}</strong><small>Banners in this view</small></span></div>
+        <div><Check size={20} aria-hidden="true" /><span><strong>{liveCount}</strong><small>Live on this page</small></span></div>
+        <div><CalendarClock size={20} aria-hidden="true" /><span><strong>{scheduledCount}</strong><small>Scheduled on this page</small></span></div>
+      </div>
+
       <section ref={formSectionRef} className="banner-setup-card" aria-label={editingId ? 'Edit banner' : 'Create banner'}>
         <div className="banner-setup-card-header">
-          <h2>{editingId ? 'Edit Banner' : 'Add New Banner'}</h2>
+          <div><p className="admin-kicker">Banner studio</p><h2>{editingId ? 'Edit Banner' : 'Add New Banner'}</h2></div>
           {editingId && (
-            <button type="button" className="button secondary banner-cancel-edit" onClick={() => resetForm()}>
+            <button type="button" disabled={disabled} className="button secondary banner-cancel-edit" onClick={() => resetForm()}>
               Cancel edit
             </button>
           )}
         </div>
-        <form onSubmit={(event) => void handleSave(event)}>
+        <form onSubmit={(event) => void handleSave(event)} onInvalidCapture={(event) => {
+          if (event.target instanceof HTMLElement) {
+            const section = event.target.closest('details');
+            if (section) section.open = true;
+          }
+        }}>
           <fieldset disabled={disabled} className="banner-setup-fieldset">
+            <div className="banner-placement-picker" role="group" aria-label="Choose banner placement">
+              {bannerPlacements.map((value) => {
+                const info = PLACEMENT_INFO[value];
+                const Icon = info.icon;
+                return <button key={value} type="button" className={`banner-placement-option${placement === value ? ' is-selected' : ''}`} aria-pressed={placement === value} onClick={() => setPlacement(value)}>
+                  <Icon size={20} aria-hidden="true" /><strong>{info.label}</strong><small>{info.description}</small>
+                  <span>{bannerRatioGuides[value].ratio}{placement === value && <Check size={14} aria-hidden="true" />}</span>
+                </button>;
+              })}
+            </div>
             <div className="banner-setup-grid">
               <div className="banner-setup-fields">
-                <label className="banner-field">
-                  <span>Banner Type</span>
-                  <select
-                    name="placement"
-                    value={placement}
-                    onChange={(event) => setPlacement(event.currentTarget.value as BannerPlacement)}
-                  >
-                    {bannerPlacements.map((value) => (
-                      <option key={value} value={value}>
-                        {bannerPlacementLabels[value]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <input type="hidden" name="placement" value={placement} />
 
                 <label className="banner-field">
-                  <span>Banner URL</span>
+                  <span>Destination URL <small>Optional</small></span>
                   <input
                     name="link_path"
                     type="text"
-                    placeholder="Enter url (e.g. /en/products)"
+                    placeholder="/en/products"
                     maxLength={500}
                     value={linkPath}
                     onChange={(event) => setLinkPath(event.currentTarget.value)}
                   />
+                  <small>Use a page on this website, for example /en/products. Leave blank for a banner without a link.</small>
                 </label>
 
                 <label className="banner-field">
@@ -411,6 +463,7 @@ export function AdminBannerSetup({
                     <select
                       name="resource_id"
                       value={resourceId}
+                      required
                       disabled={loadingResources}
                       onChange={(event) => {
                         const selectedId = event.currentTarget.value;
@@ -433,18 +486,19 @@ export function AdminBannerSetup({
 
                 <details className="banner-optional-details" open={placement === 'ANNOUNCEMENT'}>
                   <summary>
-                    Headline, description &amp; schedule
+                    Headline &amp; description
                     <small>{placement === 'ANNOUNCEMENT' ? 'Required for announcement bar' : 'Optional'}</small>
                   </summary>
                   <div className="banner-optional-body">
-                    {placement !== 'ANNOUNCEMENT' && (
+                    {placement === 'MAIN_HERO' && <p className="banner-field-help">The homepage introduction, search and actions always stay over every hero image or video. These fields name the creative; captions below apply to Products and Blog banners.</p>}
+                    {placement !== 'ANNOUNCEMENT' && placement !== 'MAIN_HERO' && (
                       <label className="admin-check">
                         <input
                           type="checkbox"
                           checked={showOverlay}
                           onChange={(event) => setShowOverlay(event.currentTarget.checked)}
                         />
-                        Show overlay headline &amp; search/copy over banner media
+                        Show headline &amp; description over the media
                       </label>
                     )}
                     <label className="banner-field">
@@ -453,7 +507,7 @@ export function AdminBannerSetup({
                         name="en_title"
                         type="text"
                         maxLength={200}
-                        required={placement === 'ANNOUNCEMENT'}
+                        required={placement === 'ANNOUNCEMENT' || (placement !== 'MAIN_HERO' && showOverlay)}
                         placeholder={bannerPlacementLabels[placement]}
                         value={enTitle}
                         onChange={(event) => setEnTitle(event.currentTarget.value)}
@@ -465,11 +519,20 @@ export function AdminBannerSetup({
                         name="en_body"
                         rows={2}
                         maxLength={5000}
-                        required={placement === 'ANNOUNCEMENT'}
+                        required={placement === 'ANNOUNCEMENT' || (placement !== 'MAIN_HERO' && showOverlay)}
                         placeholder="Short sourcing notice or promotional caption"
                         value={enBody}
                         onChange={(event) => setEnBody(event.currentTarget.value)}
                       />
+                    </label>
+                  </div>
+                </details>
+                <details className="banner-optional-details" open>
+                  <summary>Publishing &amp; schedule <small>UTC</small></summary>
+                  <div className="banner-optional-body">
+                    <label className="admin-check banner-active-check">
+                      <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.currentTarget.checked)} />
+                      Enable banner during its scheduled dates
                     </label>
                     <div className="banner-schedule-row">
                       <label className="banner-field">
@@ -478,6 +541,7 @@ export function AdminBannerSetup({
                           name="sort_order"
                           type="number"
                           min={0}
+                          max={Number.MAX_SAFE_INTEGER}
                           value={sortOrder}
                           onChange={(event) => setSortOrder(Number(event.currentTarget.value) || 0)}
                         />
@@ -498,12 +562,20 @@ export function AdminBannerSetup({
                           name="ends_at"
                           type="datetime-local"
                           step="1"
+                          min={startsAt || undefined}
                           value={endsAt}
                           onChange={(event) => setEndsAt(event.currentTarget.value)}
                         />
                       </label>
                     </div>
+                    <p className="banner-field-help">Leave dates empty to show whenever enabled. Lower sort orders appear first. All dates are in UTC.</p>
+                    <span className={`banner-schedule-pill is-${draftStatus.toLowerCase()}`}>{draftStatus === 'Inactive' ? 'Unpublished' : draftStatus === 'Active' ? 'Live when saved' : draftStatus}</span>
+                  </div>
+                </details>
 
+                <details className="banner-optional-details">
+                  <summary>Translation <small>简体中文</small></summary>
+                  <div className="banner-optional-body">
                     <label className="admin-check">
                       <input
                         type="checkbox"
@@ -541,6 +613,25 @@ export function AdminBannerSetup({
               </div>
 
               <div className="banner-setup-upload">
+                <div className="banner-live-preview">
+                  <div className="banner-preview-toolbar">
+                    <div><span className="banner-preview-indicator" /><strong>Live preview</strong></div>
+                    <div className="banner-preview-devices" role="group" aria-label="Preview device">
+                      <button type="button" aria-label="Desktop preview" aria-pressed={previewDevice === 'desktop'} onClick={() => setPreviewDevice('desktop')}><Monitor size={16} aria-hidden="true" /></button>
+                      <button type="button" aria-label="Mobile preview" aria-pressed={previewDevice === 'mobile'} onClick={() => setPreviewDevice('mobile')}><Smartphone size={16} aria-hidden="true" /></button>
+                    </div>
+                  </div>
+                  <div className={`banner-preview-canvas is-${previewDevice}`}>
+                    <div className="banner-preview-viewport">
+                      {placement === 'ANNOUNCEMENT' ? <div className="banner-announcement-preview"><AnnouncementStrip banners={[previewBanner]} locale={previewLocale} labels={{ title: 'Announcement preview', dismiss: 'Dismiss announcement', previous: 'Previous announcements', next: 'Next announcements', read: 'Read notice' }} preview /></div> : placement === 'MAIN_HERO' ? <PlacementBanner banners={[previewBanner]} locale={previewLocale} variant="hero" preview><HeroPanel copy={heroCopyByLocale[previewLocale]} preview /></PlacementBanner> : mediaPreviewUrl ? <PlacementBanner banners={[previewBanner]} locale={previewLocale} variant={PLACEMENT_INFO[placement].variant} preview /> : <div className="banner-preview-placeholder"><ImageIcon size={30} aria-hidden="true" /><strong>Your next first impression</strong><span>Upload media to preview this placement.</span></div>}
+                    </div>
+                  </div>
+                  <div className="banner-preview-footer">
+                    <span>{PLACEMENT_INFO[placement].label} · {ratioGuide.ratio}</span>
+                    <select aria-label="Preview language" value={previewLocale} onChange={(event) => setPreviewLocale(event.currentTarget.value as 'en' | 'zh-CN')}><option value="en">English</option><option value="zh-CN">简体中文</option></select>
+                  </div>
+                </div>
+                <div className="banner-upload-heading"><strong>Banner media</strong><span>{placement === 'ANNOUNCEMENT' ? 'Optional · announcement displays text only' : 'Image or video'}</span></div>
                 <div
                   className={`banner-dropzone${dragActive ? ' is-drag' : ''}${mediaPreviewUrl ? ' has-preview' : ''}`}
                   onDragOver={(event) => {
@@ -553,8 +644,9 @@ export function AdminBannerSetup({
                   <input
                     ref={fileInputRef}
                     type="file"
+                    aria-label="Upload banner media"
                     accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
-                    className="sr-only"
+                    hidden
                     id="banner-media-file"
                     onChange={(event) => void handleFileSelect(event.currentTarget.files?.[0])}
                   />
@@ -572,9 +664,9 @@ export function AdminBannerSetup({
                           {mediaType === 'VIDEO' ? 'Animation Video' : 'Banner Image'}
                         </span>
                         <div>
-                          <label htmlFor="banner-media-file" className="banner-preview-action">
+                          <button type="button" onClick={() => fileInputRef.current?.click()} className="banner-preview-action">
                             Replace
-                          </label>
+                          </button>
                           <button
                             type="button"
                             className="banner-preview-remove"
@@ -592,11 +684,11 @@ export function AdminBannerSetup({
                       </div>
                     </div>
                   ) : (
-                    <label htmlFor="banner-media-file" className="banner-dropzone-label">
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="banner-dropzone-label">
                       <UploadCloud size={30} aria-hidden="true" />
                       <span>{uploadingMedia ? 'Uploading media…' : 'Drag and drop file or Browse file'}</span>
-                      <small>JPG, PNG, WebP (up to 5 MiB) or MP4 / WebM animation video (up to 50 MiB)</small>
-                    </label>
+                      <small>JPG, PNG, WebP (up to 25 MiB) or MP4 / WebM animation video (up to 100 MiB)</small>
+                    </button>
                   )}
                 </div>
 
@@ -609,18 +701,11 @@ export function AdminBannerSetup({
                 <div className="banner-ratio-note">
                   <strong>Banner Media Ratio {ratioGuide.ratio}</strong>
                   <p>
-                    {ratioGuide.note} Banner ratio is not the same for all sections in website. Please review the ratio before upload.
+                    {ratioGuide.note} Keep essential text and subjects near the center; edges may crop on mobile.
                   </p>
                 </div>
 
-                <label className="admin-check banner-active-check">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(event) => setIsActive(event.currentTarget.checked)}
-                  />
-                  Publish banner immediately on save
-                </label>
+                <AdminLink href={PLACEMENT_INFO[placement].path} className="banner-placement-link">View this placement on website <ArrowUpRight size={14} aria-hidden="true" /></AdminLink>
               </div>
             </div>
 
@@ -636,19 +721,23 @@ export function AdminBannerSetup({
         </form>
       </section>
 
-      <section className="banner-table-card" aria-label="Banner table">
+      <section className="banner-table-card" aria-label="Banner list">
         <div className="banner-table-toolbar">
-          <div className="banner-table-title">
-            <h2>Banner Table</h2>
-            <span className="admin-products-total">{banners.length}</span>
+          <div>
+            <div className="banner-table-title">
+              <h2>Banner list</h2>
+              <span className="admin-products-total">{pagination.total_items}</span>
+            </div>
+            <p className="banner-table-description">Manage your images, videos and scheduled announcements.</p>
           </div>
           <div className="banner-table-controls">
             <select
               aria-label="Filter by banner type"
+              disabled={disabled}
               value={filterPlacement}
               onChange={(event) => setFilterPlacement(event.currentTarget.value as BannerPlacement | '')}
             >
-              <option value="">All</option>
+              <option value="">All placements</option>
               {bannerPlacements.map((value) => (
                 <option key={value} value={value}>
                   {bannerPlacementLabels[value]}
@@ -659,13 +748,14 @@ export function AdminBannerSetup({
               type="button"
               className="button primary banner-filter-btn"
               disabled={disabled}
-              onClick={() => void operation.refresh(() => refreshList(filterPlacement))}
+              onClick={() => void operation.refresh(() => refreshList(filterPlacement, 1))}
             >
               Filter
             </button>
             <button
               type="button"
               className="button primary"
+              disabled={disabled}
               onClick={() => {
                 resetForm(filterPlacement || 'MAIN_HERO');
                 formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -678,14 +768,21 @@ export function AdminBannerSetup({
         </div>
 
         <div className="admin-table-scroll">
-          <table className="admin-products-table banner-table">
+          <table className="banner-table" aria-label="Website banners">
+            <colgroup>
+              <col className="banner-col-index" />
+              <col className="banner-col-creative" />
+              <col />
+              <col className="banner-col-publication" />
+              <col className="banner-col-actions" />
+            </colgroup>
             <thead>
               <tr>
-                <th>SL</th>
-                <th>Image</th>
-                <th>Banner Type</th>
-                <th>Published</th>
-                <th>Action</th>
+                <th scope="col">#</th>
+                <th scope="col">Banner</th>
+                <th scope="col">Placement &amp; schedule</th>
+                <th scope="col">Publication</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -694,33 +791,38 @@ export function AdminBannerSetup({
                 const scheduleState = bannerScheduleState(row);
                 return (
                   <tr key={row.id}>
-                    <td>{index + 1}</td>
-                    <td>
-                      {row.media_url ? (
-                        <div className="banner-table-media-cell">
+                    <td className="banner-table-index">{(pagination.page - 1) * pagination.limit + index + 1}</td>
+                    <td className="banner-table-creative">
+                      <div className="banner-table-creative-content">
+                        <button type="button" className="banner-table-media-cell" disabled={disabled} aria-label={`Preview and edit ${row.translations.en.title}`} title="Preview and edit banner" onClick={() => loadBannerIntoForm(row)}>
+                          {row.media_url ? <>
                           {row.media_type === 'VIDEO' ? (
-                            <video src={row.media_url} muted loop playsInline className="banner-table-thumb" />
+                            <video src={row.media_url} muted playsInline preload="metadata" aria-hidden="true" className="banner-table-thumb" />
                           ) : (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={row.media_url} alt={row.translations.en.title} width={108} height={36} className="banner-table-thumb" />
+                            <img src={row.media_url} alt="" width={160} height={80} loading="lazy" className="banner-table-thumb" />
                           )}
-                          {row.media_type === 'VIDEO' && <span className="banner-table-video-tag">Video</span>}
-                        </div>
-                      ) : (
-                        <div className="banner-table-text-thumb">
+                          {row.media_type === 'VIDEO' && <span className="banner-table-video-tag"><Film size={12} aria-hidden="true" />Video</span>}
+                          </> : <span className="banner-table-text-thumb"><Megaphone size={26} aria-hidden="true" /><span>Text announcement</span></span>}
+                        </button>
+                        <div className="banner-table-caption">
                           <strong>{row.translations.en.title}</strong>
-                          <span>{row.translations.en.body}</span>
+                          <span>{row.media_url ? `${row.media_type === 'VIDEO' ? 'Video' : 'Image'} · ${bannerRatioGuides[placementKey].ratio}` : 'Text announcement'}</span>
                         </div>
-                      )}
-                    </td>
-                    <td>
-                      <div className="banner-table-type-cell">
-                        <strong>{bannerPlacementLabels[placementKey]}</strong>
-                        <span className={`banner-schedule-pill is-${scheduleState.toLowerCase()}`}>{scheduleState}</span>
-                        {row.link_path && <small>{row.link_path}</small>}
                       </div>
                     </td>
-                    <td>
+                    <td className="banner-table-placement" data-label="Placement & schedule">
+                      <div className="banner-table-type-cell">
+                        <strong>{bannerPlacementLabels[placementKey]}</strong>
+                        <small>Display order: {row.sort_order}</small>
+                        {row.starts_at && <small>From {row.starts_at.slice(0, 16).replace('T', ' ')} UTC</small>}
+                        {row.ends_at && <small>Until {row.ends_at.slice(0, 16).replace('T', ' ')} UTC</small>}
+                        {row.link_path && <small className="banner-table-destination" title={row.link_path}>{row.link_path}</small>}
+                      </div>
+                    </td>
+                    <td className="banner-table-publication" data-label="Publication">
+                      <div className="banner-table-publication-content">
+                        <div className="banner-table-toggle-row">
                       <button
                         type="button"
                         role="switch"
@@ -732,17 +834,23 @@ export function AdminBannerSetup({
                       >
                         <span />
                       </button>
+                          <span>{row.is_active ? 'Enabled' : 'Disabled'}</span>
+                        </div>
+                        <span className={`banner-schedule-pill is-${scheduleState.toLowerCase()}`}>{scheduleState === 'Active' ? 'Live' : scheduleState === 'Inactive' ? 'Unpublished' : scheduleState}</span>
+                      </div>
                     </td>
-                    <td>
+                    <td className="banner-table-action-cell" data-label="Actions">
                       <div className="banner-table-actions">
-                        <button
+                        {confirmDeleteId !== row.id && <button
                           type="button"
                           className="banner-icon-btn is-edit"
                           aria-label={`Edit ${row.translations.en.title}`}
+                          disabled={disabled}
                           onClick={() => loadBannerIntoForm(row)}
                         >
-                          <Pencil size={15} aria-hidden="true" />
-                        </button>
+                          <Pencil size={17} aria-hidden="true" />
+                          <span>Edit</span>
+                        </button>}
                         {confirmDeleteId === row.id ? (
                           <span className="banner-delete-confirm">
                             <button
@@ -766,9 +874,10 @@ export function AdminBannerSetup({
                             type="button"
                             className="banner-icon-btn is-delete"
                             aria-label={`Delete ${row.translations.en.title}`}
+                            disabled={disabled}
                             onClick={() => setConfirmDeleteId(row.id)}
                           >
-                            <Trash2 size={15} aria-hidden="true" />
+                            <Trash2 size={18} aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -785,6 +894,10 @@ export function AdminBannerSetup({
               )}
             </tbody>
           </table>
+        </div>
+        <div className="banner-list-pagination">
+          <span>{pagination.total_items ? `Showing ${(pagination.page - 1) * pagination.limit + 1}–${(pagination.page - 1) * pagination.limit + banners.length} of ${pagination.total_items} banners` : 'No banners to show'}</span>
+          <div><button type="button" className="button secondary" disabled={disabled || !pagination.has_prev} onClick={() => void operation.refresh(() => refreshList(appliedPlacement, pagination.page - 1))}>Previous</button><span>Page {pagination.page} of {Math.max(1, pagination.total_pages)}</span><button type="button" className="button secondary" disabled={disabled || !pagination.has_next} onClick={() => void operation.refresh(() => refreshList(appliedPlacement, pagination.page + 1))}>Next</button></div>
         </div>
       </section>
     </div>
