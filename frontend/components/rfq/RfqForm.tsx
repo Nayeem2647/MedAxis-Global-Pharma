@@ -4,14 +4,13 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { useLocale, useTranslations } from 'next-intl';
 import { z } from 'zod';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, FileText, MapPin, Package, Pill, ShieldCheck } from 'lucide-react';
 import { useRfqSubmission } from '../../hooks/useRfqSubmission';
 import { CartError, type CatalogCartInput, type CartItem } from '../../lib/cart';
 import { cartLine, countryCodes, rfqBusinessSchema, rfqLineSchema, type RfqKind } from '../../lib/rfq';
 import type { ContactConfig } from '../../lib/public-config';
 import { useCart } from '../layout/CartProvider';
 import { ContactChannels } from '../layout/ContactDialog';
-import { Modal } from '../layout/Modal';
 import { PrescriptionUpload } from './PrescriptionUpload';
 
 type FieldErrors = Record<string, boolean>;
@@ -22,8 +21,9 @@ function stepForField(field: string): 0 | 1 | 2 {
   return 2;
 }
 
-export function RfqDialog({ kind, product, initialName, contact, onClose }: {
+export function RfqForm({ kind, product, initialName, contact, onClose, active, onLockChange }: {
   kind: RfqKind; product?: CatalogCartInput; initialName?: string; contact: ContactConfig; onClose(): void;
+  active: boolean; onLockChange(value: boolean): void;
 }) {
   const t = useTranslations('Rfq');
   const cartText = useTranslations('Cart');
@@ -32,7 +32,11 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
   const cart = useCart();
   const [snapshot] = useState<readonly CartItem[]>(() => cart.items.map((item) => ({ ...item })));
   const { state, locked, isLocked, submit, reconcile } = useRfqSubmission();
+  const lastHandledState = useRef(state);
   const formRef = useRef<HTMLFormElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const previousStep = useRef(0);
+  const wasActive = useRef(false);
   const uploadBusyRef = useRef(false);
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -43,18 +47,23 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
   const [challengeVersion, setChallengeVersion] = useState(0);
   const [prescriptions, setPrescriptions] = useState<string[]>([]);
   const [localErrors, setLocalErrors] = useState<FieldErrors>({});
+  const [editedServerFields, setEditedServerFields] = useState<FieldErrors>({});
   const [listIssue, setListIssue] = useState<string>();
-  const [productRecap, setProductRecap] = useState<{ name: string; quantity: number; unit: string }>({
+  const [dirty, setDirty] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [productRecap, setProductRecap] = useState({
     name: product?.name ?? initialName ?? '',
-    quantity: product?.quantity ?? 1,
+    quantity: String(product?.quantity ?? 1),
     unit: product?.packagingUnit ?? 'BOX',
+    strength: product?.strength ?? '', city: '', currency: '', lineUnits: snapshot.map((item) => item.packagingUnit),
   });
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const busy = state.status === 'submitting';
+  const succeeded = state.status === 'success' && Boolean(state.receipt);
   const emailRequired = locale === 'zh-CN' || preferredLocale === 'zh-CN' || country.trim().toUpperCase() === 'CN';
   const errors: FieldErrors = { ...localErrors };
-  if (state.status === 'invalid') for (const detail of state.error?.details ?? []) errors[detail.field] = true;
+  if (state.status === 'invalid') for (const detail of state.error?.details ?? []) if (!editedServerFields[detail.field]) errors[detail.field] = true;
 
   function invalid(field: string) { return errors[field] || undefined; }
   function fieldError(field: string) {
@@ -63,11 +72,47 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
   function described(field: string) { return invalid(field) ? `rfq-${field}` : undefined; }
   const refreshChallenge = () => { setToken(''); setChallengeVersion((value) => value + 1); };
 
-  useEffect(() => { if (state.status === 'challenge' || state.status === 'invalid') { setToken(''); setChallengeVersion((value) => value + 1); } }, [state]);
+  useEffect(() => { onLockChange(locked || uploadBusy); }, [locked, uploadBusy, onLockChange]);
   useEffect(() => {
+    const media = window.matchMedia('(min-width: 901px)');
+    const update = () => setSummaryOpen(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    if (!dirty || succeeded || locked) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty, succeeded, locked]);
+  useEffect(() => {
+    const changed = previousStep.current !== step;
+    const activated = active && !wasActive.current;
+    wasActive.current = active;
+    previousStep.current = step;
+    if (!active || (!changed && !activated)) return;
+    if (Object.keys(localErrors).length || state.status === 'invalid') return;
+    const frame = requestAnimationFrame(() => {
+      if (changed) {
+        const legend = formRef.current?.querySelector<HTMLElement>(`[data-rfq-step="${step}"] legend`);
+        legend?.focus({ preventScroll: true });
+        legend?.scrollIntoView({ block: 'start' });
+      } else headingRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active, step, localErrors, state.status]);
+
+  useEffect(() => {
+    if (state.status === 'challenge' || state.status === 'invalid') { setToken(''); setChallengeVersion((value) => value + 1); }
+    if (state.status === 'invalid') setEditedServerFields({});
+  }, [state]);
+  useEffect(() => {
+    const newServerError = state !== lastHandledState.current && state.status === 'invalid';
+    lastHandledState.current = state;
     const activeErrors = Object.entries({
       ...localErrors,
-      ...(state.status === 'invalid' ? Object.fromEntries((state.error?.details ?? []).map((d) => [d.field, true])) : {}),
+      ...(newServerError ? Object.fromEntries((state.error?.details ?? []).map((d) => [d.field, true])) : {}),
     }).filter(([, hasErr]) => hasErr).map(([field]) => field);
     if (!activeErrors.length) return;
     const targetStep = Math.min(...activeErrors.map(stepForField)) as 0 | 1 | 2;
@@ -79,6 +124,23 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
 
   function read(form: FormData, name: string) { return String(form.get(name) ?? '').trim(); }
   function optional(form: FormData, name: string) { const value = read(form, name); return value ? { [name]: value } : {}; }
+  function updateSummary(event: FormEvent<HTMLFormElement>) {
+    if (!formRef.current || locked || uploadBusy) return;
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) {
+      const fields: Record<string, string> = { name: 'items.0.custom_medicine_name', strength: 'items.0.custom_strength', unit: 'items.0.packaging_unit', quantity: 'items.0.quantity', full_name: 'contact.full_name', company_name: 'contact.company_name', email: 'contact.email', whatsapp_number: 'contact.whatsapp_number', wechat_id: 'contact.wechat_id' };
+      const field = fields[target.name] ?? target.name;
+      if (field) setEditedServerFields((previous) => ({ ...previous, [field]: true }));
+    }
+    const form = new FormData(formRef.current);
+    setDirty(true);
+    setProductRecap({
+      name: product?.name ?? read(form, 'name'), quantity: read(form, 'quantity'),
+      unit: read(form, 'unit'), strength: product?.strength ?? read(form, 'strength'),
+      city: read(form, 'destination_city_port'), currency: read(form, 'preferred_currency'),
+      lineUnits: snapshot.map((item, index) => read(form, `items.${index}.packaging_unit`) || item.packagingUnit),
+    });
+  }
   function quickLine(form: FormData) {
     return {
       quantity: Number(form.get('quantity')),
@@ -116,13 +178,6 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
           ),
         );
         return false;
-      }
-      if (kind === 'quick-quote') {
-        setProductRecap({
-          name: product?.name ?? (read(form, 'name') || initialName || ''),
-          quantity: Number(form.get('quantity')) || 1,
-          unit: read(form, 'unit') || 'BOX',
-        });
       }
       return true;
     }
@@ -197,13 +252,18 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
   const requestId = state.error?.requestId && /^[\w-]{1,100}$/.test(state.error.requestId) ? state.error.requestId : undefined;
   const stepLabels = [t('stepProduct'), t('stepDelivery'), t('stepUser')] as const;
 
-  return <Modal title={kind === 'quick-quote' ? shell('quickQuote') : t('cartTitle')} onClose={close} closeDisabled={locked || uploadBusy}>
+  const title = kind === 'quick-quote' ? shell('quickQuote') : t('cartTitle');
+  return <main id={active ? 'main-content' : undefined} className="quote-request-page" aria-label={title}>
+    <div className="site-container quote-request-shell">
+      <header className="quote-request-heading">
+        <div><p className="eyebrow">{t('pageKicker')}</p><h1 ref={headingRef} tabIndex={-1}>{title}</h1><p>{t('intro')}</p></div>
+        <button type="button" className="button secondary quote-return" onClick={close} disabled={locked || uploadBusy || !cart.hydrated}><ArrowLeft size={17}/>{t('backToWebsite')}</button>
+      </header>
     {state.status === 'success' && state.receipt ? <div className="rfq-success" role="status"><CheckCircle2 size={36}/><h3>{t('success')}</h3><p className="rfq-reference">{state.receipt.rfq_number}</p><p>{t('successHelp')}</p>
       <p className="small muted">{t('emailGuidance')}</p><details className="rfq-details"><summary>{t('officialContact')}</summary><ContactChannels contact={contact}/></details>
       <button className="button primary" onClick={close}>{t('done')}</button></div>
     : <>
-      <p className="muted">{t('intro')}</p>
-      <form ref={formRef} className="stack-form rfq-form" noValidate onSubmit={send}>
+      <form ref={formRef} className="stack-form rfq-form quote-request-form" noValidate onSubmit={send} onChange={updateSummary}>
         <nav className="rfq-stepper" aria-label={t('stepsLabel')}>
           {stepLabels.map((label, index) => {
             const target = index as 0 | 1 | 2;
@@ -214,7 +274,7 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
                 type="button"
                 className={done ? 'is-done' : undefined}
                 aria-current={step === index ? 'step' : undefined}
-                disabled={locked || uploadBusy}
+                disabled={locked || uploadBusy || !cart.hydrated}
                 onClick={() => goToStep(target)}
               >
                 <span aria-hidden="true">{done ? <Check size={14}/> : index + 1}</span>
@@ -224,15 +284,17 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
           })}
         </nav>
 
+        <div className="quote-request-workspace">
+        <div className="quote-form-card">
         <div data-rfq-step="0" hidden={step !== 0} className="rfq-step-panel">
-          <fieldset disabled={locked || uploadBusy} className="rfq-fields"><legend>{t('requirements')}</legend>
+          <fieldset disabled={locked || uploadBusy || !cart.hydrated} className="rfq-fields"><legend tabIndex={-1}>{t('requirements')}</legend>
             {kind === 'quick-quote' ? <>
-              <label>{cartText('medicine')}<input name="name" maxLength={200} defaultValue={product?.name ?? initialName} readOnly={Boolean(product)} autoComplete="off" aria-invalid={invalid('items.0.custom_medicine_name')} aria-describedby={described('items.0.custom_medicine_name')}/>{fieldError('items.0.custom_medicine_name')}{fieldError('items.0.product_id')}</label>
-              <div className="form-pair"><label>{cartText('strength')}<input name="strength" maxLength={100} defaultValue={product?.strength} readOnly={Boolean(product)} aria-invalid={invalid('items.0.custom_strength')}/>{fieldError('items.0.custom_strength')}</label>
-                <label>{cartText('unit')}<input name="unit" maxLength={40} defaultValue={product?.packagingUnit ?? 'BOX'} readOnly={Boolean(product)} aria-invalid={invalid('items.0.packaging_unit')} aria-describedby={described('items.0.packaging_unit')}/>{fieldError('items.0.packaging_unit')}</label></div>
+              <label className="quote-field-wide">{cartText('medicine')}<input name="name" maxLength={200} defaultValue={product?.name ?? initialName} readOnly={Boolean(product)} autoComplete="off" aria-invalid={invalid('items.0.custom_medicine_name')} aria-describedby={described('items.0.custom_medicine_name')}/>{fieldError('items.0.custom_medicine_name')}{fieldError('items.0.product_id')}</label>
+              <div className="quote-medicine-fields"><label>{cartText('strength')}<input name="strength" maxLength={100} defaultValue={product?.strength} readOnly={Boolean(product)} aria-invalid={invalid('items.0.custom_strength')}/>{fieldError('items.0.custom_strength')}</label>
+                <label>{cartText('unit')}<input name="unit" maxLength={40} defaultValue={product?.packagingUnit ?? 'BOX'} readOnly={Boolean(product)} aria-invalid={invalid('items.0.packaging_unit')} aria-describedby={described('items.0.packaging_unit')}/>{fieldError('items.0.packaging_unit')}</label>
+                <label>{cartText('quantity')}<input name="quantity" type="number" min={1} max={Number.MAX_SAFE_INTEGER} step={1} defaultValue={product?.quantity ?? 1} aria-invalid={invalid('items.0.quantity')} aria-describedby={described('items.0.quantity')}/>{fieldError('items.0.quantity')}</label></div>
               {!product && <p className="small muted">{t('unitHelp')}</p>}
-              <label>{cartText('quantity')}<input name="quantity" type="number" min={1} max={Number.MAX_SAFE_INTEGER} step={1} defaultValue={product?.quantity ?? 1} aria-invalid={invalid('items.0.quantity')} aria-describedby={described('items.0.quantity')}/>{fieldError('items.0.quantity')}</label>
-              <label>{t('lineNotes')}<textarea name="items.0.line_notes" rows={2} maxLength={2000} aria-invalid={invalid('items.0.line_notes')}/>{fieldError('items.0.line_notes')}</label>
+              <label className="quote-field-wide">{t('lineNotes')}<textarea name="items.0.line_notes" rows={4} maxLength={2000} aria-invalid={invalid('items.0.line_notes')}/>{fieldError('items.0.line_notes')}</label>
             </> : <ul className="rfq-lines">{snapshot.map((item, index) => <li key={item.id}>
               <strong>{item.kind === 'catalog' ? item.names?.[locale] ?? item.name : item.name}</strong><p className="small muted">{item.strength} · {item.quantity}</p>
               <label>{cartText('unit')}<input name={`items.${index}.packaging_unit`} defaultValue={item.packagingUnit} readOnly={item.kind === 'catalog'} maxLength={40} aria-invalid={invalid(`items.${index}.packaging_unit`)} aria-describedby={described(`items.${index}.packaging_unit`)}/>{fieldError(`items.${index}.packaging_unit`)}</label>
@@ -242,11 +304,6 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
             </li>)}</ul>}
             {fieldError('items')}
           </fieldset>
-          <div className="rfq-step-actions">
-            <button type="button" className="button primary" disabled={locked || uploadBusy} onClick={() => goToStep(1)}>
-              {t('continueToDelivery')}<ArrowRight size={17}/>
-            </button>
-          </div>
           {kind === 'quick-quote' && <div className="rfq-list-box">
             <p className="small muted">{cartText('savedLocally')}</p>
             {listIssue && <p role="alert" className="form-error">{listIssue}</p>}
@@ -255,47 +312,22 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
         </div>
 
         <div data-rfq-step="1" hidden={step !== 1} className="rfq-step-panel">
-          <div className="rfq-step-summary">
-            <span>{t('summaryProduct')}</span>
-            <strong>
-              {kind === 'quick-quote'
-                ? `${productRecap.name || cartText('medicine')} · ${productRecap.quantity} ${productRecap.unit}`
-                : t('summaryItemsCount', { count: snapshot.length })}
-            </strong>
-          </div>
-          <fieldset disabled={locked || uploadBusy} className="rfq-fields"><legend>{t('deliveryTitle')}</legend>
+          <fieldset disabled={locked || uploadBusy || !cart.hydrated} className="rfq-fields"><legend tabIndex={-1}>{t('deliveryTitle')}</legend>
             <label>{t('country')}<input name="destination_country" autoComplete="country" maxLength={2} placeholder="BD / CN" value={country} onChange={(event) => setCountry(event.currentTarget.value.toUpperCase())} aria-invalid={invalid('destination_country')} aria-describedby={described('destination_country')}/>{fieldError('destination_country')}</label>
-            <p className="small muted">{t('countryHint')}</p>
             <label>{t('city')}<input name="destination_city_port" autoComplete="address-level2" maxLength={200} aria-invalid={invalid('destination_city_port')}/>{fieldError('destination_city_port')}</label>
             <label>{t('currency')}<select name="preferred_currency"><option value="">{t('unspecified')}</option>{['USD', 'EUR', 'CNY', 'BDT'].map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>{fieldError('preferred_currency')}</label>
+            <p className="small muted">{t('countryHint')}</p>
           </fieldset>
-          <div className="rfq-step-actions">
-            <button type="button" className="button secondary" disabled={locked || uploadBusy} onClick={() => goToStep(0)}>
-              <ArrowLeft size={17}/>{t('back')}
-            </button>
-            <button type="button" className="button primary" disabled={locked || uploadBusy} onClick={() => goToStep(2)}>
-              {t('continueToUser')}<ArrowRight size={17}/>
-            </button>
-          </div>
         </div>
 
         <div data-rfq-step="2" hidden={step !== 2} className="rfq-step-panel">
-          <div className="rfq-step-summary">
-            <span>{t('summaryDestination')}</span>
-            <strong>
-              {kind === 'quick-quote'
-                ? `${productRecap.name || cartText('medicine')} (${productRecap.quantity} ${productRecap.unit})`
-                : t('summaryItemsCount', { count: snapshot.length })}
-              {country ? ` → ${country}` : ''}
-            </strong>
-          </div>
-          <fieldset disabled={locked || uploadBusy} className="rfq-fields"><legend>{t('contactTitle')}</legend>
+          <fieldset disabled={locked || uploadBusy || !cart.hydrated} className="rfq-fields"><legend tabIndex={-1}>{t('contactTitle')}</legend>
             <label>{t('buyerType')}<select value={buyer} onChange={(event) => setBuyer(event.currentTarget.value)}><option value="B2C_PATIENT">{t('patient')}</option><option value="B2B_WHOLESALE">{t('wholesale')}</option></select></label>
             <label>{t('fullName')}<input name="full_name" autoComplete="name" maxLength={200} aria-invalid={invalid('contact.full_name')} aria-describedby={described('contact.full_name')}/>{fieldError('contact.full_name')}</label>
             {buyer === 'B2B_WHOLESALE' && <label>{t('company')}<input name="company_name" autoComplete="organization" maxLength={200} aria-invalid={invalid('contact.company_name')} aria-describedby={described('contact.company_name')}/>{fieldError('contact.company_name')}</label>}
             <label>{t('preferredLocale')}<select value={preferredLocale} onChange={(event) => setPreferredLocale(event.currentTarget.value)}><option value="en">English</option><option value="zh-CN">简体中文</option></select></label>
             <p className="small muted">{t(emailRequired ? 'emailRequired' : 'contactHelp')}</p>
-            <label>{t('email')}{emailRequired ? ' *' : ''}<input name="email" type="email" autoComplete="email" inputMode="email" maxLength={200} aria-required={emailRequired} aria-invalid={invalid('contact.email')} aria-describedby={described('contact.email')}/>{fieldError('contact.email')}</label>
+            <label className="quote-field-wide">{t('email')}{emailRequired ? ' *' : ''}<input name="email" type="email" autoComplete="email" inputMode="email" maxLength={200} aria-required={emailRequired} aria-invalid={invalid('contact.email')} aria-describedby={described('contact.email')}/>{fieldError('contact.email')}</label>
             <div className="form-pair"><label>WhatsApp<input name="whatsapp_number" autoComplete="tel" inputMode="tel" maxLength={50} aria-invalid={invalid('contact.whatsapp_number')}/>{fieldError('contact.whatsapp_number')}</label>
               <label>{t('wechat')}<input name="wechat_id" maxLength={100} autoComplete="off" aria-invalid={invalid('contact.wechat_id')}/>{fieldError('contact.wechat_id')}</label></div>
           </fieldset>
@@ -318,27 +350,39 @@ export function RfqDialog({ kind, product, initialName, contact, onClose }: {
           </div>}
           {locked && <p className="small muted" role="status">{t(busy ? 'submitting' : 'lockedHelp')}</p>}
 
-          <div className="rfq-step-actions">
-            {!locked && (
-              <button type="button" className="button secondary" disabled={uploadBusy} onClick={() => goToStep(1)}>
-                <ArrowLeft size={17}/>{t('back')}
-              </button>
-            )}
-            {locked && !busy ? (
-              <button type="button" className="button primary" disabled={state.status === 'challenge' && !token || state.error?.code === 'INTENT_EXPIRED'} onClick={async () => { if (await reconcile(state.status === 'challenge' ? token : undefined)) completed(); }}>
-                {t(state.status === 'challenge' ? 'retryChallenge' : 'reconcile')}
-              </button>
-            ) : (
-              <button type="submit" className="button primary" disabled={busy || uploadBusy || !token || !cart.hydrated}>
-                {t(busy ? 'submitting' : 'submit')}<ArrowRight size={17}/>
-              </button>
-            )}
-          </div>
-
           <p className="small muted">{t('emailGuidance')}</p>
           <details className="rfq-details"><summary>{t('officialContact')}</summary><ContactChannels contact={contact}/></details>
         </div>
+        </div>
+        <aside className="quote-summary-column">
+          <details className="quote-summary" open={summaryOpen} onToggle={(event) => setSummaryOpen(event.currentTarget.open)}>
+            <summary><span><FileText size={20}/>{t('summaryTitle')}</span><ChevronDown size={18}/></summary>
+            <div className="quote-summary-body">
+              <div className="quote-summary-section"><div className="quote-summary-label"><Pill size={17}/>{t('summaryProduct')}</div>
+                {kind === 'quick-quote' ? <><h2>{productRecap.name || t('summaryEmpty')}</h2>{productRecap.strength && <p>{productRecap.strength}</p>}
+                  <div className="quote-summary-quantity"><Package size={16}/><span>{productRecap.quantity || '—'} {productRecap.unit}</span></div></>
+                  : <><p className="quote-summary-count">{t('summaryItemsCount', { count: snapshot.length })}</p><ul className="quote-summary-items">{snapshot.map((item, index) => <li key={item.id}><strong>{item.kind === 'catalog' ? item.names?.[locale] ?? item.name : item.name}</strong><span>{item.quantity} {productRecap.lineUnits[index]}</span></li>)}</ul></>}
+              </div>
+              <div className="quote-summary-section"><div className="quote-summary-label"><MapPin size={17}/>{t('summaryDestination')}</div><p>{[productRecap.city, country].filter(Boolean).join(', ') || t('summaryEmpty')}</p><span className="small muted">{t('currency')}: {productRecap.currency || t('unspecified')}</span></div>
+              {prescriptions.length > 0 && <div className="quote-summary-section"><FileText size={17}/><span>{t('attachmentCount', { count: prescriptions.length })}</span></div>}
+              <div className="quote-summary-privacy"><ShieldCheck size={21}/><div><strong>{t('privateTitle')}</strong><p>{t('privateHelp')}</p></div></div>
+            </div>
+          </details>
+        </aside>
+        </div>
+        <div className="quote-request-actions" role="group" aria-label={t('formActions')}>
+          <div className="site-container quote-request-actions-inner">
+            <div className="quote-action-progress"><span>{t('stepCount', { step: step + 1, total: stepLabels.length })}</span><strong>{stepLabels[step]}</strong></div>
+            <div className="quote-action-buttons">
+              <button type="button" className="button secondary" disabled={locked || uploadBusy || !cart.hydrated} onClick={() => step === 0 ? close() : goToStep((step - 1) as 0 | 1)}><ArrowLeft size={17}/>{t(step === 0 ? 'cancelEnquiry' : 'back')}</button>
+              {step < 2 ? <button key={`continue-${step}`} type="button" className="button primary" disabled={locked || uploadBusy || !cart.hydrated} onClick={(event) => { event.preventDefault(); goToStep((step + 1) as 1 | 2); }}>{t(step === 0 ? 'continueToDelivery' : 'continueToUser')}<ArrowRight size={17}/></button>
+                : locked && !busy ? <button key="reconcile" type="button" className="button primary" disabled={state.status === 'challenge' && !token || state.error?.code === 'INTENT_EXPIRED'} onClick={async () => { if (await reconcile(state.status === 'challenge' ? token : undefined)) completed(); }}>{t(state.status === 'challenge' ? 'retryChallenge' : 'reconcile')}</button>
+                  : <button key="submit" type="submit" className="button primary" disabled={busy || uploadBusy || !token || !cart.hydrated}>{t(busy ? 'submitting' : 'submit')}<ArrowRight size={17}/></button>}
+            </div>
+          </div>
+        </div>
       </form>
     </>}
-  </Modal>;
+    </div>
+  </main>;
 }

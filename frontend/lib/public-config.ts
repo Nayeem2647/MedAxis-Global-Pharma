@@ -30,7 +30,7 @@ export function getAnalyticsConfig() {
   try {
     const url = new URL(script, 'https://medaxisglobalpharma.com');
     if (url.protocol !== 'https:' || url.username || url.password || url.hash || !url.pathname.endsWith('.js')) return null;
-    const collector = new URL(process.env.NEXT_PUBLIC_PLAUSIBLE_API_HOST ?? (script.startsWith('/') ? siteOrigin() : url.origin));
+    const collector = new URL(process.env.NEXT_PUBLIC_PLAUSIBLE_API_HOST?.trim() || (script.startsWith('/') ? siteOrigin() : url.origin));
     if (collector.protocol !== 'https:' || collector.username || collector.password || collector.search || collector.hash || collector.pathname !== '/') return null;
     return { domain, src: script, endpoint: `${collector.origin}/api/event` };
   } catch { return null; }

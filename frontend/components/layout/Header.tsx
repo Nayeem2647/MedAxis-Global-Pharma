@@ -137,10 +137,10 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
       href: `/${locale}/services`,
       items: [
         { label: t('coldChainLogistics'), href: `/${locale}/services#cold-chain`, Icon: Snowflake },
-        { label: t('globalPharmaSourcing'), href: `/${locale}/services/pharmaceutical-sourcing`, Icon: Globe },
-        { label: t('complianceCoa'), href: `/${locale}/services#compliance`, Icon: FileCheck2 },
-        { label: t('emergencyDelivery'), href: `/${locale}/services#delivery`, Icon: Plane },
-        { label: t('bulkFulfillment'), href: `/${locale}/services#bulk`, Icon: Package },
+        { label: t('globalPharmaSourcing'), href: `/${locale}/services#sourcing`, Icon: Globe },
+        { label: t('complianceCoa'), href: `/${locale}/services#coa-support`, Icon: FileCheck2 },
+        { label: t('emergencyDelivery'), href: `/${locale}/services#emergency-delivery`, Icon: Plane },
+        { label: t('bulkFulfillment'), href: `/${locale}/services#bulk-order`, Icon: Package },
       ],
     },
     {

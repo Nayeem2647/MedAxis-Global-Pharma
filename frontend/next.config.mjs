@@ -2,6 +2,11 @@ import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 const isDev = process.env.NODE_ENV !== 'production';
+// Separate browser-test runs can use independent build output directories.
+const e2eOutput = process.env.MEDAXIS_E2E_DIST_DIR || '.next-e2e';
+if (process.env.MEDAXIS_E2E === '1' && !/^\.next-e2e(?:-[a-z0-9-]+)?$/.test(e2eOutput)) {
+  throw new Error('MEDAXIS_E2E_DIST_DIR must be a local .next-e2e directory name.');
+}
 
 function configuredOrigin(value, name, httpsOnly = false) {
   if (!value) return undefined;
@@ -41,7 +46,7 @@ const csp = [
 
 /** @type {import('next').NextConfig} */
 const config = {
-  distDir: process.env.MEDAXIS_E2E === '1' ? '.next-e2e' : '.next',
+  distDir: process.env.MEDAXIS_E2E === '1' ? e2eOutput : '.next',
   typescript: { tsconfigPath: process.env.MEDAXIS_E2E === '1' ? 'tsconfig.e2e.json' : 'tsconfig.json' },
   poweredByHeader: false,
   reactStrictMode: true,
@@ -71,7 +76,7 @@ const config = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         ],
       },
-      ...['/q/:path*', '/admin/:path*', '/api/customer/:path*', '/:locale(en|zh-CN)/account/:path*', '/:locale(en|zh-CN)/:auth(login|register)'].map((source) => ({
+      ...['/q/:path*', '/admin/:path*', '/api/customer/:path*', '/:locale(en|zh-CN)/account/:path*', '/:locale(en|zh-CN)/:auth(login|register)', '/:locale(en|zh-CN)/request-quote'].map((source) => ({
         source,
         headers: [
           { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },

@@ -27,7 +27,7 @@ export function useProductTools() {
   return value;
 }
 
-export function ProductToolsProvider({ children }: { children: ReactNode }) {
+export function ProductToolsProvider({ children, showTray = true }: { children: ReactNode; showTray?: boolean }) {
   const t = useTranslations('ProductTools');
   const [selected, setSelected] = useState<ComparisonItem[]>([]);
   const current = useRef<ComparisonItem[]>([]);
@@ -68,7 +68,7 @@ export function ProductToolsProvider({ children }: { children: ReactNode }) {
   function remove(id: string) { commit(current.current.filter((product) => product.id !== id)); setFeedback(''); }
   return <Context.Provider value={{ selected, ready, toggleCompare, showPreview: setPreview, showRating: setRatingProduct, showComparison: () => setComparisonOpen(true), ratings, refreshRating }}>
     {children}
-    {selected.length > 0 && <aside className="comparison-tray" aria-label={t('comparisonTitle')}>
+    {showTray && selected.length > 0 && <aside className="comparison-tray" aria-label={t('comparisonTitle')}>
       <div className="comparison-selection"><Columns3 size={20} aria-hidden="true"/><span>{t('selectedCount', { count: selected.length })}</span>
         <div className="comparison-chips">{selected.map((product) => <span className="comparison-chip" key={product.id}><span title={product.name}>{product.name}</span><button type="button" aria-label={t('removeNamed', { name: product.name })} onClick={() => remove(product.id)}><X size={14}/></button></span>)}</div>
       </div>

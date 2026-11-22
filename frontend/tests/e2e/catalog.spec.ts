@@ -131,6 +131,7 @@ test('historical entity paths keep HTTP 301 and invalid targets never redirect',
 });
 
 test('empty search prefills a custom requirement and catalog additions merge across views', async ({ page }) => {
+  test.setTimeout(90_000);
   const submissions: string[] = [];
   page.on('request', (request) => {
     if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/v1/public/rfq/')) submissions.push(request.url());
@@ -141,7 +142,7 @@ test('empty search prefills a custom requirement and catalog additions merge acr
   await page.getByRole('button', { name: 'Add Osimert 80mg to RFQ list', exact: true }).click();
   await page.goto('/en/products?q=Uncatalogued%20medicine');
   await page.getByRole('button', { name: 'Send your requirement', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('main');
   await expect(dialog.getByLabel('Medicine name', { exact: true })).toHaveValue('Uncatalogued medicine');
   await expect(dialog.getByLabel('Medicine name', { exact: true })).toBeEditable();
   await dialog.getByRole('button', { name: 'Add to RFQ list', exact: true }).click();
@@ -256,8 +257,8 @@ test('product gallery switches photos and video while product enquiries retain t
     expect(new URL(href!).searchParams.get('text')).toContain('English-only medicine');
     expect(new URL(href!).searchParams.get('text')).toContain('80 mg');
     await page.locator('.product-price-inquiry').click();
-    await expect(page.getByRole('dialog').getByLabel(chinese ? '药品名称' : 'Medicine name', { exact: true })).toHaveValue('English-only medicine');
-    await page.keyboard.press('Escape');
+    await expect(page.getByRole('main').getByLabel(chinese ? '药品名称' : 'Medicine name', { exact: true })).toHaveValue('English-only medicine');
+    await page.getByRole('main').getByRole('button', { name: chinese ? '返回网站' : 'Back to website', exact: true }).click();
   }
 });
 

@@ -15,13 +15,14 @@ export async function Pagination({ locale, path, query, pagination }: { locale: 
   const pages = Array.from({ length: end - start + 1 }, (_, idx) => start + idx);
 
   return <nav className="pagination" aria-label={t('pagination')}>
-    {pagination.has_prev && <Link className="button secondary pagination-nav" rel="prev" href={catalogPageHref(path, query, pagination.page - 1)}>{t('previous')}</Link>}
+    {pagination.has_prev && <Link className="button secondary pagination-nav" rel="prev" scroll={false} href={catalogPageHref(path, query, pagination.page - 1)}>{t('previous')}</Link>}
     <div className="pagination-pages">
       {pages.map((page) => (
         <Link
           key={page}
           className={`pagination-page${page === current ? ' is-active' : ''}`}
           aria-current={page === current ? 'page' : undefined}
+          scroll={false}
           href={catalogPageHref(path, query, page)}
         >
           {page}
@@ -29,6 +30,6 @@ export async function Pagination({ locale, path, query, pagination }: { locale: 
       ))}
     </div>
     <span className="pagination-summary">{t('pageOf', { page: pagination.page, pages: pagination.total_pages })}</span>
-    {pagination.has_next && <Link className="button secondary pagination-nav" rel="next" href={catalogPageHref(path, query, pagination.page + 1)}>{t('next')}</Link>}
+    {pagination.has_next && <Link className="button secondary pagination-nav" rel="next" scroll={false} href={catalogPageHref(path, query, pagination.page + 1)}>{t('next')}</Link>}
   </nav>;
 }

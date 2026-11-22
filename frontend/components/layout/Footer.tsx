@@ -88,11 +88,11 @@ export function Footer({ contact, onContact, onQuickQuote }: { contact: ContactC
       <nav className="footer-col" aria-label={t('footerServicesHeading')}>
         <h2>{t('footerServicesHeading')}</h2>
         <ul className="footer-link-list">
-          <li><Link href={`/${locale}/services/pharmaceutical-sourcing`}>{t('globalPharmaSourcing')}</Link></li>
+          <li><Link href={`/${locale}/services#sourcing`}>{t('globalPharmaSourcing')}</Link></li>
           <li><Link href={`/${locale}/services#cold-chain`}>{t('coldChainLogistics')}</Link></li>
-          <li><Link href={`/${locale}/services#compliance`}>{t('complianceCoa')}</Link></li>
-          <li><Link href={`/${locale}/services#delivery`}>{t('emergencyDelivery')}</Link></li>
-          <li><Link href={`/${locale}/services#bulk`}>{t('bulkFulfillment')}</Link></li>
+          <li><Link href={`/${locale}/services#coa-support`}>{t('complianceCoa')}</Link></li>
+          <li><Link href={`/${locale}/services#emergency-delivery`}>{t('emergencyDelivery')}</Link></li>
+          <li><Link href={`/${locale}/services#bulk-order`}>{t('bulkFulfillment')}</Link></li>
         </ul>
       </nav>
 

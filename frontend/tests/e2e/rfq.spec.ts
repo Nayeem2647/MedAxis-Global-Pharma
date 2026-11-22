@@ -4,6 +4,8 @@ import { rfqBusinessSchema } from '../../lib/rfq';
 import { meta } from '../fixtures';
 import { installImageFixture } from './image-fixture';
 
+test.setTimeout(60_000);
+
 const payloadSchema = rfqBusinessSchema.safeExtend({ idempotency_key: z.uuidv4(), turnstile_token: z.string().min(1) });
 const id = '82f591d0-346b-4cc4-8d67-e25358fa0272';
 const cors = { 'Access-Control-Allow-Origin': 'http://127.0.0.1:3100', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Headers': 'content-type,x-idempotency-key,accept', 'Access-Control-Allow-Methods': 'POST,OPTIONS', 'Access-Control-Expose-Headers': 'x-request-id' };
@@ -27,9 +29,11 @@ async function api(page: Page, handler: (route: Route) => Promise<void>) {
     await handler(route);
   });
 }
-async function quick(page: Page, locale = 'en', opts?: { quantity?: string; lineNotes?: string }) {
-  await page.goto(`/${locale}`); await page.locator('.header-quote').click();
-  const dialog = page.getByRole('dialog');
+async function quick(page: Page, locale = 'en', opts?: { quantity?: string; lineNotes?: string; analytics?: boolean }) {
+  await page.goto(`/${locale}`);
+  if (opts?.analytics) await expect.poll(() => page.evaluate(() => typeof window.plausible?.o?.transformRequest === 'function')).toBe(true);
+  await page.locator('.header-quote').click();
+  const dialog = page.getByRole('main');
   await dialog.locator('input[name=name]').fill('Uncatalogued medicine');
   if (opts?.quantity) await dialog.locator('input[name=quantity]').fill(opts.quantity);
   if (opts?.lineNotes) await dialog.locator('textarea[name="items.0.line_notes"]').fill(opts.lineNotes);
@@ -46,6 +50,93 @@ test.beforeEach(async ({ page }) => {
   await page.route('https://plausible.example.test/**', (route) => route.fulfill({ contentType: 'application/javascript', body: '/* no analytics during tests */' }));
 });
 
+test('dedicated quotation page has a live summary and reachable fixed actions in both languages', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  for (const locale of ['en', 'zh-CN']) {
+    const response = await page.goto(`/${locale}/request-quote`);
+    expect(response?.headers()['cache-control']).toContain('no-store');
+    expect(response?.headers()['x-robots-tag']).toContain('noindex');
+    const form = page.getByRole('main');
+    await expect(form.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('script#medaxis-plausible')).toHaveCount(0);
+    await form.locator('input[name=name]').fill('Layout medicine');
+    await form.locator('input[name=strength]').fill('80 mg');
+    await form.locator('input[name=quantity]').fill('12');
+    const summary = form.locator('.quote-summary');
+    for (const width of [1440, 1024, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      if (width > 900) {
+        await expect(summary).toHaveAttribute('open', '');
+        const positions = await form.evaluate((element) => {
+          const fields = element.querySelector('.quote-form-card')!.getBoundingClientRect();
+          const aside = element.querySelector('.quote-summary')!.getBoundingClientRect();
+          return { fieldsRight: fields.right, asideLeft: aside.left };
+        });
+        expect(positions.asideLeft).toBeGreaterThan(positions.fieldsRight);
+        await expect(summary).toContainText('Layout medicine');
+        await expect(summary).toContainText('12 BOX');
+      } else {
+        await expect(summary).not.toHaveAttribute('open', '');
+        await summary.locator('summary').click();
+        await expect(summary).toContainText('Layout medicine');
+        await summary.locator('summary').click();
+      }
+      const next = form.locator('.quote-action-buttons .primary');
+      await expect(next).toBeInViewport();
+      const bounds = await next.boundingBox();
+      expect(bounds?.height).toBeGreaterThanOrEqual(44);
+      await form.locator('textarea').first().scrollIntoViewIfNeeded();
+      await expect(next).toBeInViewport();
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: info.outputPath(`quote-page-${locale}-${width}.png`), fullPage: true });
+    }
+    await form.getByRole('button', { name: locale === 'en' ? 'Back to website' : '返回网站', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/products$`));
+  }
+});
+
+test('product quick view opens the full quotation page with the selected medicine', async ({ page }) => {
+  await page.goto('/en/products?q=product-tools');
+  const card = page.locator('.product-card').first();
+  await card.hover();
+  await card.getByRole('button', { name: 'Quick view of Osimert 80mg', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Quick View', exact: true }).getByRole('button', { name: 'Request a quote', exact: true }).click();
+  await expect(page).toHaveURL(/\/en\/request-quote$/, { timeout: 20_000 });
+  const form = page.locator('.quote-request-page:visible');
+  await expect(form.locator('input[name=name]')).toHaveValue('Osimert 80mg');
+  await expect(form.locator('.quote-summary')).toContainText('Osimert 80mg');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await form.getByRole('button', { name: 'Back to website', exact: true }).click();
+  await expect(page).toHaveURL(/\/en\/products\?q=product-tools$/);
+});
+
+test('quotation draft survives client navigation without storing contact or medicine fields', async ({ page }) => {
+  await page.goto('/en/products?manufacturer=beacon');
+  await page.locator('.header-quote').click();
+  await expect(page).toHaveURL(/\/en\/request-quote$/);
+  const form = page.getByRole('main');
+  await form.locator('input[name=name]').fill('Private draft requirement');
+  await form.locator('input[name=quantity]').fill('7');
+  await form.getByRole('button', { name: 'Continue to delivery', exact: true }).click();
+  await form.locator('input[name=destination_country]').fill('BD');
+  await form.locator('input[name=destination_city_port]').fill('Dhaka');
+  await page.locator('.site-header a[href="/en"]').first().click();
+  await expect(page).toHaveURL(/\/en$/);
+  await page.locator('.header-quote').click();
+  await expect(form.locator('input[name=destination_city_port]')).toHaveValue('Dhaka');
+  await expect(form.locator('.quote-summary')).toContainText('Private draft requirement');
+  await form.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(form.locator('input[name=name]')).toHaveValue('Private draft requirement');
+  await expect(form.locator('input[name=quantity]')).toHaveValue('7');
+  const stored = await page.evaluate(() => JSON.stringify({ local: Object.fromEntries(Object.entries(localStorage)), session: Object.fromEntries(Object.entries(sessionStorage)) }));
+  expect(stored).not.toContain('Private draft requirement');
+  expect(page.url()).not.toContain('Private');
+  await form.getByRole('button', { name: 'Back to website', exact: true }).click();
+  await expect(page).toHaveURL(/\/en\/products\?manufacturer=beacon$/);
+});
+
 test('Quick Quote sends one nested line, locks duplicate submits and confirms the actual reference', async ({ page }) => {
   const requests: ReturnType<typeof body>[] = [];
   await api(page, async (route) => { requests.push(body(route)); await new Promise((resolve) => setTimeout(resolve, 300)); await confirmed(route); });
@@ -59,8 +150,8 @@ test('Quick Quote sends one nested line, locks duplicate submits and confirms th
   const stored = await page.evaluate(() => JSON.stringify(Object.fromEntries(Object.entries(localStorage))));
   expect(stored).not.toMatch(/Private Buyer|buyer@example|prescription|idempotency|turnstile/);
   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
-  await quick(page); await page.getByRole('dialog').locator('button[type=submit]').click();
-  await expect(page.getByRole('dialog').getByText('RFQ-2026-00001', { exact: true })).toBeVisible();
+  await quick(page); await page.getByRole('main').locator('button[type=submit]').click();
+  await expect(page.getByRole('main').getByText('RFQ-2026-00001', { exact: true })).toBeVisible();
   expect(requests[1]?.idempotency_key).not.toBe(requests[0]?.idempotency_key);
 });
 
@@ -75,7 +166,14 @@ for (const status of [429, 503]) test(`${status} / proxy HTML preserves frozen b
   const dialog = await quick(page); await dialog.locator('button[type=submit]').click();
   await expect(dialog.getByRole('button', { name: 'Check / retry the same enquiry', exact: true })).toBeVisible({ timeout: 20_000 });
   expect(bodies).toHaveLength(4); expect(new Set(bodies).size).toBe(1);
-  await expect(dialog.locator('input[name=full_name]')).toBeDisabled(); await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
+  await expect(dialog.locator('input[name=full_name]')).toBeDisabled(); await expect(dialog.getByRole('button', { name: 'Back to website', exact: true })).toBeDisabled();
+  if (status === 503) {
+    await page.locator('.site-header a[href="/en"]').first().click();
+    await expect(page).toHaveURL(/\/en$/);
+    await page.locator('.header-quote').click();
+    await expect(dialog.getByRole('button', { name: 'Check / retry the same enquiry', exact: true })).toBeVisible();
+    await expect(dialog.locator('input[name=full_name]')).toHaveValue('Private Buyer');
+  }
   await expect(dialog).toContainText('proxy-request-id'); expect(await dialog.innerText()).not.toContain('NEVER_RENDER_PROXY_SECRET');
   await dialog.getByRole('button', { name: 'Check / retry the same enquiry', exact: true }).click();
   await expect(dialog.getByText('RFQ-2026-00429', { exact: true })).toBeVisible(); expect(new Set(bodies).size).toBe(1);
@@ -102,8 +200,8 @@ test('a committed enquiry whose response is lost is replayed once without creati
   await expect(dialog.getByText('RFQ-2026-00001', { exact: true })).toBeVisible({ timeout: 20_000 });
   expect(committed.size).toBe(1); expect(attempts).toHaveLength(2); expect(new Set(attempts).size).toBe(1);
   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
-  await quick(page); await page.getByRole('dialog').locator('button[type=submit]').click();
-  await expect(page.getByRole('dialog').getByText('RFQ-2026-00002', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await quick(page); await page.getByRole('main').locator('button[type=submit]').click();
+  await expect(page.getByRole('main').getByText('RFQ-2026-00002', { exact: true })).toBeVisible({ timeout: 20_000 });
   expect(committed.size).toBe(2); expect(attempts).toHaveLength(4);
   expect(bodyKeys(attempts).size).toBe(2);
 });
@@ -117,7 +215,7 @@ test('RFQ contact, prescriptions and challenge data never enter analytics, brows
   page.on('console', (message) => logs.push(message.text()));
   page.on('pageerror', (error) => logs.push(error.message));
   await api(page, async (route) => { await confirmed(route); });
-  const dialog = await quick(page);
+  const dialog = await quick(page, 'en', { analytics: true });
   const payloads = await page.evaluate(() => {
     const transform = window.plausible?.o?.transformRequest;
     if (!transform) throw new Error('Analytics privacy transform is missing.');
@@ -129,11 +227,12 @@ test('RFQ contact, prescriptions and challenge data never enter analytics, brows
       custom: transform({ n: 'RFQSubmitted', u: publicUrl, props: { email: 'buyer@example.test', prescription: secret } }),
       private: transform({ n: 'pageview', u: `${location.origin}/q/${secret}` }),
       encodedPrivate: transform({ n: 'pageview', u: `${location.origin}/en/%71/${secret}` }),
+      quotationForm: transform({ n: 'pageview', u: `${location.origin}/en/request-quote` }),
       foreign: transform({ n: 'pageview', u: `https://foreign.example/en/${secret}` }),
     };
   });
   expect(payloads.pageview).toEqual({ n: 'pageview', u: `${payloads.origin}/en`, d: 'medaxisglobalpharma.com' });
-  expect(payloads.custom).toBeNull(); expect(payloads.private).toBeNull(); expect(payloads.encodedPrivate).toBeNull(); expect(payloads.foreign).toBeNull();
+  expect(payloads.custom).toBeNull(); expect(payloads.private).toBeNull(); expect(payloads.encodedPrivate).toBeNull(); expect(payloads.foreign).toBeNull(); expect(payloads.quotationForm).toBeNull();
   await dialog.locator('button[type=submit]').click(); await expect(dialog.getByText('RFQ-2026-00001', { exact: true })).toBeVisible();
   const stored = await page.evaluate(() => ({ local: Object.fromEntries(Object.entries(localStorage)), session: Object.fromEntries(Object.entries(sessionStorage)) }));
   const sensitive = /PRIVATE_MEDICAL_SESSION_SENTINEL|Private Buyer|buyer@example\.test|prescription|turnstile_token|idempotency_key/;
@@ -153,7 +252,7 @@ test('403 reacquires only the challenge, then 409 requires same-intent reconcili
   await expect(retry).toBeEnabled(); await expect(dialog.locator('input[name=email]')).toHaveValue('buyer@example.test');
   await retry.click();
   await expect(dialog).toContainText('This attempt cannot yet be reconciled');
-  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Back to website', exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Check / retry the same enquiry', exact: true }).click();
   await expect(dialog.getByText('RFQ-2026-00409', { exact: true })).toBeVisible();
   expect(requests).toHaveLength(3); expect(requests[1]?.idempotency_key).toBe(requests[0]?.idempotency_key);
@@ -186,6 +285,8 @@ test('Chinese patient and B2B rules require email/company while prescriptions re
   await dialog.getByRole('button', { name: /配送信息/ }).click();
   await dialog.locator('input[name=destination_country]').fill('CN');
   await dialog.getByRole('button', { name: '下一步：用户信息', exact: true }).click();
+  await expect(dialog.locator('button[type=submit]')).toBeEnabled();
+  expect(requests).toHaveLength(0);
   await dialog.locator('input[name=email]').fill('');
   await dialog.locator('input[name=whatsapp_number]').fill('+8801560066410');
   await dialog.locator('button[type=submit]').click(); await expect(dialog.locator('input[name=email]')).toHaveAttribute('aria-invalid', 'true'); expect(requests).toHaveLength(0);
@@ -230,10 +331,14 @@ test('cart confirmation removes submitted quantities and preserves newer medicin
   let submitted = false;
   await api(page, async (route) => { expect(body(route).items[0]).toMatchObject({ product_id: id, is_uncatalogued: false, quantity: 2, packaging_unit: 'BOX' }); submitted = true; await pending; await confirmed(route); });
   await page.goto('/en');
-  const add = page.getByRole('button', { name: 'Add Osimert 80mg to RFQ list', exact: true }); await add.click(); await add.click();
-  await page.getByRole('button', { name: 'Quotation cart, 1 items', exact: true }).click();
+  const add = page.getByRole('button', { name: 'Add Osimert 80mg to RFQ list', exact: true });
+  await add.click();
+  const drawer = page.getByRole('dialog', { name: 'Your RFQ list', exact: true });
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  await add.click();
+  await expect(drawer).toBeVisible();
   await page.getByRole('button', { name: 'Submit this RFQ list', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('main');
   await dialog.getByRole('button', { name: 'Continue to delivery', exact: true }).click();
   await dialog.locator('input[name=destination_country]').fill('BD');
   await dialog.getByRole('button', { name: 'Continue to user info', exact: true }).click();
@@ -295,7 +400,7 @@ test('spoofed/oversized files never upload; upload cancellation does not block a
   await expect(dialog.getByText('RFQ-2026-00001', { exact: true })).toBeVisible(); expect(uploads).toBe(1);
 });
 
-test('bilingual RFQ fields, optional sections and contact artwork fit desktop/tablet/mobile', async ({ page }, testInfo) => {
+test('bilingual quotation page fields, optional sections and contact artwork fit desktop/tablet/mobile', async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const locale of ['en', 'zh-CN']) for (const width of [1440, 768, 390, 320]) {
@@ -310,7 +415,7 @@ test('bilingual RFQ fields, optional sections and contact artwork fit desktop/ta
     }
     await expect(dialog.locator('.contact-channel h3').first()).toHaveText(locale === 'zh-CN' ? 'WeChat' : 'WhatsApp');
     await dialog.evaluate((element) => { element.scrollTop = 0; }); await page.screenshot({ path: testInfo.outputPath(`rfq-${locale}-${width}.png`) });
-    await dialog.getByRole('button', { name: locale === 'en' ? 'Close' : '关闭', exact: true }).click();
+    await dialog.getByRole('button', { name: locale === 'en' ? 'Back to website' : '返回网站', exact: true }).click();
   }
 });
 

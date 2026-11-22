@@ -20,6 +20,8 @@ test('three-column list, quote actions, persistent bounded comparison and quick 
   await cards.first().hover();
   await expect(cards.first().locator('.product-hover-actions')).toHaveCSS('opacity', '1');
   await cards.first().getByRole('button', { name: 'Add Osimert 80mg to quote', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Your RFQ list', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.locator('.cart-badge')).toHaveText('1');
   for (let index = 0; index < 3; index++) { await cards.nth(index).hover(); await cards.nth(index).getByRole('button', { name: /to comparison$/ }).click(); }
   await cards.nth(3).hover(); await cards.nth(3).getByRole('button', { name: /to comparison$/ }).click();
@@ -36,9 +38,9 @@ test('three-column list, quote actions, persistent bounded comparison and quick 
   const quickView = page.getByRole('dialog', { name: 'Quick View', exact: true });
   await expect(quickView.getByRole('heading', { name: 'Osimert 80mg', exact: true })).toBeVisible();
   await quickView.getByRole('button', { name: 'Request a quote', exact: true }).click();
-  await expect(page.locator('dialog[open]')).toHaveCount(1);
-  await expect(page.getByRole('dialog').locator('input[name=name]')).toHaveValue('Osimert 80mg');
-  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/\/en\/request-quote$/);
+  await expect(page.getByRole('main').locator('input[name=name]')).toHaveValue('Osimert 80mg');
+  await page.getByRole('main').getByRole('button', { name: 'Back to website', exact: true }).click();
   await page.getByRole('button', { name: 'List View', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('product-list-three-columns.png'), fullPage: true });
 });

@@ -51,13 +51,12 @@ export default async function ProductsPage({ params, searchParams }: Props) {
     )}
     <Filters locale={locale} path={path} query={query} facets={data?.facets ?? { dosage_forms: [], cold_chain: [] }}/>
     {data?.products.length ? <>
-      <CatalogGridShell resultsLabel={t('results', { count: data.pagination.total_items })} viewLabel={t('viewMode')} gridLabel={t('gridView')} listLabel={t('listView')}>
+      <CatalogGridShell viewLabel={t('viewMode')} gridLabel={t('gridView')} listLabel={t('listView')}>
         {data.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}
       </CatalogGridShell>
       <Pagination locale={locale} path={path} query={query} pagination={data.pagination}/>
-    </> : <>
-      {data && <p className="results-count" role="status">{t('results', { count: data.pagination.total_items })}</p>}
+    </> : (
       <CatalogState locale={locale} error={error} query={query.q} path={path}/>
-    </>}
+    )}
   </div></main>;
 }

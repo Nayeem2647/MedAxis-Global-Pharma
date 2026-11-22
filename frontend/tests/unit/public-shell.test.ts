@@ -41,6 +41,12 @@ describe('public configuration and content', () => {
     vi.stubEnv('NEXT_PUBLIC_PLAUSIBLE_API_HOST', 'https://events.example.test');
     expect(getAnalyticsConfig()).toEqual({ domain: 'medaxisglobalpharma.com', src: 'https://analytics.example.test/js/pa-site.js', endpoint: 'https://events.example.test/api/event' });
   });
+  it.each(['', '   '])('uses the script origin when the optional analytics collector is blank (%j)', (host) => {
+    vi.stubEnv('NEXT_PUBLIC_PLAUSIBLE_DOMAIN', 'medaxisglobalpharma.com');
+    vi.stubEnv('NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL', 'https://analytics.example.test/js/pa-site.js');
+    vi.stubEnv('NEXT_PUBLIC_PLAUSIBLE_API_HOST', host);
+    expect(getAnalyticsConfig()?.endpoint).toBe('https://analytics.example.test/api/event');
+  });
   it('renders banner text without executing CMS HTML', () => {
     expect(plainText('<p>Service &amp; sourcing</p><script>alert(1)</script>')).toBe('Service & sourcing');
   });

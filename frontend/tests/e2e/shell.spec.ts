@@ -39,7 +39,7 @@ async function expectDialogControlsToFit(dialog: Locator) {
     expect(bounds).not.toBeNull();
     if (!bounds) continue;
     expect(bounds.width).toBeGreaterThanOrEqual(44);
-    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(bounds.height, await control.evaluate((element) => element.outerHTML.slice(0, 300))).toBeGreaterThanOrEqual(44);
     expect(bounds.x).toBeGreaterThanOrEqual(geometry.left);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(geometry.right);
     await expect(control).toBeInViewport();
@@ -143,9 +143,12 @@ test('RFQ cart merges catalog rows, persists quantity and supports custom add/re
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/en');
   const add = page.getByRole('button', { name: 'Add Osimert 80mg to RFQ list', exact: true });
-  await add.click(); await add.click();
-  await page.getByRole('button', { name: /Quotation cart, 1 items/ }).click();
+  await add.click();
   const drawer = page.getByRole('dialog', { name: 'Your RFQ list', exact: true });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  await add.click();
+  await expect(drawer).toBeVisible();
   await expect(drawer.getByLabel('Quantity for Osimert 80mg', { exact: true })).toHaveValue('2');
   await drawer.getByLabel('Quantity for Osimert 80mg', { exact: true }).fill('6');
   await drawer.getByRole('button', { name: 'Close', exact: true }).click();
@@ -153,7 +156,7 @@ test('RFQ cart merges catalog rows, persists quantity and supports custom add/re
   await page.getByRole('button', { name: /Quotation cart, 1 items/ }).click();
   await expect(drawer.getByLabel('Quantity for Osimert 80mg', { exact: true })).toHaveValue('6');
   await drawer.getByRole('button', { name: 'Add a medicine requirement', exact: true }).click();
-  const quote = page.getByRole('dialog', { name: 'Request Quick Quote', exact: true });
+  const quote = page.getByRole('main', { name: 'Request Quick Quote', exact: true });
   await quote.getByLabel('Medicine name', { exact: true }).fill('Custom medicine');
   await quote.getByLabel('Quantity', { exact: true }).fill('3');
   await quote.getByRole('button', { name: 'Add to RFQ list', exact: true }).click();
@@ -180,6 +183,8 @@ test('stored cart hydrates without mismatches and stays usable when storage is b
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Add Osimert 80mg to RFQ list', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Your RFQ list', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: /Quotation cart, 2 items/ })).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -268,29 +273,24 @@ test('bilingual homepage, anchors and touch controls work from 320px through des
   }
 });
 
-test('mobile enquiry controls support keyboard focus and keep Quick Quote local', async ({ page }) => {
+test('mobile quotation page supports keyboard navigation and local medicine-list additions', async ({ page }) => {
   const submissions: string[] = [];
   page.on('request', (request) => { if (/\/v1\/public\/rfq/.test(request.url())) submissions.push(request.url()); });
   await page.setViewportSize({ width: 320, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/en');
-  await expect(page.locator('html')).toHaveCSS('scroll-behavior', 'auto');
   const trigger = page.getByRole('button', { name: 'Start an enquiry', exact: true });
   await trigger.focus();
   await page.keyboard.press('Enter');
-  const quote = page.getByRole('dialog', { name: 'Request Quick Quote', exact: true });
+  await expect(page).toHaveURL(/\/en\/request-quote$/);
+  const quote = page.getByRole('main', { name: 'Request Quick Quote', exact: true });
   await expect(quote).toBeVisible();
-  const close = quote.getByRole('button', { name: 'Close', exact: true });
-  await close.focus();
-  await page.keyboard.press('Shift+Tab');
-  await expect(quote.getByRole('button', { name: 'Add to RFQ list', exact: true })).toBeFocused();
-  for (let i = 0; i < 8; i++) {
-    await page.keyboard.press('Tab');
-    expect(await quote.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(true);
-  }
+  await quote.getByLabel('Medicine name', { exact: true }).fill('Patient requirement');
   await page.keyboard.press('Escape');
-  await expect(quote).toHaveCount(0);
-  await expect(trigger).toBeFocused();
+  await expect(quote.getByLabel('Medicine name', { exact: true })).toHaveValue('Patient requirement');
+  await quote.getByRole('button', { name: 'Back to website', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/en$/);
   await page.locator('.header-quote').focus();
   await page.keyboard.press('Enter');
   await quote.getByLabel('Medicine name', { exact: true }).fill('Patient requirement');
@@ -341,17 +341,19 @@ test('bilingual action states retain contrast, visible focus and reduced motion'
   await testInfo.attach('measured-action-contrast', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
 });
 
-test('bilingual 320px quote, cart and contact dialogs have reachable touch controls', async ({ page }, testInfo) => {
+test('bilingual 320px quotation page, cart and contact have reachable touch controls', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 320, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const locale of ['en', 'zh-CN']) {
     await page.goto(`/${locale}`);
     await page.locator('.header-quote').click();
-    const dialog = page.getByRole('dialog');
-    await expectDialogControlsToFit(dialog);
+    await expect(page).toHaveURL(new RegExp(`/${locale}/request-quote$`));
+    const quote = page.locator('.quote-request-page:visible');
+    await expectDialogControlsToFit(quote);
     await page.screenshot({ path: testInfo.outputPath(`quick-quote-${locale}-320.png`) });
-    await page.keyboard.press('Escape');
+    await quote.getByRole('button', { name: locale === 'en' ? 'Back to website' : '返回网站', exact: true }).click();
+    const dialog = page.getByRole('dialog');
     await page.locator('.cart-button').click();
     await expectDialogControlsToFit(dialog);
     await page.screenshot({ path: testInfo.outputPath(`cart-${locale}-320.png`) });

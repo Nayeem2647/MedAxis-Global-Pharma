@@ -1,0 +1,96 @@
+.public-page-slot[hidden], .quote-workspace-slot[hidden] { display: none !important; }
+.quote-request-page { background: var(--color-page); min-height: 75vh; }
+.quote-request-shell { padding-block: 36px 150px; }
+.quote-request-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+.quote-request-heading h1 { margin: 8px 0 12px; font-size: clamp(1.85rem, 3vw, 2.6rem); line-height: 1.2; letter-spacing: -.035em; }
+.quote-request-heading h1:focus, .quote-form-card legend:focus { outline: none; }
+.quote-request-heading p:last-child { margin: 0; max-width: 65ch; color: var(--color-muted); font-size: .95rem; }
+.quote-request-heading .eyebrow { margin-bottom: 0; font-size: .72rem; }
+.quote-return { flex-shrink: 0; margin-top: 14px; min-height: 46px; }
+.quote-request-form { gap: 24px; }
+.quote-request-form .rfq-stepper { gap: 14px; padding: 0; border: 0; }
+.quote-request-form .rfq-stepper button { min-height: 70px; padding: 16px 20px; gap: 12px; border-radius: 12px; background: white; font-size: .95rem; }
+.quote-request-form .rfq-stepper button span { width: 32px; height: 32px; font-size: .85rem; }
+.quote-request-form .rfq-stepper [aria-current="step"] { background: #eaf8fb; }
+.quote-request-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 28px; align-items: start; }
+.quote-form-card { min-width: 0; padding: 30px; border: 1px solid #dfe8ee; border-radius: 16px; background: white; box-shadow: 0 8px 28px #173d4e05; }
+.quote-form-card .rfq-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.quote-form-card .rfq-fields legend { margin-bottom: 24px; font-size: 1.25rem; scroll-margin-top: 28px; }
+.quote-form-card .rfq-fields > :is(.quote-field-wide, .quote-medicine-fields, .form-pair, p, ul, .field-error) { grid-column: 1 / -1; }
+.quote-form-card .rfq-fields > p { margin: -6px 0 0; }
+.quote-medicine-fields { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 16px; min-width: 0; }
+.quote-form-card :is(input, select, textarea) { width: 100%; min-width: 0; max-width: 100%; font-size: .95rem; }
+.quote-form-card :is(input, select) { min-height: 50px; padding: 12px 14px; border-color: #cddce4; border-radius: 9px; }
+.quote-form-card textarea { padding: 14px; border-radius: 9px; }
+.quote-form-card .rfq-fields label { min-width: 0; gap: 9px; font-size: .9rem; }
+.quote-form-card .rfq-list-box { margin-top: 6px; padding-top: 20px; }
+.quote-form-card .rfq-list-box .button { justify-self: start; }
+.quote-form-card .rfq-lines { margin: 0; }
+.quote-form-card .rfq-lines > li { border-radius: 12px; padding: 20px; }
+.quote-form-card .rfq-details { margin-top: 6px; }
+.quote-form-card .rfq-details > summary { min-height: 46px; }
+.quote-summary-column { position: sticky; top: 24px; min-width: 0; }
+.quote-summary { overflow: hidden; border: 1px solid #dfe8ee; border-radius: 16px; background: white; box-shadow: 0 8px 28px #173d4e05; }
+.quote-summary > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 66px; padding: 18px 24px; list-style: none; font-weight: 700; cursor: pointer; }
+.quote-summary > summary::-webkit-details-marker { display: none; }
+.quote-summary > summary > span { display: flex; align-items: center; gap: 10px; }
+.quote-summary > summary > svg { transition: transform .2s; }
+.quote-summary[open] > summary > svg { transform: rotate(180deg); }
+.quote-summary-body { border-top: 1px solid #edf1f4; padding: 0 24px; }
+.quote-summary-section { padding: 23px 0; border-bottom: 1px solid #edf1f4; overflow-wrap: anywhere; }
+.quote-summary-section h2 { margin: 12px 0 8px; font-size: 1.1rem; line-height: 1.5; letter-spacing: -.01em; }
+.quote-summary-section > p { margin: 8px 0; font-size: .9rem; }
+.quote-summary-label { display: flex; align-items: center; gap: 8px; font-size: .78rem; color: var(--color-muted); font-weight: 600; }
+.quote-summary-label svg, .quote-summary-quantity svg { color: var(--color-action); }
+.quote-summary-quantity { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; padding: 7px 10px; border-radius: 7px; background: #eff8fa; font-size: .85rem; font-weight: 600; }
+.quote-summary-items { display: grid; gap: 14px; margin: 16px 0 0; padding: 0; list-style: none; max-height: 340px; overflow-y: auto; }
+.quote-summary-items li { display: grid; gap: 4px; font-size: .85rem; }
+.quote-summary-items li span { color: var(--color-muted); font-size: .8rem; }
+.quote-summary-privacy { display: flex; align-items: flex-start; gap: 12px; padding: 24px 0; color: var(--color-action); }
+.quote-summary-privacy strong { display: block; margin-bottom: 6px; font-size: .85rem; }
+.quote-summary-privacy p { margin: 0; color: var(--color-muted); font-size: .8rem; line-height: 1.7; }
+.quote-request-actions { position: fixed; z-index: 45; inset: auto 0 0; padding-block: 16px max(16px, env(safe-area-inset-bottom)); border-top: 1px solid #dce6ed; background: #fffffff5; box-shadow: 0 -8px 30px #153e4e08; backdrop-filter: blur(12px); }
+.quote-request-actions-inner { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.quote-action-progress { display: grid; gap: 4px; font-size: .9rem; }
+.quote-action-progress > span { font-size: .75rem; color: var(--color-muted); }
+.quote-action-buttons { display: flex; gap: 12px; align-items: center; }
+.quote-action-buttons .button { min-height: 48px; padding: 12px 20px; border-radius: 9px; }
+.quote-action-buttons .button.primary { min-width: 220px; }
+.quote-request-page .rfq-success { max-width: 780px; margin: 0 auto; padding: 48px; border: 1px solid #dfe8ee; border-radius: 16px; background: white; }
+@media (max-width: 1100px) {
+  .quote-request-workspace { gap: 20px; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); }
+  .quote-form-card { padding: 24px; }
+  .quote-summary > summary { padding-inline: 20px; }
+  .quote-summary-body { padding-inline: 20px; }
+}
+@media (max-width: 900px) {
+  .quote-request-workspace { grid-template-columns: minmax(0, 1fr); }
+  .quote-summary-column { position: static; grid-row: 1; }
+  .quote-request-heading { gap: 18px; }
+  .quote-request-form .rfq-stepper button { padding: 12px; min-height: 64px; font-size: .85rem; }
+}
+@media (max-width: 600px) {
+  .quote-request-shell { padding-block: 24px 155px; }
+  .quote-request-heading { flex-direction: column; margin-bottom: 22px; }
+  .quote-request-heading h1 { font-size: 1.85rem; }
+  .quote-request-heading p:last-child { font-size: .88rem; }
+  .quote-return { margin: 0; min-height: 44px; }
+  .quote-request-form { gap: 16px; }
+  .quote-request-form .rfq-stepper { gap: 7px; }
+  .quote-request-form .rfq-stepper button { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 10px; font-size: .75rem; line-height: 1.5; }
+  .quote-request-form .rfq-stepper button span { width: 28px; height: 28px; }
+  .quote-form-card { padding: 22px 18px; border-radius: 12px; }
+  .quote-form-card .rfq-fields, .quote-medicine-fields, .quote-form-card .form-pair { grid-template-columns: minmax(0, 1fr); }
+  .quote-form-card .rfq-fields { gap: 18px; }
+  .quote-form-card .rfq-fields legend { font-size: 1.1rem; }
+  .quote-summary { border-radius: 12px; }
+  .quote-summary > summary { min-height: 56px; padding: 14px 18px; font-size: .9rem; }
+  .quote-request-actions { padding-block: 10px max(12px, env(safe-area-inset-bottom)); }
+  .quote-request-actions-inner { flex-direction: column; align-items: stretch; gap: 10px; }
+  .quote-action-progress { display: flex; gap: 10px; align-items: center; font-size: .78rem; }
+  .quote-action-progress > span { font-size: .72rem; }
+  .quote-action-buttons { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+  .quote-action-buttons .button { padding: 11px 12px; font-size: .8rem; min-width: 0; white-space: normal; }
+  .quote-action-buttons .button.primary { min-width: 0; }
+  .quote-request-page .rfq-success { padding: 28px 18px; }
+}

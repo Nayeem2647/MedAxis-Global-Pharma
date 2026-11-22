@@ -52,13 +52,12 @@ export async function Hub({ params, searchParams, kind }: HubProps & { kind: Mas
     <p className="medical-notice">{t('medicalNotice')}</p>
     <Filters locale={locale} path={path} query={query} facets={profile.facets} lockedKind={kind}/>
     {profile.products.length ? <>
-      <CatalogGridShell resultsLabel={t('results', { count: pagination.total_items })} viewLabel={t('viewMode')} gridLabel={t('gridView')} listLabel={t('listView')}>
+      <CatalogGridShell viewLabel={t('viewMode')} gridLabel={t('gridView')} listLabel={t('listView')}>
         {profile.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}
       </CatalogGridShell>
       <Pagination locale={locale} path={path} query={query} pagination={pagination}/>
-    </> : <>
-      <p className="results-count" role="status">{t('results', { count: pagination.total_items })}</p>
+    </> : (
       <CatalogState locale={locale} query={query.q} path={path}/>
-    </>}
+    )}
   </div></main>;
 }

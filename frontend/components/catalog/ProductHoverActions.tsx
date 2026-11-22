@@ -21,7 +21,7 @@ export function ProductHoverActions({ product }: { product: HomeProduct }) {
   return <>
     <div className="product-hover-actions" role="group" aria-label={t('actionsNamed', { name: product.brand_name })}>
       <button type="button" disabled={!cart.hydrated} aria-label={t('addQuoteNamed', { name: product.brand_name })} title={t('addQuote')} onClick={() => {
-        try { cart.addItem(productCartInput(product)); setMessage(t('quoteAdded')); setError(null); } catch (issue: unknown) { setError(issue instanceof CartError ? issue.issue : 'invalidItem'); }
+        try { cart.addItem(productCartInput(product)); setMessage(t('quoteAdded')); setError(null); cart.setDrawerOpen(true); } catch (issue: unknown) { setError(issue instanceof CartError ? issue.issue : 'invalidItem'); }
       }}>{added ? <Check size={19}/> : <ListPlus size={19}/>}<span className="product-tool-tip" aria-hidden="true">{t('addQuote')}</span></button>
       <button type="button" disabled={!tools.ready} className={compared ? 'is-selected' : undefined} aria-pressed={compared} aria-label={t(compared ? 'removeCompareNamed' : 'addCompareNamed', { name: product.brand_name })} title={t(compared ? 'removeCompare' : 'addCompare')} onClick={() => tools.toggleCompare(product)}><Columns3 size={18}/><span className="product-tool-tip" aria-hidden="true">{t(compared ? 'removeCompare' : 'addCompare')}</span></button>
       <button type="button" aria-label={t('quickViewNamed', { name: product.brand_name })} title={t('quickView')} onClick={() => tools.showPreview(product)}><Eye size={19}/><span className="product-tool-tip" aria-hidden="true">{t('quickView')}</span></button>

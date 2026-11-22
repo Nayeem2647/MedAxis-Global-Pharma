@@ -13,7 +13,7 @@ export function ProductEnquiry({ product, contact }: { product: CatalogCartInput
   const t = useTranslations('Catalog');
   const cart = useTranslations('Cart');
   const channels = useTranslations('Contact');
-  const { addItem, hydrated } = useCart();
+  const { addItem, setDrawerOpen, hydrated } = useCart();
   const { openContact } = usePublicShell();
   const [added, setAdded] = useState(false);
   const [issue, setIssue] = useState<CartIssue | null>(null);
@@ -25,7 +25,7 @@ export function ProductEnquiry({ product, contact }: { product: CatalogCartInput
       <QuoteButton className="button product-price-inquiry" product={product}><Mail size={19}/>{t('priceInquiry')}</QuoteButton>
     </div>
     <button type="button" className="product-save-enquiry" aria-label={cart('addNamed', { name: product.name })} disabled={!hydrated} onClick={() => {
-      try { addItem(product); setAdded(true); setIssue(null); } catch (error: unknown) { setIssue(error instanceof CartError ? error.issue : 'invalidItem'); }
+      try { addItem(product); setAdded(true); setIssue(null); setDrawerOpen(true); } catch (error: unknown) { setIssue(error instanceof CartError ? error.issue : 'invalidItem'); }
     }}>{added ? <Check size={17}/> : <Plus size={17}/>}<span>{added ? cart('added') : cart('addToList')}</span></button>
     {added && <span className="sr-only" role="status">{cart('added')}</span>}
     {issue && <p role="alert" className="form-error">{cart(issue)}</p>}

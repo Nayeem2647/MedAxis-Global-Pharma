@@ -168,9 +168,9 @@ test('hero search and quote actions work over image and video backgrounds in bot
     await hero.hover();
     await expect(hero.getByRole('search')).toBeVisible();
     await hero.getByRole('button', { name: locale === 'en' ? 'Request a Quote' : '获取报价', exact: true }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/${locale}/request-quote$`));
+    await page.getByRole('main').getByRole('button', { name: locale === 'en' ? 'Back to website' : '返回网站', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}$`));
     const query = locale === 'en' ? 'Osimert 80mg' : '奥希替尼 80mg';
     await hero.getByRole('search').locator('input[name=q]').fill(query);
     await hero.getByRole('search').locator('input[name=q]').press('Enter');

@@ -1,0 +1,40 @@
+/* Shared outer edges for every localized public page, including its header/footer. */
+body.public-website {
+  --public-content-width: 91%;
+}
+
+/* Override legacy page-specific container widths without affecting admin layouts. */
+body.public-website :is(.site-container, .announcement-shell) {
+  width: var(--public-content-width);
+  max-width: none;
+  margin-inline: auto;
+}
+
+body.public-website .utility-page > p:not(.eyebrow) {
+  max-width: 75ch;
+}
+
+body.public-website .customer-access-form {
+  width: 100%;
+  max-width: 560px;
+  justify-self: end;
+}
+
+@media (min-width: 901px) {
+  body.public-website .customer-access {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
+  }
+}
+
+@media (max-width: 680px) {
+  body.public-website .customer-access-form {
+    max-width: none;
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  body.public-website {
+    --public-content-width: calc(100% - 32px);
+  }
+}

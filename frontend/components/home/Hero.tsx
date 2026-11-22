@@ -21,14 +21,14 @@ export async function Hero({ locale, banners = [] }: { locale: Locale; banners?:
 
   if (heroBanners.length > 0) {
     return (
-      <section className="hero-banner-stage">
+      <section className="hero-banner-stage site-container">
         <PlacementBanner banners={heroBanners} locale={locale} variant="hero">{panel}</PlacementBanner>
       </section>
     );
   }
 
   return (
-    <section className="hero hero-banner-fallback">
+    <section className="hero hero-banner-fallback site-container">
       <HeroArtwork />
       <div className="hero-persistent-overlay">{panel}</div>
     </section>
