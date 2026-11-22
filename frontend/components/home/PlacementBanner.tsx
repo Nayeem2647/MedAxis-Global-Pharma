@@ -24,6 +24,7 @@ const ASPECT_DIMENSIONS = {
 export function PlacementBanner({ banners, locale, variant, preview = false, children }: PlacementBannerProps) {
   const [active, setActive] = useState(0);
   const [inputFocused, setInputFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [playback, setPlayback] = useState<'auto' | 'playing' | 'paused'>('auto');
   const [reducedMotion, setReducedMotion] = useState(false);
   const [pageHidden, setPageHidden] = useState(false);
@@ -32,7 +33,7 @@ export function PlacementBanner({ banners, locale, variant, preview = false, chi
   const safeIndex = count ? active % count : 0;
   const slide = banners[safeIndex];
   const stopped = playback === 'paused' || (reducedMotion && playback !== 'playing');
-  const paused = preview || pageHidden || stopped || (playback !== 'playing' && inputFocused);
+  const paused = preview || pageHidden || stopped || (playback !== 'playing' && (inputFocused || (hovered && variant === 'hero')));
   const chinese = locale === 'zh-CN';
 
   useEffect(() => {
@@ -109,6 +110,8 @@ export function PlacementBanner({ banners, locale, variant, preview = false, chi
       className={`placement-banner placement-banner-${variant}${hasMedia ? ' has-media' : ''}${showOverlay ? ' has-overlay' : ''}${hasControls ? ' has-controls' : ''}${children ? ' has-persistent-overlay' : ''}${stopped ? ' is-stopped' : ''}${preview ? ' is-preview' : ''}`}
       aria-roledescription={chinese ? '轮播' : 'carousel'}
       aria-label={chinese ? '精选内容' : 'Featured highlights'}
+      onMouseEnter={() => { if (variant === 'hero' && !preview) setHovered(true); }}
+      onMouseLeave={() => { if (variant === 'hero' && !preview) setHovered(false); }}
       onFocusCapture={(event) => {
         if (event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) {
           setInputFocused(true);

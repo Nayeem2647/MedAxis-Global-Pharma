@@ -1,13 +1,15 @@
 .hero-banner-fallback {
   container-type: inline-size;
   display: grid;
-  place-items: center;
+  align-items: end;
+  justify-items: center;
   min-height: 440px;
 }
 
 .placement-banner.placement-banner-hero.has-persistent-overlay {
   display: grid;
-  place-items: center;
+  align-items: end;
+  justify-items: center;
   aspect-ratio: 3 / 1;
   min-height: 440px;
   max-height: 540px;
@@ -15,7 +17,8 @@
 
 .banner-preview-canvas .placement-banner.placement-banner-hero.has-persistent-overlay {
   display: grid;
-  place-items: center;
+  align-items: end;
+  justify-items: center;
   aspect-ratio: 3 / 1;
   min-height: 0;
   max-height: none;
@@ -31,8 +34,14 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: radial-gradient(ellipse at center, rgba(6, 22, 34, .46) 0%, rgba(6, 22, 34, .28) 65%, rgba(6, 22, 34, .16) 100%);
+  background: linear-gradient(
+    to top,
+    rgba(6, 22, 34, .72) 0%,
+    rgba(6, 22, 34, .38) 48%,
+    rgba(6, 22, 34, .06) 100%
+  );
   pointer-events: none;
+  transition: opacity .26s ease;
 }
 
 .hero-persistent-overlay {
@@ -40,8 +49,8 @@
   z-index: 2;
   width: 100%;
   display: grid;
-  place-items: center;
-  padding: clamp(24px, 3cqi, 44px) clamp(16px, 4cqi, 48px);
+  justify-items: center;
+  padding: clamp(16px, 2cqi, 28px) clamp(16px, 4cqi, 48px) clamp(18px, 2.2cqi, 30px);
   pointer-events: none;
 }
 
@@ -58,6 +67,46 @@
   box-shadow: none;
   backdrop-filter: none;
   pointer-events: auto;
+}
+
+@media (hover: hover) {
+  .placement-banner-hero.has-persistent-overlay:not(.is-preview)::before {
+    opacity: 0;
+  }
+
+  .placement-banner-hero.has-persistent-overlay:not(.is-preview):hover::before,
+  .placement-banner-hero.has-persistent-overlay:not(.is-preview):has(.hero-overlay-panel:focus-within)::before {
+    opacity: 1;
+  }
+
+  .hero-banner-stage .placement-banner-hero:not(.is-preview) .hero-overlay-panel,
+  .hero-banner-fallback .hero-overlay-panel {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(18px);
+    transition: opacity .24s ease, transform .24s cubic-bezier(.16, 1, .3, 1), visibility 0s linear .24s;
+  }
+
+  .hero-banner-stage .placement-banner-hero:not(.is-preview):hover .hero-overlay-panel,
+  .hero-banner-stage .placement-banner-hero:not(.is-preview) .hero-overlay-panel:focus-within,
+  .hero-banner-fallback:hover .hero-overlay-panel,
+  .hero-banner-fallback .hero-overlay-panel:focus-within {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+    transition: opacity .24s ease, transform .24s cubic-bezier(.16, 1, .3, 1), visibility 0s linear 0s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placement-banner-hero.has-persistent-overlay::before,
+  .hero-banner-stage .placement-banner-hero:not(.is-preview) .hero-overlay-panel,
+  .hero-banner-fallback .hero-overlay-panel {
+    transition: none;
+    transform: none;
+  }
 }
 
 .hero-overlay-panel .hero-search {
@@ -96,16 +145,16 @@
 }
 
 .hero-overlay-panel .hero-actions {
-  margin-top: 18px;
+  margin-top: 12px;
   gap: 14px;
   justify-content: center;
 }
 
 .hero-overlay-panel .hero-actions .button {
-  min-height: 50px;
+  min-height: 48px;
   min-width: 196px;
   border-radius: 12px;
-  padding: 12px 24px;
+  padding: 11px 22px;
   font-size: clamp(.85rem, 1.1cqi, .98rem);
   font-weight: 650;
   gap: 10px;
@@ -135,7 +184,7 @@
 }
 
 .hero-overlay-panel .hero-assurance {
-  margin-top: 22px;
+  margin-top: 14px;
   gap: 14px 28px;
   font-size: clamp(.78rem, 1cqi, .9rem);
   font-weight: 500;
@@ -212,7 +261,7 @@
 
 .hero-overlay-panel.is-preview {
   max-width: 520px;
-  padding: 12px 10px;
+  padding: 10px 10px 6px;
 }
 
 .hero-overlay-panel.is-preview .hero-search {
@@ -223,7 +272,7 @@
 }
 
 .hero-overlay-panel.is-preview .hero-actions {
-  margin-top: 12px;
+  margin-top: 10px;
   gap: 8px;
 }
 
@@ -237,7 +286,7 @@
 }
 
 .hero-overlay-panel.is-preview .hero-assurance {
-  margin-top: 12px;
+  margin-top: 10px;
   gap: 8px 16px;
   font-size: .68rem;
 }
@@ -263,6 +312,12 @@
   padding: 3px 4px 6px;
 }
 
+@media (max-width: 1180px) {
+  .placement-banner.has-controls > .hero-persistent-overlay {
+    padding-bottom: 72px;
+  }
+}
+
 @media (max-width: 900px) {
   .hero-banner-fallback,
   .placement-banner.placement-banner-hero.has-persistent-overlay {
@@ -278,7 +333,7 @@
   }
 
   .placement-banner.has-controls > .hero-persistent-overlay {
-    padding-bottom: 72px;
+    padding-bottom: 74px;
   }
 
   .hero-overlay-panel .hero-actions .button {
@@ -289,7 +344,7 @@
 
   .hero-overlay-panel .hero-assurance {
     gap: 10px 18px;
-    margin-top: 18px;
+    margin-top: 12px;
     font-size: .78rem;
   }
 }

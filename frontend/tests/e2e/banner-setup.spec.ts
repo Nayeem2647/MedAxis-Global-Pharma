@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 import { installImageFixture } from './image-fixture';
 import { bannerVideo } from './banner-video-fixture';
 
+test.use({ timezoneId: 'Asia/Dhaka' });
+
 const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
 
 test.beforeEach(async ({ page }) => {
@@ -25,23 +27,25 @@ test('banner studio previews media, saves schedules and edits announcements with
   await expect(page.getByRole('button', { name: /Home hero/ })).toBeEnabled();
   await page.locator('#banner-media-file').setInputFiles({ name: 'banner.png', mimeType: 'image/png', buffer: image });
   await expect(page.locator('.banner-live-preview img')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.banner-live-preview .hero-panel-title')).toHaveText('Your Global Partner in Pharmaceutical Sourcing.');
+  await expect(page.locator('.banner-live-preview .hero-preview-query')).toHaveText('Search medicines, brands or generics...');
   await expect(page.locator('.banner-live-preview .hero-search-preview')).toBeVisible();
   await page.locator('summary').filter({ hasText: 'Headline & description' }).click();
   await page.getByLabel('Title (EN)', { exact: true }).fill('Your next sourcing partner');
   await page.getByLabel('Description (EN)', { exact: true }).fill('Documented sourcing support.');
-  await expect(page.locator('.banner-live-preview .hero-panel-title')).toHaveText('Your Global Partner in Pharmaceutical Sourcing.');
+  await expect(page.locator('.banner-live-preview .hero-preview-query')).toHaveText('Search medicines, brands or generics...');
   await page.locator('summary').filter({ hasText: 'Translation' }).click();
   await page.getByLabel('Include Simplified Chinese translation', { exact: false }).check();
   await page.getByLabel('Title (ZH)', { exact: true }).fill('医药采购服务');
   await page.getByLabel('Description (ZH)', { exact: true }).fill('提交您的采购需求。');
   await page.getByLabel('Preview language').selectOption('zh-CN');
-  await expect(page.locator('.banner-live-preview .hero-panel-title')).toHaveText('您的全球医药采购合作伙伴。');
+  await expect(page.locator('.banner-live-preview .hero-preview-query')).toHaveText('搜索药品、品牌或通用名…');
   await page.getByLabel('Preview language').selectOption('en');
   await page.locator('summary').filter({ hasText: 'Translation' }).click();
   await page.getByRole('button', { name: 'Mobile preview', exact: true }).click();
   await expect(page.locator('.banner-preview-canvas')).toHaveClass(/is-mobile/);
-  await page.getByLabel('Starts at (UTC)', { exact: true }).fill('2030-01-01T00:00:00');
+  await page.getByLabel('Starts at (local time)', { exact: true }).fill('2030-01-01T00:00:00');
+  await page.getByLabel('Ends at (local time)', { exact: true }).fill('2030-01-02T00:00:00');
+  await expect(page.getByText('Dates use your local time zone', { exact: false })).toContainText('Asia/Dhaka');
   await expect(page.getByText('Scheduled', { exact: true }).first()).toBeVisible();
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 950 });
@@ -67,11 +71,14 @@ test('banner studio previews media, saves schedules and edits announcements with
   await expect(page.getByText('Server state refreshed.', { exact: true })).toBeVisible();
   const result = await request.get(`http://127.0.0.1:4100/__test__/admin?${new URLSearchParams({ email, action: 'management' })}`);
   const { data } = await result.json();
-  expect(data.writes).toContainEqual({ path: 'cms/banners', body: expect.objectContaining({ placement: 'MAIN_HERO', starts_at: '2030-01-01T00:00:00.000Z', media_type: 'IMAGE' }) });
+  expect(data.writes).toContainEqual({ path: 'cms/banners', body: expect.objectContaining({ placement: 'MAIN_HERO', starts_at: '2029-12-31T18:00:00.000Z', ends_at: '2030-01-01T18:00:00.000Z', media_type: 'IMAGE' }) });
   expect(data.writes.filter((write: { path: string }) => write.path === 'cms/banners')).toHaveLength(1);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Edit Your next sourcing partner', exact: true })).toBeVisible();
   await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit Your next sourcing partner', exact: true }).click();
+  await expect(page.getByLabel('Starts at (local time)', { exact: true })).toHaveValue('2030-01-01T00:00');
+  await expect(page.getByLabel('Ends at (local time)', { exact: true })).toHaveValue('2030-01-02T00:00');
   await page.getByRole('switch', { name: 'Toggle publish for Your next sourcing partner', exact: true }).click();
   await expect(page.getByRole('switch', { name: 'Toggle publish for Your next sourcing partner', exact: true })).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
@@ -95,6 +102,7 @@ test('public banners preserve heading and search, support manual pause and fit m
   await page.goto('/en');
   const banner = page.locator('.placement-banner-hero');
   await expect(banner.getByRole('heading', { level: 1 })).toHaveText('Your Global Partner in Pharmaceutical Sourcing.');
+  await banner.hover();
   await expect(banner.getByRole('search')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(page.getByRole('search')).toBeVisible();
@@ -157,6 +165,7 @@ test('hero search and quote actions work over image and video backgrounds in bot
     const hero = page.locator('.placement-banner-hero');
     await hero.getByRole('button', { name: locale === 'en' ? 'Next banner' : '下一张横幅', exact: true }).click();
     await expect(hero.locator('video')).toBeVisible();
+    await hero.hover();
     await expect(hero.getByRole('search')).toBeVisible();
     await hero.getByRole('button', { name: locale === 'en' ? 'Request a Quote' : '获取报价', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();

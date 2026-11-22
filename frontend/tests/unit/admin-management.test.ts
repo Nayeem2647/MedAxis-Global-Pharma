@@ -4,6 +4,9 @@ import {
   adminMultipart,
   auditRecord,
   bannerBody,
+  bannerScheduleInput,
+  bannerScheduleIso,
+  bannerScheduleState,
   blogPostBody,
   blogPostRecord,
   blogSlugFromTitle,
@@ -45,6 +48,26 @@ const product = {
   status: 'DRAFT',
 };
 beforeEach(() => vi.restoreAllMocks());
+describe('banner schedule time zones', () => {
+  it.each([
+    ['Asia/Dhaka', '2026-11-22T22:58:32', '2026-11-22T16:58:32.000Z'],
+    ['UTC', '2026-11-22T22:58:32', '2026-11-22T22:58:32.000Z'],
+    ['America/New_York', '2026-07-22T22:58:32', '2026-07-23T02:58:32.000Z'],
+    ['America/New_York', '2026-11-22T22:58:32', '2026-11-23T03:58:32.000Z'],
+  ])('preserves local input and the publication instant in %s', (zone, input, iso) => {
+    vi.stubEnv('TZ', zone);
+    try {
+      expect(bannerScheduleIso(input)).toBe(iso);
+      expect(bannerScheduleInput(iso)).toBe(input);
+      expect(bannerScheduleState({ is_active: true, starts_at: bannerScheduleIso(input) }, Date.parse(iso) - 1)).toBe('Scheduled');
+      expect(bannerScheduleState({ is_active: true, starts_at: bannerScheduleIso(input) }, Date.parse(iso))).toBe('Active');
+      expect(bannerScheduleState({ is_active: true, ends_at: bannerScheduleIso(input) }, Date.parse(iso))).toBe('Ended');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
 describe('registered management boundaries', () => {
   it('accepts full therapeutic indication paragraphs and restricts translation to the registered action', () => {
     const body = { translations: { en: { name: 'Osimertinib', slug: 'osimertinib' } }, is_active: true, therapeutic_indications: ['Verified medicine information. '.repeat(50)] };

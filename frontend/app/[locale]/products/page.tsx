@@ -43,7 +43,7 @@ export default async function ProductsPage({ params, searchParams }: Props) {
   } catch (failure: unknown) { error = failure; }
   return <main id="main-content" className="catalog-page"><div className="site-container section">
     <Breadcrumbs locale={locale} entries={[{ name: t('products'), href: path }]}/>
-    <div className="catalog-heading"><p className="eyebrow">MEDAXIS GLOBAL PHARMA</p><h1>{t('products')}</h1><p>{t('catalogDescription')}</p></div>
+    <h1 className="sr-only">{t('products')}</h1>
     {productsBanners.length > 0 && (
       <div className="products-banner-slot">
         <PlacementBanner banners={productsBanners} locale={locale} variant="products" />

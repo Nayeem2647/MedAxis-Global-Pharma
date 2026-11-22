@@ -13,6 +13,8 @@ import {
   bannerRatioGuides,
   bannerRecord,
   bannerResourceTypes,
+  bannerScheduleInput,
+  bannerScheduleIso,
   bannerScheduleState,
   catalogDeleteReceipt,
   imageReceipt,
@@ -193,8 +195,8 @@ export function AdminBannerSetup({
     setZhTitle(row.translations.zhCN?.title ?? '');
     setZhBody(row.translations.zhCN?.body ?? '');
     setSortOrder(row.sort_order);
-    setStartsAt(row.starts_at ? row.starts_at.slice(0, 19) : '');
-    setEndsAt(row.ends_at ? row.ends_at.slice(0, 19) : '');
+    setStartsAt(bannerScheduleInput(row.starts_at));
+    setEndsAt(bannerScheduleInput(row.ends_at));
     setShowOverlay(Boolean(row.show_overlay));
     setIsActive(row.is_active);
     formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -297,8 +299,8 @@ export function AdminBannerSetup({
           },
           is_active: isActive,
           sort_order: Number(sortOrder) || 0,
-          ...(startsAt ? { starts_at: new Date(`${startsAt}Z`).toISOString() } : {}),
-          ...(endsAt ? { ends_at: new Date(`${endsAt}Z`).toISOString() } : {}),
+          ...(startsAt ? { starts_at: bannerScheduleIso(startsAt) } : {}),
+          ...(endsAt ? { ends_at: bannerScheduleIso(endsAt) } : {}),
           ...(linkPath.trim() ? { link_path: linkPath.trim() } : {}),
         });
         return (await apiRequest('/v1/admin/cms/banners', bannerRecord, { method: 'POST', json: payload })).data;
@@ -359,7 +361,8 @@ export function AdminBannerSetup({
     show_overlay: showOverlay, title: plainText(previewTitle), body: plainText(previewBody),
     sort_order: sortOrder, ...(linkPath.trim() ? { link_path: linkPath.trim() } : {}),
   };
-  const draftStatus = bannerScheduleState({ is_active: isActive, ...(startsAt ? { starts_at: `${startsAt}Z` } : {}), ...(endsAt ? { ends_at: `${endsAt}Z` } : {}) });
+  const scheduleTimeZone = ready ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'Local time';
+  const draftStatus = bannerScheduleState({ is_active: isActive, ...(startsAt ? { starts_at: bannerScheduleIso(startsAt) } : {}), ...(endsAt ? { ends_at: bannerScheduleIso(endsAt) } : {}) });
   const liveCount = banners.filter((row) => bannerScheduleState(row) === 'Active').length;
   const scheduledCount = banners.filter((row) => bannerScheduleState(row) === 'Scheduled').length;
 
@@ -528,7 +531,7 @@ export function AdminBannerSetup({
                   </div>
                 </details>
                 <details className="banner-optional-details" open>
-                  <summary>Publishing &amp; schedule <small>UTC</small></summary>
+                  <summary>Publishing &amp; schedule <small>{scheduleTimeZone}</small></summary>
                   <div className="banner-optional-body">
                     <label className="admin-check banner-active-check">
                       <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.currentTarget.checked)} />
@@ -547,7 +550,7 @@ export function AdminBannerSetup({
                         />
                       </label>
                       <label className="banner-field">
-                        <span>Starts at (UTC)</span>
+                        <span>Starts at (local time)</span>
                         <input
                           name="starts_at"
                           type="datetime-local"
@@ -557,7 +560,7 @@ export function AdminBannerSetup({
                         />
                       </label>
                       <label className="banner-field">
-                        <span>Ends at (UTC)</span>
+                        <span>Ends at (local time)</span>
                         <input
                           name="ends_at"
                           type="datetime-local"
@@ -568,7 +571,7 @@ export function AdminBannerSetup({
                         />
                       </label>
                     </div>
-                    <p className="banner-field-help">Leave dates empty to show whenever enabled. Lower sort orders appear first. All dates are in UTC.</p>
+                    <p className="banner-field-help">Leave dates empty to show whenever enabled. Lower sort orders appear first. Dates use your local time zone ({scheduleTimeZone}).</p>
                     <span className={`banner-schedule-pill is-${draftStatus.toLowerCase()}`}>{draftStatus === 'Inactive' ? 'Unpublished' : draftStatus === 'Active' ? 'Live when saved' : draftStatus}</span>
                   </div>
                 </details>
@@ -815,8 +818,8 @@ export function AdminBannerSetup({
                       <div className="banner-table-type-cell">
                         <strong>{bannerPlacementLabels[placementKey]}</strong>
                         <small>Display order: {row.sort_order}</small>
-                        {row.starts_at && <small>From {row.starts_at.slice(0, 16).replace('T', ' ')} UTC</small>}
-                        {row.ends_at && <small>Until {row.ends_at.slice(0, 16).replace('T', ' ')} UTC</small>}
+                        {row.starts_at && <small>From {(ready ? bannerScheduleInput(row.starts_at) : row.starts_at).slice(0, 16).replace('T', ' ')} {ready ? scheduleTimeZone : 'UTC'}</small>}
+                        {row.ends_at && <small>Until {(ready ? bannerScheduleInput(row.ends_at) : row.ends_at).slice(0, 16).replace('T', ' ')} {ready ? scheduleTimeZone : 'UTC'}</small>}
                         {row.link_path && <small className="banner-table-destination" title={row.link_path}>{row.link_path}</small>}
                       </div>
                     </td>

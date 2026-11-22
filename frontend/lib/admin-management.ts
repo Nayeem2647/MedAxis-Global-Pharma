@@ -277,6 +277,17 @@ export function resourceName(row: ResourceRecord) {
   const en = row.translations.en;
   return 'brand_name' in en ? en.brand_name : 'name' in en ? en.name : en.title;
 }
+export function bannerScheduleInput(value: string | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+export function bannerScheduleIso(value: string): string {
+  return new Date(value).toISOString();
+}
+
 export function bannerScheduleState(
   row: { is_active: boolean; starts_at?: string; ends_at?: string },
   now = Date.now(),
