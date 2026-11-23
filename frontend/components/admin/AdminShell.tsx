@@ -83,12 +83,13 @@ function MasterNavigation({ pathname, kind }: { pathname: string; kind: MasterDi
 }
 
 function QuotationNavigation({ pathname }: { pathname: string }) {
-  const inDirectory = pathname.startsWith('/admin/quotations');
+  const inQuotations = pathname.startsWith('/admin/quotations');
+  const inDirectory = inQuotations || pathname.startsWith('/admin/rfqs');
   const [expanded, setExpanded] = useState(inDirectory);
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
-  const links = [['/admin/quotations/overview', 'Overview'], ['/admin/quotations', 'All quotations'], ['/admin/quotations/new', 'Create from RFQ'], ['/admin/quotations/follow-ups', 'Follow-ups']];
-  return <div className="admin-catalog-menu admin-directory-menu"><button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-quotation-links" disabled={!ready} onClick={() => setExpanded((value) => !value)}><FileText size={18} aria-hidden="true" /><span>Quotations</span><ChevronDown size={16} className="admin-catalog-chevron" aria-hidden="true" /></button><ul id="admin-quotation-links" className="admin-catalog-links" hidden={!expanded}>{links.map(([href, label]) => <li key={href}><AdminLink href={href} current={pathname === href || href === '/admin/quotations' && inDirectory && !links.some(([route]) => route === pathname)}>{label}</AdminLink></li>)}</ul></div>;
+  const links = [['/admin/rfqs', 'Website requests'], ['/admin/quotations/overview', 'Overview'], ['/admin/quotations', 'All quotations'], ['/admin/quotations/new', 'Create from RFQ'], ['/admin/quotations/follow-ups', 'Follow-ups']];
+  return <div className="admin-catalog-menu admin-directory-menu"><button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-quotation-links" disabled={!ready} onClick={() => setExpanded((value) => !value)}><FileText size={18} aria-hidden="true" /><span>Quotations</span><ChevronDown size={16} className="admin-catalog-chevron" aria-hidden="true" /></button><ul id="admin-quotation-links" className="admin-catalog-links" hidden={!expanded}>{links.map(([href, label]) => <li key={href}><AdminLink href={href} current={pathname === href || href === '/admin/rfqs' && pathname.startsWith('/admin/rfqs/') || href === '/admin/quotations' && inQuotations && !links.some(([route]) => route === pathname)}>{label}</AdminLink></li>)}</ul></div>;
 }
 
 export function AdminShell({ session, children }: { session: AdminSession; children: ReactNode }) {
@@ -148,7 +149,7 @@ export function AdminShell({ session, children }: { session: AdminSession; child
         <MasterNavigation pathname={pathname} kind="generics"/>
         <MasterNavigation pathname={pathname} kind="categories"/>
         <AdminLink href="/admin/catalog/banners" current={pathname.startsWith('/admin/catalog/banners')}><ImageIcon size={18} aria-hidden="true"/><span>Banner Setup</span></AdminLink>
-        <AdminLink href="/admin/blog" current={pathname.startsWith('/admin/blog')}><Newspaper size={18} aria-hidden="true"/><span>Blog</span></AdminLink>
+        <AdminLink href="/admin/blog" current={pathname.startsWith('/admin/blog')} className="admin-blog-link"><Newspaper size={18} aria-hidden="true"/><span>Blog</span></AdminLink>
 
         <p className="admin-nav-group-label">Operations &amp; System</p>
         <AdminLink href="/admin/customers" current={pathname.startsWith('/admin/customers')}><Users size={18} aria-hidden="true"/><span>Customers</span></AdminLink>
