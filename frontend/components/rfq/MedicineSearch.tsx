@@ -2,15 +2,17 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ChevronLeft, ChevronRight, Pill, Plus, Search } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Pill, Plus, Search } from 'lucide-react';
 import { apiRequest, type ApiPagination } from '../../lib/api-client';
 import { catalogListSchema, type HomeProduct } from '../../lib/public-catalog';
 
 export function MedicineSearch({
   enabled,
+  selectedIds = [],
   onSelect,
 }: {
   enabled: boolean;
+  selectedIds?: readonly string[];
   onSelect(product: HomeProduct): void;
 }) {
   const t = useTranslations('Rfq');
@@ -150,6 +152,7 @@ export function MedicineSearch({
             <>
               <ul className="rfq-search-result-list" role="presentation">
                 {result.products.map((medicine) => {
+                  const isAdded = selectedIds.includes(medicine.id);
                   const detailLine = [
                     medicine.generic.name,
                     medicine.strength,
@@ -159,7 +162,7 @@ export function MedicineSearch({
                     .join(' · ');
 
                   return (
-                    <li key={medicine.id} className="rfq-search-result-item" role="option" aria-selected={false}>
+                    <li key={medicine.id} className="rfq-search-result-item" role="option" aria-selected={isAdded}>
                       <div className="rfq-search-thumb" aria-hidden="true">
                         {medicine.primary_image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -176,12 +179,22 @@ export function MedicineSearch({
 
                       <button
                         type="button"
-                        className="rfq-search-add-btn"
-                        aria-label={t('medicineAddNamed', { name: medicine.brand_name })}
+                        className={`rfq-search-add-btn${isAdded ? ' is-added' : ''}`}
+                        disabled={isAdded}
+                        aria-label={t(isAdded ? 'medicineSelected' : 'medicineAddNamed', { name: medicine.brand_name })}
                         onClick={() => handleAdd(medicine)}
                       >
-                        <Plus size={14} aria-hidden="true" />
-                        {t('addShort')}
+                        {isAdded ? (
+                          <>
+                            <Check size={14} aria-hidden="true" />
+                            {t('medicineSelected')}
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={14} aria-hidden="true" />
+                            {t('addShort')}
+                          </>
+                        )}
                       </button>
                     </li>
                   );

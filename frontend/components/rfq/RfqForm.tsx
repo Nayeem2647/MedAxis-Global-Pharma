@@ -401,11 +401,27 @@ export function RfqForm({
 
   function commitPendingCustom(): readonly CartItem[] | null {
     if (!showCustom || !customName.trim()) return items;
+    const normalizedName = customName.trim().normalize('NFC').toLowerCase();
+    const normalizedStrength = customStrength.trim();
+    if (
+      items.some(
+        (it) =>
+          it.kind === 'custom' &&
+          it.name.normalize('NFC').toLowerCase() === normalizedName &&
+          it.strength === normalizedStrength,
+      )
+    ) {
+      setCustomName('');
+      setCustomStrength('');
+      setCustomQty(1);
+      setShowCustom(false);
+      return items;
+    }
     const newItem: CartItem = {
       kind: 'custom',
       id: crypto.randomUUID(),
       name: customName.trim(),
-      strength: customStrength.trim(),
+      strength: normalizedStrength,
       packagingUnit: customUnit.trim() || 'BOX',
       quantity: Math.max(1, customQty),
     };
@@ -561,6 +577,7 @@ export function RfqForm({
 
   function selectMedicine(medicine: HomeProduct) {
     if (isLocked() || uploadBusyRef.current || !cart.hydrated) return;
+    if (items.some((it) => it.kind === 'catalog' && it.productId === medicine.id)) return;
     const selected = productCartInput(medicine);
     const id = catalogCartId(selected);
     const subtitle = [medicine.generic.name, medicine.pack_size || medicine.dosage_form]
@@ -727,6 +744,7 @@ export function RfqForm({
 
                   <MedicineSearch
                     enabled={active && step === 0 && !locked && !uploadBusy && cart.hydrated}
+                    selectedIds={items.flatMap((it) => (it.kind === 'catalog' ? [it.productId] : []))}
                     onSelect={selectMedicine}
                   />
 

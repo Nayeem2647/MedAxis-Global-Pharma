@@ -348,9 +348,17 @@
   white-space: nowrap;
 }
 
-.rfq-search-add-btn:hover {
+.rfq-search-add-btn:hover:not(:disabled) {
   background: #0A5C60;
   border-color: #0A5C60;
+}
+
+.rfq-search-add-btn.is-added,
+.rfq-search-add-btn:disabled {
+  background: #F0FDFA;
+  border-color: #99F6E4;
+  color: #0D7377;
+  cursor: default;
 }
 
 .rfq-search-pagination {
