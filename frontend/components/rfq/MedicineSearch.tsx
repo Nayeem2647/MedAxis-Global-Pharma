@@ -2,14 +2,15 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Check, ChevronLeft, ChevronRight, Pill, Plus, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pill, Plus, Search } from 'lucide-react';
 import { apiRequest, type ApiPagination } from '../../lib/api-client';
 import { catalogListSchema, type HomeProduct } from '../../lib/public-catalog';
 
-export function MedicineSearch({ enabled, selectedId, addToList = false, onSelect }: {
+export function MedicineSearch({
+  enabled,
+  onSelect,
+}: {
   enabled: boolean;
-  selectedId?: string;
-  addToList?: boolean;
   onSelect(product: HomeProduct): void;
 }) {
   const t = useTranslations('Rfq');
@@ -30,66 +31,71 @@ export function MedicineSearch({ enabled, selectedId, addToList = false, onSelec
   const key = parameters.toString();
   const loading = status === 'loading' || (status === 'ready' && result?.key !== key);
 
-  /* Fetch on query/page change */
+  /* Fetch catalog products on query/page change */
   useEffect(() => {
     if (!enabled || !open) return;
     const controller = new AbortController();
     setStatus('loading');
     const hasQuery = key.includes('q=');
-    const timer = setTimeout(async () => {
-      try {
-        const response = await apiRequest(
-          `/v1/public/products?${key}`,
-          catalogListSchema,
-          { signal: controller.signal, timeoutMs: 10_000 },
-        );
-        if (controller.signal.aborted) return;
-        if (!response.meta.pagination) throw new Error('Missing pagination.');
-        setResult({ key, products: response.data.products, pagination: response.meta.pagination });
-        setStatus('ready');
-      } catch {
-        if (!controller.signal.aborted) setStatus('error');
-      }
-    }, hasQuery ? 300 : 0);
-    return () => { clearTimeout(timer); controller.abort(); };
+    const timer = setTimeout(
+      async () => {
+        try {
+          const response = await apiRequest(`/v1/public/products?${key}`, catalogListSchema, {
+            signal: controller.signal,
+            timeoutMs: 10_000,
+          });
+          if (controller.signal.aborted) return;
+          if (!response.meta.pagination) throw new Error('Missing pagination.');
+          setResult({ key, products: response.data.products, pagination: response.meta.pagination });
+          setStatus('ready');
+        } catch {
+          if (!controller.signal.aborted) setStatus('error');
+        }
+      },
+      hasQuery ? 250 : 0,
+    );
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [enabled, open, key, retry]);
 
-  /* Open dropdown when user focuses the input */
   function handleFocus() {
     setOpen(true);
     if (status === 'idle') setStatus('loading');
   }
 
-  /* Close on outside click */
+  /* Close dropdown on outside click */
   useEffect(() => {
     if (!open) return;
     function handle(e: MouseEvent) {
       if (
-        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-        inputRef.current && !inputRef.current.contains(e.target as Node)
-      ) setOpen(false);
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
     }
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, [open]);
 
-  function handleSelect(medicine: HomeProduct) {
+  function handleAdd(medicine: HomeProduct) {
     onSelect(medicine);
-    if (!addToList) {
-      setOpen(false);
-      setQuery('');
-    }
+    setOpen(false);
+    setQuery('');
   }
 
   return (
     <div className="rfq-search-wrap" onChange={(e) => e.stopPropagation()}>
-      {/* ── Search input ── */}
-      <Search size={16} className="rfq-search-icon" aria-hidden="true" />
+      <Search size={17} className="rfq-search-icon" aria-hidden="true" />
       <input
         ref={inputRef}
         type="search"
         className="rfq-search-input"
-        placeholder={t('medicineSearchPlaceholder')}
+        placeholder={t('searchBarPlaceholder')}
         value={query}
         maxLength={100}
         autoComplete="off"
@@ -97,13 +103,21 @@ export function MedicineSearch({ enabled, selectedId, addToList = false, onSelec
         aria-describedby={helpId}
         aria-haspopup="listbox"
         disabled={!enabled}
-        onChange={(e) => { setQuery(e.target.value); setPage(1); if (!open) setOpen(true); }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setPage(1);
+          if (!open) setOpen(true);
+        }}
         onFocus={handleFocus}
-        onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); } if (e.key === 'Enter') e.preventDefault(); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+          if (e.key === 'Enter') e.preventDefault();
+        }}
       />
-      <span id={helpId} className="sr-only">{t(addToList ? 'medicineSearchCartHelp' : 'medicineSearchHelp')}</span>
+      <span id={helpId} className="sr-only">
+        {t('medicineSearchCartHelp')}
+      </span>
 
-      {/* ── Dropdown ── */}
       {open && (
         <div
           ref={dropdownRef}
@@ -112,87 +126,68 @@ export function MedicineSearch({ enabled, selectedId, addToList = false, onSelec
           role="listbox"
           aria-label={t('medicineSearchTitle')}
         >
-          {/* Status line */}
           <p className="rfq-search-status" role="status" aria-live="polite">
             {loading
               ? t('medicineSearchLoading')
               : status === 'error'
-              ? t('medicineSearchError')
-              : result?.products.length
-              ? t('medicineSearchCount', { count: result.pagination.total_items })
-              : query.trim()
-              ? t('medicineSearchEmpty')
-              : 'Start typing to search medicines…'}
+                ? t('medicineSearchError')
+                : result?.products.length
+                  ? t('medicineSearchCount', { count: result.pagination.total_items })
+                  : query.trim()
+                    ? t('medicineSearchEmpty')
+                    : t('searchStartTyping')}
           </p>
 
-          {/* Error retry */}
           {status === 'error' && !loading && (
-            <div style={{ padding: '0 12px 10px' }}>
-              <button
-                type="button"
-                className="rfq-search-page-btn"
-                onClick={() => setRetry((v) => v + 1)}
-              >
+            <div style={{ padding: '0 14px 12px' }}>
+              <button type="button" className="rfq-search-page-btn" onClick={() => setRetry((v) => v + 1)}>
                 {t('medicineSearchRetry')}
               </button>
             </div>
           )}
 
-          {/* Results */}
           {!loading && status === 'ready' && result && result.products.length > 0 && (
             <>
               <ul className="rfq-search-result-list" role="presentation">
                 {result.products.map((medicine) => {
-                  const isSelected = medicine.id === selectedId;
+                  const detailLine = [
+                    medicine.generic.name,
+                    medicine.strength,
+                    medicine.pack_size || medicine.dosage_form,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ');
+
                   return (
-                    <li
-                      key={medicine.id}
-                      className="rfq-search-result-item"
-                      role="option"
-                      aria-selected={isSelected}
-                    >
-                      {/* Thumbnail */}
+                    <li key={medicine.id} className="rfq-search-result-item" role="option" aria-selected={false}>
                       <div className="rfq-search-thumb" aria-hidden="true">
                         {medicine.primary_image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={medicine.primary_image_url}
-                            alt=""
-                            width={44}
-                            height={44}
-                            loading="lazy"
-                          />
+                          <img src={medicine.primary_image_url} alt="" width={44} height={44} loading="lazy" />
                         ) : (
                           <Pill size={18} className="rfq-search-thumb-icon" aria-hidden="true" />
                         )}
                       </div>
 
-                      {/* Info */}
                       <div className="rfq-search-result-info">
                         <strong>{medicine.brand_name}</strong>
-                        <span>{medicine.generic.name} · {medicine.strength} · {medicine.dosage_form}</span>
-                        <span style={{ fontSize: '.72rem', color: '#93aab8' }}>{medicine.manufacturer.name} · {medicine.pack_size} · {medicine.packaging_unit}</span>
+                        <span>{detailLine}</span>
                       </div>
 
-                      {/* Add / Selected button */}
                       <button
                         type="button"
                         className="rfq-search-add-btn"
-                        disabled={isSelected && !addToList}
-                        aria-label={t(addToList ? 'medicineAddNamed' : 'medicineSelectNamed', { name: medicine.brand_name })}
-                        onClick={() => handleSelect(medicine)}
+                        aria-label={t('medicineAddNamed', { name: medicine.brand_name })}
+                        onClick={() => handleAdd(medicine)}
                       >
-                        {isSelected && !addToList
-                          ? <><Check size={14} aria-hidden="true" /> {t('medicineSelected')}</>
-                          : <><Plus size={14} aria-hidden="true" /> {t(addToList ? 'medicineAdd' : 'medicineSelect')}</>
-                        }
+                        <Plus size={14} aria-hidden="true" />
+                        {t('addShort')}
                       </button>
                     </li>
                   );
                 })}
               </ul>
 
-              {/* Pagination */}
               {result.pagination.total_pages > 1 && (
                 <div className="rfq-search-pagination">
                   <button
