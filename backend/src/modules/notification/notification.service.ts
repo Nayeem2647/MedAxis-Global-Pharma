@@ -305,6 +305,8 @@ export function createNotificationService(
     return active;
   };
   async function securityEvent(event: SecurityEvent) {
+    // Skip routine ADMIN_LOGIN emails from a known IP; still alert on new/foreign IP, backup logins, lockouts, and 2FA changes.
+    if (event.event === 'ADMIN_LOGIN' && !event.new_ip && !event.foreign_ip && event.severity !== 'HIGH') return;
     const owner = await AdminModel.findOne({ singleton_key: 'SUPER_ADMIN', is_active: true })
       .select({ _id: 1, email: 1 })
       .lean();
