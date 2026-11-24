@@ -20,9 +20,8 @@
 }
 
 .quote-request-shell {
-  max-width: 1140px;
-  margin: 0 auto;
-  padding: 36px 24px 96px;
+  padding-top: 32px;
+  padding-bottom: 96px;
 }
 
 /* ── Top Header ── */
@@ -179,12 +178,9 @@
   transform: scaleX(1);
 }
 
-/* ── Desktop Two-Column Split (~65% / ~35%) ── */
+/* ── Desktop Two-Column Split (handled via Tailwind grid-cols-1 lg:grid-cols-12) ── */
 .quote-request-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr);
-  gap: 24px;
-  align-items: start;
+  min-width: 0;
 }
 
 /* ── Main Card (Left) ── */
@@ -220,7 +216,7 @@
   pointer-events: none;
 }
 
-.rfq-search-input {
+.quote-request-page .rfq-search-input {
   width: 100%;
   min-height: 46px;
   padding: 10px 14px 10px 42px;
@@ -302,7 +298,7 @@
 .rfq-search-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .rfq-search-thumb-icon {
@@ -411,102 +407,107 @@
   gap: 8px;
 }
 
-.rfq-selected-item {
+.quote-request-page .rfq-selected-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 6px 10px;
+  padding: 10px 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   background: #FFFFFF;
   border: 1px solid #E2E8F0;
   border-radius: 10px;
-  min-height: 58px;
+  min-height: 60px;
   transition: border-color .15s;
 }
 
-.rfq-selected-item:hover {
+@media (min-width: 640px) {
+  .quote-request-page .rfq-selected-item {
+    flex-wrap: nowrap;
+  }
+}
+
+.quote-request-page .rfq-selected-item:hover {
   border-color: #CBD5E1;
 }
 
-.rfq-selected-item-thumb {
+.quote-request-page .rfq-selected-item-thumb {
   width: 44px;
   height: 44px;
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  background: #F1F5F9;
+  background: #F8FAFC;
   border: 1px solid #E2E8F0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.rfq-selected-item-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.quote-request-page .rfq-selected-item-thumb img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
 }
 
-.rfq-selected-info {
-  flex: 1;
+.quote-request-page .rfq-selected-info {
+  flex: 1 1 0%;
   min-width: 0;
 }
 
-.rfq-selected-info strong {
-  display: block;
-  font-size: .9rem;
-  font-weight: 700;
-  color: #0F172A;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rfq-selected-info span {
-  display: block;
-  font-size: .78rem;
-  color: #64748B;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rfq-qty-stepper {
+.quote-request-page .rfq-selected-controls {
   display: flex;
   align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.quote-request-page .rfq-qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   border: 1px solid #CBD5E1;
   border-radius: 8px;
   background: #F1F5F9;
   overflow: hidden;
-  flex-shrink: 0;
 }
 
-.rfq-qty-btn {
+.quote-request-page .rfq-qty-btn {
   width: 30px;
   height: 32px;
   border: 0;
+  padding: 0;
   background: transparent;
   color: #475569;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   transition: background .12s, color .12s;
 }
 
-.rfq-qty-btn:hover:not(:disabled) {
+.quote-request-page .rfq-qty-btn:hover:not(:disabled) {
   background: #E2E8F0;
   color: #0D7377;
 }
 
-.rfq-qty-btn:disabled {
+.quote-request-page .rfq-qty-btn:disabled {
   opacity: .4;
   cursor: default;
 }
 
-.rfq-qty-value {
-  width: 34px;
+.quote-request-page .rfq-qty-value {
+  width: 36px;
+  min-width: 36px;
+  min-height: 32px;
   height: 32px;
+  padding: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
   text-align: center;
   font-size: .88rem;
@@ -516,12 +517,16 @@
   -moz-appearance: textfield;
 }
 
-.rfq-qty-value::-webkit-inner-spin-button,
-.rfq-qty-value::-webkit-outer-spin-button {
+.quote-request-page .rfq-qty-value::-webkit-inner-spin-button,
+.quote-request-page .rfq-qty-value::-webkit-outer-spin-button {
   appearance: none;
 }
 
-.rfq-unit-select {
+.quote-request-page .rfq-unit-select {
+  width: 6rem;
+  min-width: 6rem;
+  max-width: 7rem;
+  min-height: 34px;
   height: 34px;
   padding: 0 26px 0 10px;
   border: 1px solid #CBD5E1;
@@ -536,17 +541,24 @@
   background-position: right 8px center;
   cursor: pointer;
   flex-shrink: 0;
-  min-width: 78px;
 }
 
-.rfq-unit-select:focus {
+@media (min-width: 640px) {
+  .quote-request-page .rfq-unit-select {
+    width: 7rem;
+    min-width: 7rem;
+  }
+}
+
+.quote-request-page .rfq-unit-select:focus {
   border-color: #0D7377;
   outline: none;
 }
 
-.rfq-remove-btn {
+.quote-request-page .rfq-remove-btn {
   width: 32px;
   height: 32px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: #94A3B8;
@@ -559,7 +571,7 @@
   transition: background .12s, color .12s;
 }
 
-.rfq-remove-btn:hover:not(:disabled) {
+.quote-request-page .rfq-remove-btn:hover:not(:disabled) {
   background: #FEE2E2;
   color: #B91C1C;
 }
@@ -820,9 +832,14 @@
   box-shadow: 0 0 0 3px rgba(13, 115, 119, .1);
 }
 
-.rfq-phone-select {
+.quote-request-page .rfq-phone-select {
+  width: auto;
+  min-width: 96px;
+  max-width: 116px;
+  min-height: 44px;
   border: 0;
   border-right: 1px solid #E2E8F0;
+  border-radius: 0;
   background: #F8FAFC;
   color: #334155;
   font-size: .82rem;
@@ -833,10 +850,13 @@
   flex-shrink: 0;
 }
 
-.rfq-phone-input {
-  flex: 1;
+.quote-request-page .rfq-phone-input {
+  flex: 1 1 0%;
+  width: auto;
   min-width: 0;
+  min-height: 44px;
   border: 0;
+  border-radius: 0;
   background: transparent;
   padding: 10px 12px;
   font-size: .9rem;
@@ -1196,10 +1216,7 @@
 }
 
 /* ── Responsive ── */
-@media (max-width: 960px) {
-  .quote-request-workspace {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 1023px) {
   .quote-summary-column {
     position: static;
   }
@@ -1211,18 +1228,22 @@
   .rfq-custom-expand {
     grid-template-columns: 1fr;
   }
-  .rfq-selected-item {
-    flex-wrap: wrap;
-    padding: 10px;
-  }
-  .rfq-selected-info {
+}
+
+@media (max-width: 639px) {
+  .quote-request-page .rfq-selected-info {
     flex: 1 1 calc(100% - 60px);
+  }
+  .quote-request-page .rfq-selected-controls {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 
 @media (max-width: 540px) {
   .quote-request-shell {
-    padding: 20px 16px 72px;
+    padding-top: 20px;
+    padding-bottom: 72px;
   }
   .quote-form-card {
     padding: 20px 16px;

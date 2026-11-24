@@ -129,88 +129,97 @@ function SelectedItemRow({
   onUnitChange(unit: string): void;
 }) {
   const name = item.kind === 'catalog' ? (item.names?.[locale] ?? item.name) : item.name;
-  const sub = meta?.subtitle || item.strength || '';
+  const sub = meta?.subtitle || [item.strength, item.packagingUnit].filter(Boolean).join(' · ');
   const unitChoices = UNIT_OPTIONS.includes(item.packagingUnit)
     ? UNIT_OPTIONS
     : [item.packagingUnit, ...UNIT_OPTIONS];
 
   return (
-    <li className="rfq-selected-item">
-      <div className="rfq-selected-item-thumb">
+    <li className="rfq-selected-item flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 w-full overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="rfq-selected-item-thumb w-11 h-11 shrink-0 rounded-lg overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center">
         {meta?.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={meta.imageUrl} alt={name} width={44} height={44} loading="lazy" />
+          <img
+            src={meta.imageUrl}
+            alt={name}
+            width={44}
+            height={44}
+            loading="lazy"
+            className="w-11 h-11 shrink-0 rounded-lg object-contain"
+          />
         ) : (
           <Pill size={18} className="rfq-search-thumb-icon" aria-hidden="true" />
         )}
       </div>
 
-      <div className="rfq-selected-info">
-        <strong>{name}</strong>
-        {sub && <span>{sub}</span>}
+      <div className="rfq-selected-info flex-1 min-w-0">
+        <strong className="block truncate text-sm font-bold text-slate-900">{name}</strong>
+        {sub && <span className="block truncate text-xs text-slate-500">{sub}</span>}
       </div>
 
-      <div className="rfq-qty-stepper" aria-label={`Quantity for ${name}`}>
+      <div className="rfq-selected-controls flex items-center gap-2 shrink-0 ml-auto">
+        <div className="rfq-qty-stepper shrink-0" aria-label={`Quantity for ${name}`}>
+          <button
+            type="button"
+            className="rfq-qty-btn"
+            aria-label={`Decrease quantity for ${name}`}
+            disabled={disabled || item.quantity <= 1}
+            onClick={() => onQtyChange(Math.max(1, item.quantity - 1))}
+          >
+            <Minus size={12} aria-hidden="true" />
+          </button>
+          <input
+            type="number"
+            className="rfq-qty-value"
+            min={1}
+            max={99999}
+            step={1}
+            value={item.quantity}
+            disabled={disabled}
+            aria-label={`Quantity for ${name}`}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (Number.isFinite(v) && v >= 1) onQtyChange(v);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.preventDefault();
+            }}
+          />
+          <button
+            type="button"
+            className="rfq-qty-btn"
+            aria-label={`Increase quantity for ${name}`}
+            disabled={disabled}
+            onClick={() => onQtyChange(item.quantity + 1)}
+          >
+            <Plus size={12} aria-hidden="true" />
+          </button>
+        </div>
+
+        <select
+          className="rfq-unit-select w-24 sm:w-28 shrink-0"
+          value={item.packagingUnit}
+          disabled={disabled}
+          aria-label={`Packaging unit for ${name}`}
+          onChange={(e) => onUnitChange(e.target.value)}
+        >
+          {unitChoices.map((u) => (
+            <option key={u} value={u}>
+              {u}
+            </option>
+          ))}
+        </select>
+
         <button
           type="button"
-          className="rfq-qty-btn"
-          aria-label={`Decrease quantity for ${name}`}
-          disabled={disabled || item.quantity <= 1}
-          onClick={() => onQtyChange(Math.max(1, item.quantity - 1))}
-        >
-          <Minus size={12} aria-hidden="true" />
-        </button>
-        <input
-          type="number"
-          className="rfq-qty-value"
-          min={1}
-          max={99999}
-          step={1}
-          value={item.quantity}
+          className="rfq-remove-btn shrink-0"
+          aria-label={`Remove ${name}`}
           disabled={disabled}
-          aria-label={`Quantity for ${name}`}
-          onChange={(e) => {
-            const v = parseInt(e.target.value, 10);
-            if (Number.isFinite(v) && v >= 1) onQtyChange(v);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.preventDefault();
-          }}
-        />
-        <button
-          type="button"
-          className="rfq-qty-btn"
-          aria-label={`Increase quantity for ${name}`}
-          disabled={disabled}
-          onClick={() => onQtyChange(item.quantity + 1)}
+          onClick={onRemove}
         >
-          <Plus size={12} aria-hidden="true" />
+          <Trash2 size={16} aria-hidden="true" />
         </button>
       </div>
-
-      <select
-        className="rfq-unit-select"
-        value={item.packagingUnit}
-        disabled={disabled}
-        aria-label={`Packaging unit for ${name}`}
-        onChange={(e) => onUnitChange(e.target.value)}
-      >
-        {unitChoices.map((u) => (
-          <option key={u} value={u}>
-            {u}
-          </option>
-        ))}
-      </select>
-
-      <button
-        type="button"
-        className="rfq-remove-btn"
-        aria-label={`Remove ${name}`}
-        disabled={disabled}
-        onClick={onRemove}
-      >
-        <Trash2 size={16} aria-hidden="true" />
-      </button>
     </li>
   );
 }
@@ -636,7 +645,7 @@ export function RfqForm({
 
   return (
     <main id={active ? 'main-content' : undefined} className="quote-request-page" aria-label={title}>
-      <div className="quote-request-shell">
+      <div className="quote-request-shell max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* ── TOP HEADER ── */}
         <header className="quote-request-heading">
           <div className="quote-heading-left">
@@ -708,10 +717,10 @@ export function RfqForm({
               </button>
             </nav>
 
-            {/* ── TWO-COLUMN WORKSPACE ── */}
-            <div className="quote-request-workspace">
-              {/* ══════════ LEFT: FORM CARD ══════════ */}
-              <div className="quote-form-card">
+            {/* ── TWO-COLUMN WORKSPACE (12-col grid) ── */}
+            <div className="quote-request-workspace grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* ══════════ LEFT: FORM CARD (8 cols) ══════════ */}
+              <div className="quote-form-card lg:col-span-8">
                 {/* ── STEP 0: Select Medicines ── */}
                 <div data-rfq-step="0" hidden={step !== 0} className="rfq-step-panel">
                   <h2>{t('step1Heading')}</h2>
@@ -1137,8 +1146,8 @@ export function RfqForm({
                 </div>
               </div>
 
-              {/* ══════════ RIGHT: QUOTE SUMMARY SIDEBAR ══════════ */}
-              <aside className="quote-summary-column">
+              {/* ══════════ RIGHT: QUOTE SUMMARY SIDEBAR (4 cols) ══════════ */}
+              <aside className="quote-summary-column lg:col-span-4">
                 <div className="quote-summary-card">
                   <div className="quote-summary-title-row">
                     <h3>{t('summarySidebarTitle')}</h3>
