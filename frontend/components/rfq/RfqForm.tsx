@@ -111,6 +111,20 @@ function buildInitialItems(
   return [];
 }
 
+function formatUnitWord(unit: string): string {
+  const lower = unit.trim().toLowerCase();
+  return lower ? lower.charAt(0).toUpperCase() + lower.slice(1) : '';
+}
+
+function formatPackLabel(packSize?: string, packagingUnit?: string): string {
+  const pack = packSize?.trim() ?? '';
+  const unit = packagingUnit?.trim() ?? '';
+  if (!pack) return unit ? formatUnitWord(unit) : '';
+  if (!unit) return pack;
+  if (pack.toLowerCase().includes(unit.toLowerCase())) return pack;
+  return `${pack} ${formatUnitWord(unit)}`;
+}
+
 function SelectedItemRow({
   item,
   meta,
@@ -129,13 +143,13 @@ function SelectedItemRow({
   onUnitChange(unit: string): void;
 }) {
   const name = item.kind === 'catalog' ? (item.names?.[locale] ?? item.name) : item.name;
-  const sub = meta?.subtitle || [item.strength, item.packagingUnit].filter(Boolean).join(' · ');
+  const sub = meta?.subtitle || [item.strength, formatUnitWord(item.packagingUnit)].filter(Boolean).join(' · ');
   const unitChoices = UNIT_OPTIONS.includes(item.packagingUnit)
     ? UNIT_OPTIONS
     : [item.packagingUnit, ...UNIT_OPTIONS];
 
   return (
-    <li className="rfq-selected-item flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 w-full overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <li className="rfq-selected-item flex flex-wrap sm:flex-nowrap items-center gap-3 px-2.5 py-2 w-full overflow-hidden rounded-xl border border-slate-200/80 bg-white">
       <div className="rfq-selected-item-thumb w-11 h-11 shrink-0 rounded-lg overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center">
         {meta?.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -153,8 +167,10 @@ function SelectedItemRow({
       </div>
 
       <div className="rfq-selected-info flex-1 min-w-0">
-        <strong className="block truncate text-sm font-bold text-slate-900">{name}</strong>
-        {sub && <span className="block truncate text-xs text-slate-500">{sub}</span>}
+        <p className="rfq-selected-line m-0 truncate text-[15px] leading-snug text-slate-900">
+          <strong className="font-bold text-slate-900">{name}</strong>
+          {sub && <span className="font-normal text-slate-500">{` · ${sub}`}</span>}
+        </p>
       </div>
 
       <div className="rfq-selected-controls flex items-center gap-2 shrink-0 ml-auto">
@@ -580,7 +596,8 @@ export function RfqForm({
     if (items.some((it) => it.kind === 'catalog' && it.productId === medicine.id)) return;
     const selected = productCartInput(medicine);
     const id = catalogCartId(selected);
-    const subtitle = [medicine.generic.name, medicine.pack_size || medicine.dosage_form]
+    const packLabel = formatPackLabel(medicine.pack_size, medicine.packaging_unit);
+    const subtitle = [medicine.generic.name || medicine.manufacturer.name, packLabel]
       .filter(Boolean)
       .join(' · ');
 

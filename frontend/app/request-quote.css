@@ -420,16 +420,16 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
   background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #EDF2F7;
   border-radius: 10px;
-  min-height: 60px;
-  transition: border-color .15s;
+  min-height: 58px;
+  transition: border-color .15s, background .15s;
 }
 
 @media (min-width: 640px) {
