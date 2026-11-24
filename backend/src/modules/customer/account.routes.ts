@@ -1,4 +1,4 @@
-import { Router, type Response } from 'express';
+import { Router, type RequestHandler, type Response } from 'express';
 import mongoose, { type PipelineStage } from 'mongoose';
 import { z } from 'zod';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
@@ -6,6 +6,7 @@ import type { AppEnv } from '../../config/env.js';
 import type { AppLogger } from '../../shared/utils/logger.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { adminBoundary } from '../../shared/middleware/adminBoundary.js';
+import { turnstile } from '../../shared/middleware/turnstile.js';
 import { hashPassword, verifyPassword } from '../../shared/utils/crypto.js';
 import { sendSuccess, sendPaginated } from '../../shared/utils/response.js';
 import { createRfqIntakeService } from '../rfq/rfq.intake.service.js';
@@ -172,7 +173,10 @@ export function createCustomerRouter(
         .catch(next);
     });
   });
-  router.post('/auth/register', async (req, res) => {
+  const registerBot: RequestHandler = env.CLOUDFLARE_TURNSTILE_SECRET
+    ? turnstile(env)
+    : (_req, _res, next) => next();
+  router.post('/auth/register', registerBot, async (req, res) => {
     sendSuccess(res, await auth.register(accountRegistration.parse(req.body), res), { status: 201 });
   });
   router.post('/auth/login', async (req, res) => {

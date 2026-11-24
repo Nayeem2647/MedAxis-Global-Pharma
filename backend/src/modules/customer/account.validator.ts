@@ -16,6 +16,7 @@ export const accountRegistration = z
       .toUpperCase()
       .regex(/^[A-Z]{2}$/),
     preferred_locale: z.enum(['en', 'zh-CN']),
+    turnstile_token: z.string().max(2048).optional(),
   })
   .superRefine((value, context) => {
     if (value.customer_type === 'B2B_WHOLESALE' && !value.company_name)

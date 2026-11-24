@@ -164,7 +164,7 @@ export function createCustomerAuthService(env: AppEnv, hooks: CustomerAuthHooks 
   async function register(input: z.infer<typeof accountRegistration>, res: Response) {
     if (await CustomerAccountModel.exists({ email: input.email }))
       throw AppError.conflict('An account already exists. Sign in or reset your password.');
-    const { password, ...details } = input;
+    const { password, turnstile_token: _turnstileToken, ...details } = input;
     let account;
     try {
       account = await CustomerAccountModel.create({ ...details, password_hash: await hashPassword(password) });

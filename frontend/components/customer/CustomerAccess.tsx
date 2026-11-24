@@ -4,13 +4,18 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { CheckCircle2, FileText, LockKeyhole, Eye, EyeOff, History, ShieldCheck } from 'lucide-react';
+import { Turnstile } from '@marsidev/react-turnstile';
+import { CheckCircle2, FileText, LockKeyhole, Eye, EyeOff, History, RefreshCw, ShieldCheck } from 'lucide-react';
 import { z } from 'zod';
 import { ApiError } from '../../lib/api-client';
 import { customerRequest } from '../../lib/customer-api';
 import { customerRegistrationSchema, customerSessionSchema } from '../../lib/customer-contract';
 import { buildCountryOptions, CountrySelect } from '../rfq/CountrySelect';
 import { useCustomerAccount } from './CustomerAccountProvider';
+
+function randomPair(): [number, number] {
+  return [Math.floor(Math.random() * 8) + 1, Math.floor(Math.random() * 8) + 1];
+}
 
 export type CustomerAccessMode = 'login' | 'register' | 'forgot' | 'reset' | 'verify';
 export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
@@ -19,8 +24,15 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
   const [country, setCountry] = useState('');
   const countryOptions = useMemo(() => buildCountryOptions(locale), [locale]);
   const [problem, setProblem] = useState(''); const [notice, setNotice] = useState(''); const [token, setToken] = useState(''); const [completed, setCompleted] = useState(false);
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [challengeVersion, setChallengeVersion] = useState(0);
+  const [challengeFallback, setChallengeFallback] = useState(false);
+  const [mathPair, setMathPair] = useState<[number, number]>([3, 4]);
+  const [mathAnswer, setMathAnswer] = useState('');
+  const useTurnstile = Boolean(siteKey) && !challengeFallback;
   const capturedMode = useRef<string | null>(null);
-  useEffect(() => { setReady(true); }, []);
+  useEffect(() => { setReady(true); setMathPair(randomPair()); }, []);
   useEffect(() => {
     if (mode !== 'verify' && mode !== 'reset') return;
     if (capturedMode.current === mode) return;
@@ -43,7 +55,15 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
       if (mode === 'register') {
         const resolvedCountry = (country || read('country')).toUpperCase();
         if (!/^[A-Z]{2}$/.test(resolvedCountry)) { setProblem(t('checkFields')); setBusy(false); return; }
-        const result = await customerRequest('auth/register', customerRegistrationSchema, { method: 'POST', body: { email: read('email'), password, full_name: read('full_name'), customer_type: buyerType, ...(buyerType === 'B2B_WHOLESALE' ? { company_name: read('company_name') } : {}), country: resolvedCountry, preferred_locale: locale } });
+        if (useTurnstile && !captchaToken) { setProblem(t('captchaRequired')); setBusy(false); return; }
+        if (!useTurnstile && Number(mathAnswer.trim()) !== mathPair[0] + mathPair[1]) {
+          setProblem(t('captchaInvalid'));
+          setMathPair(randomPair());
+          setMathAnswer('');
+          setBusy(false);
+          return;
+        }
+        const result = await customerRequest('auth/register', customerRegistrationSchema, { method: 'POST', body: { email: read('email'), password, full_name: read('full_name'), customer_type: buyerType, ...(buyerType === 'B2B_WHOLESALE' ? { company_name: read('company_name') } : {}), country: resolvedCountry, preferred_locale: locale, ...(captchaToken ? { turnstile_token: captchaToken } : {}) } });
         await account.refresh(); router.replace(`/${locale}/account?welcome=${result.data.verification_sent ? 'sent' : 'pending'}`);
       } else if (mode === 'login') {
         await customerRequest('auth/login', customerSessionSchema, { method: 'POST', body: { email: read('email'), password } });
@@ -60,7 +80,8 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
       }
     } catch (error) {
       const status = error instanceof ApiError ? error.status : 503;
-      setProblem(t(status === 401 ? 'invalidCredentials' : status === 409 ? 'accountExists' : status === 429 ? 'tooManyAttempts' : (mode === 'reset' || mode === 'verify') && status === 400 ? 'invalidLink' : status === 422 ? 'checkFields' : 'unavailable'));
+      if (mode === 'register' && useTurnstile) { setCaptchaToken(''); setChallengeVersion((v) => v + 1); }
+      setProblem(t(status === 401 ? 'invalidCredentials' : status === 403 ? 'captchaFailed' : status === 409 ? 'accountExists' : status === 429 ? 'tooManyAttempts' : (mode === 'reset' || mode === 'verify') && status === 400 ? 'invalidLink' : status === 422 ? 'checkFields' : 'unavailable'));
     } finally { setBusy(false); }
   }
   const title = t(mode === 'login' ? 'loginTitle' : mode === 'register' ? 'registerTitle' : mode === 'verify' ? 'verifyTitle' : mode === 'reset' ? 'resetTitle' : 'forgotTitle');
@@ -79,6 +100,49 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
             <label>{t(mode === 'reset' ? 'newPassword' : 'password')}<span className="customer-password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'login' ? 1 : 4} maxLength={1024}/><button type="button" aria-label={t(showPassword ? 'hidePassword' : 'showPassword')} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button></span></label>
             {mode !== 'login' && <><p className="customer-field-help">{t('passwordHelp')}</p><label>{t('confirmPassword')}<input name="confirm_password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={4} maxLength={1024}/></label></>}
           </>}
+          {mode === 'register' && (
+            <div className="customer-captcha-box" aria-label={t('captchaTitle')}>
+              <div className="customer-captcha-head">
+                <ShieldCheck size={16} aria-hidden="true" />
+                <span>{t('captchaTitle')}</span>
+              </div>
+              {useTurnstile ? (
+                <Turnstile
+                  key={challengeVersion}
+                  siteKey={siteKey!}
+                  options={{ size: 'flexible', language: locale === 'zh-CN' ? 'zh-CN' : 'en', theme: 'light', responseField: false }}
+                  onSuccess={setCaptchaToken}
+                  onExpire={() => setCaptchaToken('')}
+                  onError={() => { setCaptchaToken(''); setChallengeFallback(true); }}
+                />
+              ) : (
+                <div className="customer-math-captcha">
+                  <label htmlFor="register-captcha" className="customer-math-label">
+                    {t('captchaMathPrompt', { a: mathPair[0], b: mathPair[1] })}
+                  </label>
+                  <div className="customer-math-row">
+                    <input
+                      id="register-captcha"
+                      type="number"
+                      inputMode="numeric"
+                      required
+                      value={mathAnswer}
+                      placeholder="?"
+                      onChange={(e) => setMathAnswer(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="customer-math-refresh"
+                      aria-label={t('captchaRefresh')}
+                      onClick={() => { setMathPair(randomPair()); setMathAnswer(''); }}
+                    >
+                      <RefreshCw size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {mode === 'verify' && <p>{t('verifyIntro')}</p>}
           {problem && <p className="customer-feedback is-error" role="alert">{problem}</p>}
           {notice && <p className="customer-feedback" role="status">{notice}</p>}
