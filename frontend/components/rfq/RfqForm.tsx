@@ -27,7 +27,7 @@ import {
   type CatalogCartInput,
   type CartItem,
 } from '../../lib/cart';
-import { cartLine, countryCodes, rfqBusinessSchema, rfqLineSchema, type RfqKind } from '../../lib/rfq';
+import { cartLine, rfqBusinessSchema, rfqLineSchema, type RfqKind } from '../../lib/rfq';
 import type { ContactConfig } from '../../lib/public-config';
 import type { HomeProduct } from '../../lib/public-catalog';
 import { productCartInput } from '../../lib/product-tools';
@@ -35,7 +35,7 @@ import { useCart } from '../layout/CartProvider';
 import { ContactChannels } from '../layout/ContactDialog';
 import { PrescriptionUpload } from './PrescriptionUpload';
 import { MedicineSearch } from './MedicineSearch';
-import { CountrySelect } from './CountrySelect';
+import { buildCountryOptions, CountrySelect } from './CountrySelect';
 
 type FieldErrors = Record<string, boolean>;
 type ItemMeta = { imageUrl?: string; subtitle?: string };
@@ -302,17 +302,7 @@ export function RfqForm({
   const [itemNote, setItemNote] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
 
-  const countryOptions = useMemo(() => {
-    let display: Intl.DisplayNames | undefined;
-    try {
-      display = new Intl.DisplayNames([locale], { type: 'region' });
-    } catch {
-      display = undefined;
-    }
-    return [...countryCodes]
-      .map((code) => ({ code, name: display?.of(code) ?? code }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [locale]);
+  const countryOptions = useMemo(() => buildCountryOptions(locale), [locale]);
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const busy = state.status === 'submitting';

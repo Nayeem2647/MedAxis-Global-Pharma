@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
@@ -9,12 +9,15 @@ import { z } from 'zod';
 import { ApiError } from '../../lib/api-client';
 import { customerRequest } from '../../lib/customer-api';
 import { customerRegistrationSchema, customerSessionSchema } from '../../lib/customer-contract';
+import { buildCountryOptions, CountrySelect } from '../rfq/CountrySelect';
 import { useCustomerAccount } from './CustomerAccountProvider';
 
 export type CustomerAccessMode = 'login' | 'register' | 'forgot' | 'reset' | 'verify';
 export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
   const t = useTranslations('Customer'); const locale = useLocale(); const router = useRouter(); const account = useCustomerAccount();
   const [ready, setReady] = useState(false); const [busy, setBusy] = useState(false); const [showPassword, setShowPassword] = useState(false); const [buyerType, setBuyerType] = useState('B2C_PATIENT');
+  const [country, setCountry] = useState('');
+  const countryOptions = useMemo(() => buildCountryOptions(locale), [locale]);
   const [problem, setProblem] = useState(''); const [notice, setNotice] = useState(''); const [token, setToken] = useState(''); const [completed, setCompleted] = useState(false);
   const capturedMode = useRef<string | null>(null);
   useEffect(() => { setReady(true); }, []);
@@ -38,7 +41,9 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
     setBusy(true); setProblem(''); setNotice('');
     try {
       if (mode === 'register') {
-        const result = await customerRequest('auth/register', customerRegistrationSchema, { method: 'POST', body: { email: read('email'), password, full_name: read('full_name'), customer_type: buyerType, ...(buyerType === 'B2B_WHOLESALE' ? { company_name: read('company_name') } : {}), country: read('country').toUpperCase(), preferred_locale: locale } });
+        const resolvedCountry = (country || read('country')).toUpperCase();
+        if (!/^[A-Z]{2}$/.test(resolvedCountry)) { setProblem(t('checkFields')); setBusy(false); return; }
+        const result = await customerRequest('auth/register', customerRegistrationSchema, { method: 'POST', body: { email: read('email'), password, full_name: read('full_name'), customer_type: buyerType, ...(buyerType === 'B2B_WHOLESALE' ? { company_name: read('company_name') } : {}), country: resolvedCountry, preferred_locale: locale } });
         await account.refresh(); router.replace(`/${locale}/account?welcome=${result.data.verification_sent ? 'sent' : 'pending'}`);
       } else if (mode === 'login') {
         await customerRequest('auth/login', customerSessionSchema, { method: 'POST', body: { email: read('email'), password } });
@@ -66,7 +71,7 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
       {completed ? <div className="customer-access-complete"><CheckCircle2 size={32}/><p role="status">{notice}</p><Link className="button primary" href={`/${locale}/${account.profile && mode === 'verify' ? 'account' : 'login'}`}>{t(account.profile && mode === 'verify' ? 'openDashboard' : 'signIn')}</Link></div> : <form method="post" onSubmit={submit} className="stack-form">
         <fieldset disabled={busy || !ready} className="customer-form-fields">
           {mode === 'register' && <><label>{t('fullName')}<input name="full_name" autoComplete="name" required maxLength={200}/></label>
-            <div className="form-pair"><label>{t('buyerType')}<select value={buyerType} onChange={(event) => setBuyerType(event.target.value)}><option value="B2C_PATIENT">{t('individual')}</option><option value="B2B_WHOLESALE">{t('business')}</option></select></label><label>{t('country')}<input name="country" autoComplete="country" required maxLength={2} minLength={2} pattern="[A-Za-z]{2}" placeholder="BD / CN / US"/></label></div>
+            <div className="form-pair"><label>{t('buyerType')}<select value={buyerType} onChange={(event) => setBuyerType(event.target.value)}><option value="B2C_PATIENT">{t('individual')}</option><option value="B2B_WHOLESALE">{t('business')}</option></select></label><div className="customer-field"><label htmlFor="register-country">{t('country')}</label><CountrySelect id="register-country" name="country" value={country} options={countryOptions} placeholder={t('selectCountry')} emptyLabel={t('noCountryMatch')} required disabled={busy || !ready} onChange={setCountry} /></div></div>
             {buyerType === 'B2B_WHOLESALE' && <label>{t('company')}<input name="company_name" autoComplete="organization" required maxLength={200}/></label>}
           </>}
           {(mode === 'register' || mode === 'login' || mode === 'forgot') && <label>{t('email')}<input name="email" type="email" autoComplete="email" required maxLength={200}/></label>}

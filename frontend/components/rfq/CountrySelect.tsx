@@ -2,30 +2,53 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, X } from 'lucide-react';
+import { countryCodes } from '../../lib/rfq';
 
 export interface CountryOption {
   code: string;
   name: string;
 }
 
+export function buildCountryOptions(locale: string): CountryOption[] {
+  let display: Intl.DisplayNames | undefined;
+  try {
+    display = new Intl.DisplayNames([locale], { type: 'region' });
+  } catch {
+    display = undefined;
+  }
+  return [...countryCodes]
+    .map((code) => ({ code, name: display?.of(code) ?? code }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function findExactCountry(options: readonly CountryOption[], raw: string): CountryOption | undefined {
+  const q = raw.trim().toLowerCase();
+  if (!q) return undefined;
+  return options.find((opt) => opt.code.toLowerCase() === q || opt.name.toLowerCase() === q);
+}
+
 export function CountrySelect({
   id,
+  name = 'destination_country',
   value,
   options,
   placeholder,
   emptyLabel,
   invalid,
   describedBy,
+  required,
   disabled,
   onChange,
 }: {
   id: string;
+  name?: string;
   value: string;
   options: readonly CountryOption[];
   placeholder: string;
   emptyLabel: string;
   invalid?: boolean;
   describedBy?: string;
+  required?: boolean;
   disabled?: boolean;
   onChange(code: string): void;
 }) {
@@ -54,13 +77,15 @@ export function CountrySelect({
     if (!open) return;
     function handleOutside(event: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) {
+        const match = findExactCountry(options, query);
+        if (match && match.code !== value) onChange(match.code);
         setOpen(false);
         setQuery('');
       }
     }
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
-  }, [open]);
+  }, [open, options, query, value, onChange]);
 
   function selectOption(code: string) {
     onChange(code);
@@ -87,12 +112,13 @@ export function CountrySelect({
           type="text"
           className="rfq-field-input rfq-country-input"
           role="combobox"
-          autoComplete="off"
+          autoComplete="country-name"
           aria-autocomplete="list"
           aria-expanded={open}
           aria-controls={listboxId}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
+          required={required}
           placeholder={selectedOption ? selectedOption.name : placeholder}
           value={displayValue}
           disabled={disabled}
@@ -102,9 +128,16 @@ export function CountrySelect({
             setHighlighted(0);
           }}
           onChange={(e) => {
-            setQuery(e.target.value);
+            const nextQuery = e.target.value;
+            setQuery(nextQuery);
             setOpen(true);
             setHighlighted(0);
+            if (!nextQuery.trim()) {
+              if (value) onChange('');
+              return;
+            }
+            const exact = findExactCountry(options, nextQuery);
+            if (exact) onChange(exact.code);
           }}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') {
@@ -126,7 +159,7 @@ export function CountrySelect({
             }
           }}
         />
-        <input type="hidden" name="destination_country" value={value} readOnly />
+        <input type="hidden" name={name} value={value} readOnly />
 
         {value && !disabled ? (
           <button
