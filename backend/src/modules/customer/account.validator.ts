@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 const email = z.string().trim().toLowerCase().email().max(200);
-const password = z.string().min(12).max(1024);
+const password = z.string().min(4).max(1024);
 export const accountRegistration = z
   .strictObject({
     email,

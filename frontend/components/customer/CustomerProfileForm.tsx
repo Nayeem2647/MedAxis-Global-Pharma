@@ -23,6 +23,7 @@ export function CustomerProfileForm({ profile }: { profile: CustomerProfile }) {
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     const data = new FormData(event.currentTarget); const password = String(data.get('password') ?? '');
+    if (password.length < 4) { setProblem(t('passwordHelp')); return; }
     if (password !== String(data.get('confirmation') ?? '')) { setProblem(t('passwordMismatch')); return; }
     setBusy(true); setProblem(''); setNotice('');
     try {
@@ -42,8 +43,8 @@ export function CustomerProfileForm({ profile }: { profile: CustomerProfile }) {
     </fieldset></form></section>
     <section className="customer-panel"><h2>{t('changePassword')}</h2><form className="stack-form" onSubmit={changePassword}><fieldset disabled={busy} className="customer-form-fields">
       <label>{t('currentPassword')}<input name="current_password" type="password" required maxLength={1024} autoComplete="current-password"/></label>
-      <label>{t('newPassword')}<input name="password" type="password" required minLength={12} maxLength={1024} autoComplete="new-password"/></label>
-      <p className="customer-field-help">{t('passwordHelp')}</p><label>{t('confirmPassword')}<input name="confirmation" type="password" required minLength={12} maxLength={1024} autoComplete="new-password"/></label>
+      <label>{t('newPassword')}<input name="password" type="password" required minLength={4} maxLength={1024} autoComplete="new-password"/></label>
+      <p className="customer-field-help">{t('passwordHelp')}</p><label>{t('confirmPassword')}<input name="confirmation" type="password" required minLength={4} maxLength={1024} autoComplete="new-password"/></label>
       <button className="button secondary" type="submit">{t(busy ? 'working' : 'savePassword')}</button>
     </fieldset></form></section>
     {problem && <p className="customer-feedback is-error" role="alert">{problem}</p>}{notice && <p className="customer-feedback" role="status">{notice}</p>}

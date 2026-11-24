@@ -35,7 +35,7 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
     const data = new FormData(event.currentTarget); const read = (name: string) => String(data.get(name) ?? '').trim();
     const password = String(data.get('password') ?? '');
     if (mode === 'register' || mode === 'reset') {
-      if (password.length < 12) { setProblem(t('passwordHelp')); return; }
+      if (password.length < 4) { setProblem(t('passwordHelp')); return; }
       if (password !== String(data.get('confirm_password') ?? '')) { setProblem(t('passwordMismatch')); return; }
     }
     setBusy(true); setProblem(''); setNotice('');
@@ -76,8 +76,8 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
           </>}
           {(mode === 'register' || mode === 'login' || mode === 'forgot') && <label>{t('email')}<input name="email" type="email" autoComplete="email" required maxLength={200}/></label>}
           {(mode === 'register' || mode === 'login' || mode === 'reset') && <>
-            <label>{t(mode === 'reset' ? 'newPassword' : 'password')}<span className="customer-password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'login' ? 1 : 12} maxLength={1024}/><button type="button" aria-label={t(showPassword ? 'hidePassword' : 'showPassword')} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button></span></label>
-            {mode !== 'login' && <><p className="customer-field-help">{t('passwordHelp')}</p><label>{t('confirmPassword')}<input name="confirm_password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={12} maxLength={1024}/></label></>}
+            <label>{t(mode === 'reset' ? 'newPassword' : 'password')}<span className="customer-password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'login' ? 1 : 4} maxLength={1024}/><button type="button" aria-label={t(showPassword ? 'hidePassword' : 'showPassword')} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button></span></label>
+            {mode !== 'login' && <><p className="customer-field-help">{t('passwordHelp')}</p><label>{t('confirmPassword')}<input name="confirm_password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={4} maxLength={1024}/></label></>}
           </>}
           {mode === 'verify' && <p>{t('verifyIntro')}</p>}
           {problem && <p className="customer-feedback is-error" role="alert">{problem}</p>}
