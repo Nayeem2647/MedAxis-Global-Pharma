@@ -489,7 +489,8 @@
     "backToMedicinesLink": "返回修改药品",
     "submitQuoteCta": "提交报价申请",
     "addShort": "添加",
-    "searchStartTyping": "输入关键词以搜索药品…"
+    "searchStartTyping": "输入关键词以搜索药品…",
+    "noCountryMatch": "未找到匹配的国家或地区"
   },
   "Quotation": {
     "title": "报价单",

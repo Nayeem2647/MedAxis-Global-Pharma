@@ -35,6 +35,7 @@ import { useCart } from '../layout/CartProvider';
 import { ContactChannels } from '../layout/ContactDialog';
 import { PrescriptionUpload } from './PrescriptionUpload';
 import { MedicineSearch } from './MedicineSearch';
+import { CountrySelect } from './CountrySelect';
 
 type FieldErrors = Record<string, boolean>;
 type ItemMeta = { imageUrl?: string; subtitle?: string };
@@ -923,29 +924,23 @@ export function RfqForm({
                         <label className="rfq-field-label" htmlFor="dest-country">
                           {t('countryLabel')}
                         </label>
-                        <select
+                        <CountrySelect
                           id="dest-country"
-                          className="rfq-field-select"
-                          name="destination_country"
                           value={country}
-                          aria-invalid={invalid('destination_country')}
-                          aria-describedby={described('destination_country')}
-                          onChange={(e) => {
-                            const nextCountry = e.target.value;
+                          options={countryOptions}
+                          placeholder={t('selectCountryPlaceholder')}
+                          emptyLabel={t('noCountryMatch')}
+                          invalid={invalid('destination_country')}
+                          describedBy={described('destination_country')}
+                          disabled={locked || uploadBusy}
+                          onChange={(nextCountry) => {
                             setCountry(nextCountry);
                             setLocalErrors((prev) => ({ ...prev, destination_country: false }));
                             if (!dialTouched && DIAL_BY_COUNTRY[nextCountry]) {
                               setDialCode(DIAL_BY_COUNTRY[nextCountry]);
                             }
                           }}
-                        >
-                          <option value="">{t('selectCountryPlaceholder')}</option>
-                          {countryOptions.map(({ code, name }) => (
-                            <option key={code} value={code}>
-                              {name}
-                            </option>
-                          ))}
-                        </select>
+                        />
                         {fieldError('destination_country')}
                       </div>
 

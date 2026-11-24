@@ -872,6 +872,103 @@
   outline: none;
 }
 
+/* ── Searchable Country Combobox ── */
+.rfq-country-combobox {
+  position: relative;
+}
+
+.rfq-country-input-wrap {
+  position: relative;
+}
+
+.quote-request-page .rfq-country-input {
+  padding-right: 38px;
+}
+
+.rfq-country-icon-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.rfq-country-icon-btn:hover:not(:disabled) {
+  background: #F1F5F9;
+  color: #0D7377;
+}
+
+.rfq-country-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 60;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .12);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.rfq-country-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: .88rem;
+  color: #0F172A;
+  cursor: pointer;
+}
+
+.rfq-country-option.is-highlighted {
+  background: #F0FDFA;
+}
+
+.rfq-country-option.is-selected {
+  background: #E6FFFA;
+  color: #0D7377;
+  font-weight: 700;
+}
+
+.rfq-country-option-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #0D7377;
+}
+
+.rfq-country-code-tag {
+  font-size: .72rem;
+  font-weight: 700;
+  color: #64748B;
+  background: #F1F5F9;
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+
+.rfq-country-empty {
+  padding: 12px 10px;
+  font-size: .84rem;
+  color: #64748B;
+  text-align: center;
+}
+
 /* ── Dropzone & Upload List ── */
 .rfq-dropzone {
   border: 1.5px dashed #0D7377;
