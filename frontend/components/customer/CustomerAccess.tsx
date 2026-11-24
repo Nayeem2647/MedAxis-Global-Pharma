@@ -50,7 +50,7 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
         await account.refresh(); router.replace(`/${locale}/account`);
       } else if (mode === 'forgot') {
         const result = await customerRequest('auth/forgot-password', z.object({ requested: z.literal(true), email_delivery_available: z.boolean() }), { method: 'POST', body: { email: read('email') } });
-        setNotice(t(result.data.email_delivery_available ? 'resetSent' : 'emailUnavailable'));
+        setNotice(t(result.data.email_delivery_available ? 'resetSent' : 'resetEmailUnavailable'));
       } else if (mode === 'verify') {
         await customerRequest('auth/verify-email', z.object({ verified: z.literal(true) }), { method: 'POST', body: { token } });
         await account.refresh(); setCompleted(true); setNotice(t('verified'));
