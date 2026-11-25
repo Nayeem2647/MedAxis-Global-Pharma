@@ -11,6 +11,7 @@ import { Hero } from '../../components/home/Hero';
 import { SourcingTiles } from '../../components/home/SourcingTiles';
 import { Categories } from '../../components/home/Categories';
 import { CustomerReviews } from '../../components/home/CustomerReviews';
+import { ManufacturerMarquee } from '../../components/home/ManufacturerMarquee';
 import { ProductCard } from '../../components/home/ProductCard';
 import { QuoteButton } from '../../components/layout/PublicShell';
 
@@ -57,6 +58,7 @@ export default async function Home({ params }: Props) {
       </div></div></section>
       <section className="section site-container process-section"><p className="eyebrow">MEDAXIS GLOBAL PHARMA</p><h2>{t('processTitle')}</h2><ol className="process-grid"><li><span>01</span><ClipboardList/><h3>{t('stepOneTitle')}</h3><p>{t('stepOneBody')}</p></li><li><span>02</span><FileCheck2/><h3>{t('stepTwoTitle')}</h3><p>{t('stepTwoBody')}</p></li><li><span>03</span><Box/><h3>{t('stepThreeTitle')}</h3><p>{t('stepThreeBody')}</p></li></ol></section>
       <section className="site-container final-cta"><div><h2>{t('ctaTitle')}</h2><p>{t('ctaBody')}</p></div><QuoteButton>{t('request')}<ArrowRight size={18}/></QuoteButton></section>
+      <ManufacturerMarquee locale={locale} manufacturers={data.marqueeManufacturers}/>
     </main>
   );
 }

@@ -18,6 +18,7 @@ import { createProductRatingRouter } from './product-rating.routes.js';
 import {
   catalogDelete,
   catalogQuery,
+  categoryHomePatch,
   localeQuery,
   productCreate,
   productPatch,
@@ -63,8 +64,12 @@ export function createPublicCatalogRouter(env: AppEnv) {
     detail(res, await service.product(slug.parse(req.params.slug), query.locale));
   });
   router.get('/categories', limiter, async (req, res) => {
+    const query = localeQuery.extend({ home: z.enum(['true', 'false']).optional() }).parse(req.query);
+    sendSuccess(res, await service.categories(query.locale, query.home === 'true'));
+  });
+  router.get('/manufacturers', limiter, async (req, res) => {
     const query = localeQuery.parse(req.query);
-    sendSuccess(res, await service.categories(query.locale));
+    sendSuccess(res, await service.manufacturers(query.locale));
   });
   for (const kind of ['generics', 'manufacturers', 'categories'] as const)
     router.get(`/${kind}/:slug`, async (req, res) => {
@@ -137,6 +142,11 @@ export function createAdminCatalogRouter(env: AppEnv, revalidate: Revalidate, st
   });
   router.patch('/products/:id', async (req, res) => {
     sendSuccess(res, await service.saveProduct(req, productPatch.parse(req.body), uuid.parse(req.params.id)));
+  });
+  router.patch('/categories/:id/home-visibility', async (req, res) => {
+    z.object({}).strict().parse(req.query);
+    const input = categoryHomePatch.parse(req.body);
+    sendSuccess(res, await service.setCategoryHomeSettings(req, uuid.parse(req.params.id), input));
   });
   const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_VIDEO_BYTES, files: 1, fields: 0, parts: 1 } });
   router.post('/videos', videoUpload.single('video'), async (req, res) => {

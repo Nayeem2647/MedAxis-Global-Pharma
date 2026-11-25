@@ -44,6 +44,7 @@ export type HomeProduct = z.infer<typeof homeProductSchema>;
 export type CatalogMaster = z.infer<typeof masterSchema>;
 export const homeProductsSchema = z.object({ products: z.array(homeProductSchema).max(100) });
 export const publicCategoriesSchema = z.object({ categories: z.array(masterSchema) });
+export const publicManufacturersSchema = z.object({ manufacturers: z.array(masterSchema) });
 export const facetsSchema = z.object({
   dosage_forms: z.array(z.object({ name: text, count: z.number().int().nonnegative() })).max(1000),
   cold_chain: z.array(z.object({ required: z.boolean(), count: z.number().int().nonnegative() })).max(2),
@@ -104,10 +105,11 @@ export async function getHomeData(locale: Locale) {
     process.env.NODE_ENV !== 'production' || !process.env.REVALIDATE_WEBHOOK_SECRET
       ? { cache: 'no-store' }
       : { next: { revalidate: 3600, tags: ['catalog'] } };
-  const [catalog, cms, catList] = await Promise.allSettled([
+  const [catalog, cms, catList, manList] = await Promise.allSettled([
     apiRequest(`/v1/public/products?locale=${locale}&page=1&limit=24`, homeProductsSchema, catalogFetch),
     apiRequest(`/v1/public/cms/banners?locale=${locale}`, bannersSchema, cmsFetchCache()),
     apiRequest(`/v1/public/categories?locale=${locale}&home=true`, publicCategoriesSchema, catalogFetch),
+    apiRequest(`/v1/public/manufacturers?locale=${locale}`, publicManufacturersSchema, catalogFetch),
   ]);
   const allProducts = catalog.status === 'fulfilled' ? catalog.value.data.products : [];
   const products = allProducts.slice(0, 8);
@@ -119,12 +121,18 @@ export async function getHomeData(locale: Locale) {
     .slice(0, 15);
   const unique = (values: CatalogMaster[]) => [...new Map(values.map((item) => [item.id, item])).values()];
   const fetchedCategories = catList.status === 'fulfilled' ? catList.value.data.categories : [];
+  const productManufacturers = unique(allProducts.map((product) => product.manufacturer));
+  const marqueeManufacturers =
+    manList.status === 'fulfilled' && manList.value.data.manufacturers.length > 0
+      ? manList.value.data.manufacturers
+      : productManufacturers;
   return {
     products,
     popularProducts,
     banners: cms.status === 'fulfilled' ? cms.value.data : [],
     categories: fetchedCategories,
-    manufacturers: unique(allProducts.map((product) => product.manufacturer)),
+    manufacturers: productManufacturers,
+    marqueeManufacturers,
     generics: unique(allProducts.map((product) => product.generic)),
     catalogUnavailable: catalog.status === 'rejected',
   };

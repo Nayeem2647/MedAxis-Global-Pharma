@@ -4,7 +4,7 @@ import { AppError } from '../../shared/errors/AppError.js';
 import { escapeRegex } from '../../shared/utils/content.js';
 import { UrlRedirectModel } from '../cms/cms.schema.js';
 import { publicImageBaseUrl } from '../storage/storage.service.js';
-import { ProductModel } from './catalog.schema.js';
+import { CategoryModel, ManufacturerModel, ProductModel } from './catalog.schema.js';
 import {
   PUBLIC_MASTER_PROJECTION,
   PUBLIC_PRODUCT_PROJECTION,
@@ -212,14 +212,19 @@ export function createPublicCatalogService(env: AppEnv) {
     return publicProduct(rows[0], 'en', publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL);
   }
 
-  async function categories(locale: Locale) {
+  async function categories(locale: Locale, homeOnly: boolean) {
     const [records, counts] = await Promise.all([
-      masterModel('categories')
-        .find({ is_active: true, deleted_at: { $exists: false } })
-        .select(PUBLIC_MASTER_PROJECTION)
+      CategoryModel
+        .find({
+          is_active: true,
+          deleted_at: { $exists: false },
+          ...(homeOnly ? { show_on_home: { $ne: false } } : {}),
+        })
+        .select(homeOnly ? { ...PUBLIC_MASTER_PROJECTION, home_featured: 1 } : PUBLIC_MASTER_PROJECTION)
         .sort({ sort_order: 1, _id: 1 })
-        .limit(50)
-        .lean<MasterRecord[]>(),
+        .limit(homeOnly ? 0 : 50)
+        .maxTimeMS(10_000)
+        .lean(),
       ProductModel.aggregate<{ _id: string; count: number }>([
         { $match: { status: 'PUBLISHED', deleted_at: { $exists: false } } },
         { $unwind: '$category_ids' },
@@ -227,11 +232,28 @@ export function createPublicCatalogService(env: AppEnv) {
       ]).option({ maxTimeMS: 10_000 }),
     ]);
     const countMap = new Map(counts.map((entry) => [entry._id, entry.count]));
+    const ordered = homeOnly
+      ? [...records.filter((category) => category.home_featured), ...records.filter((category) => !category.home_featured)]
+      : records;
     return {
-      categories: records.map((record) => ({
+      categories: ordered.map((record) => ({
         ...publicMaster(record, locale, publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL),
         product_count: countMap.get(record._id) ?? 0,
       })),
+    };
+  }
+
+  async function manufacturers(locale: Locale) {
+    const records = await ManufacturerModel.find({ is_active: true, deleted_at: { $exists: false } })
+      .select(PUBLIC_MASTER_PROJECTION)
+      .sort({ 'translations.en.name': 1, _id: 1 })
+      .limit(50)
+      .maxTimeMS(10_000)
+      .lean<MasterRecord[]>();
+    return {
+      manufacturers: records.map((record) =>
+        publicMaster(record, locale, publicImageBaseUrl(env), env.R2_PUBLIC_BASE_URL),
+      ),
     };
   }
 
@@ -276,5 +298,5 @@ export function createPublicCatalogService(env: AppEnv) {
       categories: categories!.map(pair),
     };
   }
-  return { list, product, productById, master, categories, sitemap };
+  return { list, product, productById, master, categories, manufacturers, sitemap };
 }
