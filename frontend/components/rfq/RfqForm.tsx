@@ -307,7 +307,7 @@ export function RfqForm({
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const busy = state.status === 'submitting';
   const succeeded = state.status === 'success' && Boolean(state.receipt);
-  const emailRequired = locale === 'zh-CN' || country.trim().toUpperCase() === 'CN';
+  const emailRequired = true;
 
   const errors: FieldErrors = { ...localErrors };
   if (state.status === 'invalid') {

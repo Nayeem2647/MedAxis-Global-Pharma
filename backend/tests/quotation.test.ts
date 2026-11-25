@@ -102,6 +102,7 @@ function issuanceHarness() {
   vi.spyOn(RfqModel, 'findById').mockImplementation(
     () => query({ _id: quote.rfq_id, status: 'UNDER_REVIEW' }) as never,
   );
+  vi.spyOn(RfqModel, 'findOne').mockImplementation(() => query(null) as never);
   const rfqWrite = vi.spyOn(RfqModel, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
   const bank = {
     configured: true,
@@ -481,7 +482,7 @@ describe('quotation DTO, validation and delivery secrets', () => {
     const sealed = encryptedDelivery(env, url);
     expect(JSON.stringify(sealed)).not.toContain(url);
     expect(decrypt(sealed, Buffer.from(key, 'hex'), 'quote-v1').toString()).toBe(url);
-    expect(() => encryptedDelivery(loadEnv(validEnv), url)).toThrow('not configured');
+    expect(() => encryptedDelivery(loadEnv({ ...validEnv, QUOTATION_TOKEN_ENCRYPTION_KEY: '', QUOTATION_TOKEN_KEY_ID: '' }), url)).toThrow('not configured');
   });
   it('rejects client totals, numeric money and corrupt manual rates', () => {
     expect(draftQuoteSchema.safeParse({ total_amount: '1' }).success).toBe(false);

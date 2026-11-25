@@ -90,7 +90,7 @@ export function createRfqAdminService(signals: RfqSignals) {
     if (!rfq) throw AppError.notFound();
     const [prescriptions, clarification_messages, quotations] = await Promise.all([
       PrescriptionModel.find({ rfq_id: id })
-        .select({ _id: 1, mime_type: 1, file_size_bytes: 1, uploaded_at: 1, purge_scheduled_at: 1, purge_status: 1 })
+        .select({ _id: 1, mime_type: 1, attachment_kind: 1, file_size_bytes: 1, uploaded_at: 1, purge_scheduled_at: 1, purge_status: 1 })
         .sort({ uploaded_at: 1 })
         .lean(),
       ClarificationMessageModel.find({ rfq_id: id }).sort({ created_at: 1, _id: 1 }).lean(),

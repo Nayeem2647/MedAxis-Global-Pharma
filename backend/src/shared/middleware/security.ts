@@ -17,6 +17,7 @@ export function securityHeaders(): RequestHandler {
 export function privateQuotationHeaders(): RequestHandler {
   return (req, res, next) => {
     if (
+      req.path.toLowerCase().startsWith('/v1/public/rfq-workflow/') ||
       req.path.toLowerCase().startsWith(PRIVATE_QUOTATION_PATH_PREFIX) ||
       req.originalUrl.toLowerCase().startsWith(PRIVATE_QUOTATION_PATH_PREFIX)
     ) {

@@ -4,6 +4,7 @@ import type { AppEnv } from '../../config/env.js';
 import { decrypt, hashToken } from '../../shared/utils/crypto.js';
 import type { AppLogger } from '../../shared/utils/logger.js';
 import { RfqModel, ClarificationMessageModel } from '../rfq/rfq.schema.js';
+import { guestUrl } from '../rfq/rfq.guest-access.js';
 import { QuotationModel, QuotationVersionModel } from '../quotation/quotation.schema.js';
 import { COMMERCIAL_PROJECTION, commercialQuotation } from '../quotation/quotation.dto.js';
 import { isAccepted } from '../quotation/quotation.lifecycle.js';
@@ -15,6 +16,8 @@ import { template, type EmailContext, type TemplateId } from './email.templates/
 import { enqueueOperatorAlert } from './notification.alerts.js';
 
 const primaryTemplates = new Set<TemplateId>([
+  'payment-request',
+  'negotiation-reply',
   'rfq-confirmation',
   'quotation-sent',
   'accepted',
@@ -66,6 +69,7 @@ export function createNotificationService(
       data.reference = rfq.rfq_number;
       data.locale = rfq.contact_snapshot.preferred_locale;
       data.buyerName = rfq.contact_snapshot.full_name;
+      data.link = await guestUrl(env, rfq._id);
       if (id === 'unable-to-supply') data.body = rfq.unable_to_supply_reason;
       if (id === 'clarification-request') {
         const messageId = job.safe_payload.clarification_message_id;
@@ -88,13 +92,18 @@ export function createNotificationService(
       const version = await QuotationVersionModel.findById(job.entity_id).select(COMMERCIAL_PROJECTION).lean();
       if (!version) throw new DeliveryError('EMAIL_REFERENCE_MISSING', false, true);
       const quote = await QuotationModel.findOne({ _id: version.quotation_id, current_version_id: version._id })
-        .select({ quotation_number: 1 })
+        .select({ quotation_number: 1, rfq_id: 1 })
         .lean();
       if (!quote || version.status === 'SUPERSEDED') throw new ObsoleteDelivery();
       data.reference = quote.quotation_number;
       data.locale = version.contact_snapshot.preferred_locale;
       data.buyerName = version.contact_snapshot.full_name;
       data.quotation = commercialQuotation(version);
+      data.link = await guestUrl(env, quote.rfq_id);
+      if (id === 'negotiation-reply' || id === 'quotation-sent') {
+        const source = await RfqModel.findById(quote.rfq_id).select({ workflow: 1 }).lean();
+        data.body = source?.workflow?.messages?.filter((message) => message.author === 'ADMIN' && message.version_id === version._id).at(-1)?.body;
+      }
       if (id === 'quotation-sent') {
         if (version.status !== 'SENT' || !version.valid_until || version.valid_until <= new Date())
           throw new ObsoleteDelivery();
@@ -116,7 +125,7 @@ export function createNotificationService(
         } catch {
           throw new DeliveryError('INVALID_DELIVERY_ENVELOPE', false, true);
         }
-        const token = /^\/q\/([a-f0-9]{64})$/.exec(link.pathname)?.[1];
+          const token = /^\/(?:q|r)\/([a-f0-9]{64})$/.exec(link.pathname)?.[1];
         if (
           !token ||
           link.search ||
@@ -125,15 +134,15 @@ export function createNotificationService(
         )
           throw new DeliveryError('INVALID_DELIVERY_ENVELOPE', false, true);
         if (
-          !(await QuotationVersionModel.exists({
+            !(link.pathname.startsWith('/r/') ? await RfqModel.exists({ _id: quote.rfq_id, guest_token_hash: hashToken(token), guest_revoked_at: { $exists: false }, guest_expires_at: { $gt: new Date() } }) : await QuotationVersionModel.exists({
             _id: version._id,
             magic_link_token_hash: hashToken(token),
             status: 'SENT',
-          }))
+            }))
         )
           throw new ObsoleteDelivery();
         data.link = link.href;
-        data.pdfLink = new URL(`/v1/public/quotation/pdf/${token}`, env.API_ORIGIN).href;
+        if (link.pathname.startsWith('/q/')) data.pdfLink = new URL(`/v1/public/quotation/pdf/${token}`, env.API_ORIGIN).href;
       }
       if (['accepted', 'admin-accepted-alert'].includes(id) && !isAccepted(version.status))
         throw new ObsoleteDelivery();

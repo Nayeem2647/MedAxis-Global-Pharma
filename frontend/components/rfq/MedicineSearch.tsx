@@ -23,13 +23,15 @@ export function MedicineSearch({
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [dosageForm, setDosageForm] = useState('');
   const [page, setPage] = useState(1);
   const [retry, setRetry] = useState(0);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  const [result, setResult] = useState<{ key: string; products: HomeProduct[]; pagination: ApiPagination }>();
+  const [result, setResult] = useState<{ key: string; products: HomeProduct[]; dosageForms: string[]; pagination: ApiPagination }>();
 
   const parameters = new URLSearchParams({ locale, page: String(page), limit: '6' });
   if (query.trim()) parameters.set('q', query.trim());
+  if (dosageForm) parameters.set('dosage_form', dosageForm);
   const key = parameters.toString();
   const loading = status === 'loading' || (status === 'ready' && result?.key !== key);
 
@@ -48,7 +50,7 @@ export function MedicineSearch({
           });
           if (controller.signal.aborted) return;
           if (!response.meta.pagination) throw new Error('Missing pagination.');
-          setResult({ key, products: response.data.products, pagination: response.meta.pagination });
+          setResult({ key, products: response.data.products, dosageForms: response.data.facets.dosage_forms.map((form) => form.name), pagination: response.meta.pagination });
           setStatus('ready');
         } catch {
           if (!controller.signal.aborted) setStatus('error');
@@ -128,6 +130,13 @@ export function MedicineSearch({
           role="listbox"
           aria-label={t('medicineSearchTitle')}
         >
+          <label className="rfq-search-filter">
+            {t('medicineDosageFilter')}
+            <select aria-label={t('medicineDosageFilter')} value={dosageForm} onChange={(event) => { setDosageForm(event.target.value); setPage(1); }}>
+              <option value="">{t('medicineAllDosageForms')}</option>
+              {[...new Set([...(result?.dosageForms ?? []), ...(dosageForm ? [dosageForm] : [])])].map((form) => <option key={form}>{form}</option>)}
+            </select>
+          </label>
           <p className="rfq-search-status" role="status" aria-live="polite">
             {loading
               ? t('medicineSearchLoading')

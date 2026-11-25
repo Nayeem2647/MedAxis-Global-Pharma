@@ -10,6 +10,7 @@ const line = {
   id: z.uuidv4(), rfq_item_id: z.uuidv4(), product_id: z.uuidv4().optional(), manufacturer_id: z.uuidv4(),
   brand_name: text(200), generic_name: text(200), strength: z.string().max(200), dosage_form: text(200), pack_size: text(200),
   packaging_unit: text(40), quantity: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), customer_facing_note: text(2000).optional(),
+  weight_per_pack_g: commercialDecimal.optional(), line_weight_g: commercialDecimal.optional(),
 };
 const lineSchema = z.discriminatedUnion('availability_status', [
   z.object({ ...line, availability_status: z.literal('AVAILABLE'), unit_quoted_price: commercialDecimal, total_line_price: commercialDecimal }),
@@ -27,6 +28,7 @@ export const customerQuotationSchema = z.object({
     email: z.email().max(200).optional(), whatsapp_number: text(50).optional(), wechat_id: text(100).optional(), preferred_locale: z.enum(['en', 'zh-CN']) }),
   items: z.array(lineSchema).min(1).max(100), billing_currency: currency,
   subtotal_amount: commercialDecimal, freight_cost: commercialDecimal, insurance_cost: commercialDecimal, total_amount: commercialDecimal,
+  medicine_weight_g: commercialDecimal.optional(), packed_weight_g: commercialDecimal.optional(), payment_requested_at: date.optional(),
   shipping_terms: z.object({ method: z.enum(['INCOTERM', 'EXPRESS_COURIER']), incoterm: z.enum(['FCA', 'CIP', 'DAP', 'CPT', 'FOB', 'CIF']).optional(),
     named_place: text(200), cold_chain_required: z.boolean(), temperature_range: text(200).optional() }),
   payment_terms: z.literal('BANK_WIRE_TT'), bank_details: bankSchema.optional(),

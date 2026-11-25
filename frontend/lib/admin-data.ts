@@ -8,6 +8,7 @@ export const adminFiltersSchema = z.strictObject({ page: z.coerce.number().int()
   q: z.preprocess(blank, z.string().trim().max(100).optional()), status: z.preprocess(blank, z.enum(rfqStatuses).optional()), buyer_type: z.preprocess(blank, z.enum(['B2B_WHOLESALE', 'B2C_PATIENT']).optional()), date_from: day, date_to: day,
 }).refine((value) => !value.date_from || !value.date_to || value.date_from <= value.date_to);
 export type AdminFilters = z.infer<typeof adminFiltersSchema>;
+export const quotationRequestFilters = adminFiltersSchema.parse({ status: 'SUBMITTED', limit: 5 });
 export function rfqQuery(filters: AdminFilters): string {
   const query = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit) });
   for (const key of ['q', 'status', 'buyer_type'] as const) if (filters[key]) query.set(key, filters[key]);

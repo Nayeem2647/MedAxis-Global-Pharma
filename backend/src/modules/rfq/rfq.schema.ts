@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { Schema, model } from 'mongoose';
 import { installPersistenceGuards } from '../../shared/persistence/guards.js';
+import type { RfqWorkflow } from './rfq.workflow.types.js';
 
 export interface IRfq {
+  workflow?: RfqWorkflow;
+  guest_token_hash?: string;
+  guest_delivery?: Record<string, unknown>;
+  guest_expires_at?: Date;
+  guest_revoked_at?: Date;
   _id: string;
   rfq_number: string;
   customer_id: string;
@@ -45,6 +51,11 @@ export interface IRfq {
 
 export const RfqSchema = new Schema<IRfq>(
   {
+    workflow: { type: Schema.Types.Mixed },
+    guest_token_hash: { type: String, select: false, match: /^[a-f0-9]{64}$/ },
+    guest_delivery: { type: Schema.Types.Mixed, select: false },
+    guest_expires_at: Date,
+    guest_revoked_at: Date,
     _id: {
       type: String,
       required: true,
@@ -188,6 +199,7 @@ export const RfqSchema = new Schema<IRfq>(
   },
 );
 RfqSchema.index({ rfq_number: 1 }, { unique: true });
+RfqSchema.index({ guest_token_hash: 1 }, { unique: true, partialFilterExpression: { guest_token_hash: { $type: 'string' } } });
 RfqSchema.index({ customer_id: 1, created_at: -1 }, {});
 RfqSchema.index({ status: 1, created_at: -1 }, {});
 installPersistenceGuards(RfqSchema, 'rfqs');

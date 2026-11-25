@@ -72,6 +72,11 @@ installPersistenceGuards(QuotationSchema, 'quotations');
 export const QuotationModel = model<IQuotation>('Quotation', QuotationSchema, 'quotations');
 
 export interface IQuotationVersion {
+  workflow_enabled?: boolean;
+  medicine_weight_g?: Types.Decimal128;
+  packed_weight_g?: Types.Decimal128;
+  payment_requested_at?: Date;
+  delivery_evidence?: string;
   _id: string;
   quotation_id: string;
   version_number: number;
@@ -111,6 +116,9 @@ export interface IQuotationVersion {
     customer_facing_note?: string;
     unit_quoted_price?: Types.Decimal128;
     total_line_price?: Types.Decimal128;
+    weight_per_pack_g?: Types.Decimal128;
+    line_weight_g?: Types.Decimal128;
+    selling_price_override?: Types.Decimal128;
   }>;
   billing_currency: 'USD' | 'CNY' | 'EUR' | 'BDT';
   subtotal_amount: Types.Decimal128;
@@ -161,6 +169,11 @@ export interface IQuotationVersion {
 
 export const QuotationVersionSchema = new Schema<IQuotationVersion>(
   {
+    workflow_enabled: Boolean,
+    medicine_weight_g: Schema.Types.Decimal128,
+    packed_weight_g: Schema.Types.Decimal128,
+    payment_requested_at: Date,
+    delivery_evidence: { type: String, maxlength: 2000 },
     _id: {
       type: String,
       required: true,
@@ -282,6 +295,9 @@ export const QuotationVersionSchema = new Schema<IQuotationVersion>(
                 enum: ['AVAILABLE', 'UNAVAILABLE', 'SOURCING'],
               },
               customer_facing_note: { type: String, required: false, trim: true, maxlength: 2000 },
+              weight_per_pack_g: Schema.Types.Decimal128,
+              line_weight_g: Schema.Types.Decimal128,
+              selling_price_override: Schema.Types.Decimal128,
               unit_quoted_price: {
                 type: Schema.Types.Decimal128,
                 required: false,

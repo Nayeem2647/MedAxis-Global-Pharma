@@ -19,6 +19,7 @@ import { AdminUnavailable } from "./AdminFeedback";
 import { AdminLink } from "./AdminShell";
 import { ManagementPagination, ManagementTable } from "./ManagementTable";
 import { QuotationMetrics } from "./QuotationMetrics";
+import { QuotationRequests } from "./QuotationRequests";
 
 export type QuotationSearch = Promise<
   Record<string, string | string[] | undefined>
@@ -60,7 +61,7 @@ export async function QuotationDirectory({
   searchParams: QuotationSearch;
   followUps?: boolean;
 }) {
-  const path = followUps ? "/admin/quotations/follow-ups" : "/admin/quotations";
+  const path = followUps ? "/admin/quotations/follow-ups" : "/admin/quotations/documents";
   let params: URLSearchParams;
   try {
     params = paramsFor(await searchParams, [
@@ -155,6 +156,7 @@ export async function QuotationDirectory({
           </AdminLink>
         </div>
       </div>
+      {!followUps && <QuotationRequests />}
       <QuotationMetrics value={summaryData} compact />
       <section className="admin-products-list" aria-label="Quotation list">
         <nav className="quotation-tabs" aria-label="Quotation views">

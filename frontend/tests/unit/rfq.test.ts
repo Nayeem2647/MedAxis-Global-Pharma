@@ -7,7 +7,7 @@ import { meta } from '../fixtures';
 const id = '82f591d0-346b-4cc4-8d67-e25358fa0272';
 const receipt = { rfq_id: id, rfq_number: 'RFQ-2026-00001', status: 'SUBMITTED' as const, created_at: meta.timestamp, total_items: 1 };
 const business = (): RfqBusiness => ({
-  contact: { full_name: 'Buyer', customer_type: 'B2C_PATIENT', whatsapp_number: '+8801560066410', preferred_locale: 'en' },
+  contact: { full_name: 'Buyer', customer_type: 'B2C_PATIENT', email: 'buyer@example.test', whatsapp_number: '+8801560066410', preferred_locale: 'en' },
   destination_country: 'BD', locale: 'en', items: [{ is_uncatalogued: true, custom_medicine_name: 'Medicine', quantity: 1, packaging_unit: 'BOX' }], prescription_ids: [],
 });
 const failed = (status: number, code = 'FAILURE') => new ApiError('Private proxy / server text must not be rendered.', { status, code, responseValidated: true });
@@ -23,7 +23,9 @@ describe('RFQ transport validation', () => {
     { contact: { full_name: 'Buyer', customer_type: 'B2B_WHOLESALE', email: 'buyer@example.test', preferred_locale: 'en' } },
     { contact: { full_name: 'Buyer', customer_type: 'B2C_PATIENT', preferred_locale: 'en' } },
     { contact: { ...business().contact, email: 'not-an-email' } },
-    { locale: 'zh-CN' }, { destination_country: 'CN' }, { contact: { ...business().contact, preferred_locale: 'zh-CN' } },
+    { contact: { ...business().contact, email: undefined } },
+    { locale: 'zh-CN', contact: { ...business().contact, email: undefined } },
+    { destination_country: 'CN', contact: { ...business().contact, email: undefined } },
     { destination_country: 'ZZ' }, { destination_country: 'CHN' }, { items: [] },
     { items: Array.from({ length: 101 }, () => business().items[0]) },
     { prescription_ids: Array.from({ length: 6 }, () => crypto.randomUUID()) }, { prescription_ids: [id, id] },

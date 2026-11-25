@@ -5,6 +5,7 @@ import { API_BASE_PATH } from './config/constants.js';
 import { checkDatabase as defaultCheckDatabase, type CheckDatabaseFn } from './config/db.js';
 import type { AppEnv } from './config/env.js';
 import { createHealthRouter } from './modules/health/health.routes.js';
+import { createRfqWorkflowRouter } from './modules/rfq/rfq.workflow.routes.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import type { AuthHooks } from './modules/auth/auth.security.js';
 import { createPublicCatalogRouter, createAdminCatalogRouter } from './modules/catalog/catalog.routes.js';
@@ -115,6 +116,7 @@ export function createApp({
   v1.use('/admin/cms', cms.adminRouter);
   v1.use('/admin/settings', createSettingsRouter(env, revalidate));
   v1.use(createRfqRouter(env, logger, { storage, ...rfq }));
+  v1.use(createRfqWorkflowRouter(env, fx, logger, { dispatchNotifications: rfq?.hooks?.dispatchNotifications, ...decisionHooks }));
   v1.use('/admin/fx-rates', createFxRouter(env, fx));
   v1.use(
     '/admin/quotations',

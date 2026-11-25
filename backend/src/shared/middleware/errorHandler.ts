@@ -159,7 +159,7 @@ export function errorHandler(logger: AppLogger): ErrorRequestHandler {
           original && typeof original === 'object' && 'code' in original && typeof original.code === 'number'
             ? original.code
             : undefined,
-        err: /\/(?:rfq|rfqs|prescriptions|quotation|quotations|fx-rates|customers|audit-logs|stream)(?:\/|$)|\/webhooks\/email-reply/i.test(
+        err: /\/(?:rfq-workflow|rfq|rfqs|prescriptions|quotation|quotations|fx-rates|customers|audit-logs|stream)(?:\/|$)|\/webhooks\/email-reply/i.test(
           req.path,
         )
           ? new Error('Private business operation failed')

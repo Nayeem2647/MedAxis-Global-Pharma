@@ -7,6 +7,7 @@ import { Exact, bsonDecimal, amount } from '../../shared/utils/decimal.js';
 import type { AppLogger } from '../../shared/utils/logger.js';
 import type { fulfillmentSchema } from '../../shared/validators/decision.validator.js';
 import { QuotationModel, QuotationVersionModel } from './quotation.schema.js';
+import { quotationEvents } from './quotation.service.js';
 import { COMMERCIAL_PROJECTION, commercialQuotation } from './quotation.dto.js';
 import { queueLifecycleEmail, scheduleMedicalPurge, versionConflict } from './quotation.lifecycle.js';
 
@@ -28,6 +29,8 @@ export function createFulfillmentService(logger: AppLogger, dispatch?: () => voi
         const filter: Record<string, unknown> = { _id: version._id, quotation_id: id };
         let set: Record<string, unknown>;
         if (input.status === 'PAYMENT_RECEIVED') {
+          if (version.workflow_enabled && !version.payment_requested_at) throw AppError.conflict('Request payment after customer approval before recording the transfer.');
+          if (version.payment && version.payment.reference === input.wire_reference && version.payment.currency === input.currency && new Exact(version.payment.amount.toString()).eq(input.amount)) return commercialQuotation(version);
           if (
             input.currency !== version.billing_currency ||
             !new Exact(input.amount).gt(0) ||
@@ -63,6 +66,7 @@ export function createFulfillmentService(logger: AppLogger, dispatch?: () => voi
             },
           };
         } else if (input.status === 'DISPATCHED') {
+          if (version.shipment?.courier_name === input.courier_name && version.shipment.awb_number === input.awb_tracking_number) return commercialQuotation(version);
           if (version.status !== 'PAYMENT_RECEIVED' || !version.payment || version.reservation_status !== 'CONSUMED')
             throw AppError.conflict('Verified payment is required before dispatch.');
           filter.status = 'PAYMENT_RECEIVED';
@@ -76,10 +80,12 @@ export function createFulfillmentService(logger: AppLogger, dispatch?: () => voi
             },
           };
         } else {
+          if (version.status === 'DELIVERED' && version.workflow_enabled) return commercialQuotation(version);
+          if (version.workflow_enabled && !input.delivery_evidence) throw AppError.validation([{ field: 'delivery_evidence', issue: 'Record the courier proof of delivery or handover reference.' }]);
           if (version.status !== 'DISPATCHED' || !version.shipment)
             throw AppError.conflict('Dispatch is required before delivery.');
           filter.status = 'DISPATCHED';
-          set = { status: input.status, delivered_at: now };
+          set = { status: input.status, delivered_at: now, delivery_evidence: input.delivery_evidence };
         }
         const changed = await QuotationVersionModel.findOneAndUpdate(
           filter,
@@ -127,6 +133,7 @@ export function createFulfillmentService(logger: AppLogger, dispatch?: () => voi
       { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } },
     );
     void Promise.resolve()
+      .then(() => quotationEvents.emit('QUOTATION_CHANGED', { quotation_id: id }))
       .then(() => dispatch?.())
       .catch(() => logger.warn('Fulfillment notification hook failed', { request_id: req.requestId }));
     return result;

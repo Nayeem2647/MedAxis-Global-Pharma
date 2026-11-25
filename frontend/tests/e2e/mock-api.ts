@@ -1,3 +1,4 @@
+import { createProductionWorkflow, handleProductionAdmin, handleProductionGuest, productionWorkflowState } from './production-workflow-fixture.ts';
 import { createServer, type ServerResponse } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -23,6 +24,7 @@ function workflowLink(owner: string, workflow: WorkflowFixture, version: ReturnT
 }
 function workflowFixture(scenario: string): WorkflowFixture {
   const rfq = rfqFixture(); const quote = scenario.includes('issue-conflict') || scenario==='workflow-existing-draft' ? quotationDetailFixture('DRAFT') : /sent|accepted|expired|payment|dispatched|conflict/.test(scenario) ? quotationDetailFixture(scenario.includes('payment') ? 'PAYMENT_RECEIVED' : scenario.includes('dispatched') ? 'DISPATCHED' : /accepted|expired/.test(scenario) ? 'ACCEPTED' : 'SENT') : null;
+  if (scenario === 'workflow-website-request-empty') rfq.status = 'UNDER_REVIEW';
   if (quote) { rfq.status = 'QUOTED'; const current = quote.versions[0]!; if (/accepted|expired|payment|dispatched/.test(scenario)) { current.reservation_status = /payment|dispatched/.test(scenario) ? 'CONSUMED' : 'ACTIVE'; current.accepted_at = timestamp; current.reservation_expires_at = new Date(Date.now() + (scenario.includes('expired') ? -1000 : 5 * 86_400_000)).toISOString(); } if (/payment|dispatched/.test(scenario)) current.payment = { reference: 'verified-wire', amount: current.total_amount, currency: 'USD', received_at: timestamp }; if (scenario.includes('dispatched')) current.shipment = { courier_name: 'Fixture courier', awb_tracking_number: 'AWB-001', dispatched_at: timestamp }; rfq.quotations = [{ ...quote.quotation, created_at: timestamp }]; }
   return { rfq, quote, writes: [], lost: false, links: 0 };
 }
@@ -144,19 +146,20 @@ createServer(async (req, res) => {
   if (url.pathname === '/__test__/admin' && req.method === 'POST') {
     let raw = ''; for await (const chunk of req) raw += String(chunk);
     const { email, scenario } = z.object({ email: z.email(), scenario: z.string().default('normal') }).parse(JSON.parse(raw)); const id = randomUUID();
-    admins.set(email, { id, email, scenario, full: `s%3A${id}.FIXTURE-FULL`, pre: `s%3A${id}.FIXTURE-PRE`, verified: false, revoked: false, others: true, calls: [], streams: new Set(), otherStreams: new Set(), connects: 0, disconnects: 0 }); const directoryFixture = managementFixture(); if (scenario === 'dropdown-controls') directoryFixture.resources.categories!.push({ _id: workflowIds.prescription, created_at: timestamp, updated_at: timestamp, translations: { en: { name: 'Additional category', slug: 'additional-category' }, zhCN: { name: '\u6d4b\u8bd5\u5206\u7c7b', slug: 'additional-category-cn' } }, sort_order: 1, is_active: true }); management.set(id,directoryFixture); if (scenario.startsWith('workflow')) workflows.set(id, workflowFixture(scenario)); success(res, { configured: true }); return;
+    admins.set(email, { id, email, scenario, full: `s%3A${id}.FIXTURE-FULL`, pre: `s%3A${id}.FIXTURE-PRE`, verified: false, revoked: false, others: true, calls: [], streams: new Set(), otherStreams: new Set(), connects: 0, disconnects: 0 }); const directoryFixture = managementFixture(); if (scenario === 'dropdown-controls') directoryFixture.resources.categories!.push({ _id: workflowIds.prescription, created_at: timestamp, updated_at: timestamp, translations: { en: { name: 'Additional category', slug: 'additional-category' }, zhCN: { name: '\u6d4b\u8bd5\u5206\u7c7b', slug: 'additional-category-cn' } }, sort_order: 1, is_active: true }); management.set(id,directoryFixture); if (scenario === 'workflow-production') createProductionWorkflow(id); if (scenario.startsWith('workflow')) workflows.set(id, workflowFixture(scenario)); success(res, { configured: true }); return;
   }
   if (url.pathname === '/__test__/admin') {
     const state = admins.get(url.searchParams.get('email') ?? '');
     if (!state) { res.writeHead(404); res.end('{}'); return; }
     if (req.method === 'POST') { res.writeHead(405); res.end(); return; }
-    if (url.searchParams.get('action') === 'event') { const eventId = randomUUID(); const frame = `id: ${eventId}\nevent: NEW_RFQ\ndata: ${JSON.stringify({ rfq_id: productId, rfq_number: 'RFQ-LIVE-001', created_at: timestamp, private_extra: 'NEVER_RENDER_ADMIN_EVENT' })}\n\n`; for (const stream of state.streams) stream.write('id: fake\nevent: NEW_RFQ\ndata: broken\n\n' + frame + frame); }
+    if (url.searchParams.get('action') === 'event') { if (state.scenario === 'workflow-website-request-empty') workflows.get(state.id)!.rfq.status = 'SUBMITTED'; const eventId = randomUUID(); const frame = `id: ${eventId}\nevent: NEW_RFQ\ndata: ${JSON.stringify({ rfq_id: productId, rfq_number: 'RFQ-LIVE-001', created_at: timestamp, private_extra: 'NEVER_RENDER_ADMIN_EVENT' })}\n\n`; for (const stream of state.streams) stream.write('id: fake\nevent: NEW_RFQ\ndata: broken\n\n' + frame + frame); }
     if (url.searchParams.get('action') === 'disconnect') for (const stream of state.streams) stream.end();
     if (url.searchParams.get('action') === 'expire') { state.revoked = true; for (const stream of state.streams) stream.end(); }
     if(url.searchParams.get('action')==='management'){success(res,management.get(state.id));return;}
-    if (url.searchParams.get('action') === 'workflow') { success(res, workflows.get(state.id)); return; }
+    if (url.searchParams.get('action') === 'workflow') { success(res, productionWorkflowState(state.id) ?? workflows.get(state.id)); return; }
     success(res, { calls: state.calls, connects: state.connects, disconnects: state.disconnects, active: state.streams.size, verified: state.verified, revoked: state.revoked, ...(url.searchParams.get('action') === 'other-session' && state.verified && state.others ? { other_cookie: state.full.replace('FIXTURE-FULL', 'FIXTURE-OTHER') } : {}) }); return;
   }
+  if (url.pathname.startsWith('/v1/public/rfq-workflow/')) { let raw = ''; for await (const chunk of req) raw += String(chunk); if (await handleProductionGuest(url, req.method ?? 'GET', raw, res, (owner) => [...admins.values()].find((entry) => entry.id === owner)?.streams ?? new Set())) return; }
   if (url.pathname.startsWith('/v1/admin/')) {
     const path = url.pathname.slice('/v1/admin/'.length); const rawCookie = req.headers.cookie ?? ''; const pair = (name: string) => rawCookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
     let input: unknown; let multipart:FormData|undefined; if (req.method === 'POST' || req.method === 'PATCH' || req.method === 'DELETE') { const chunks:Buffer[]=[]; for await (const chunk of req) chunks.push(Buffer.from(chunk)); const bytes=new Uint8Array(Buffer.concat(chunks)); try { if(req.headers['content-type']?.startsWith('multipart/form-data'))multipart=await new Request('http://fixture.test',{method:'POST',headers:{'Content-Type':req.headers['content-type']},body:bytes}).formData();else input=JSON.parse(new TextDecoder().decode(bytes)); } catch { quoteError(res,400,'INVALID_REQUEST');return; } }
@@ -179,6 +182,7 @@ createServer(async (req, res) => {
     const other = pair('medaxis_admin_session') === state.full.replace('FIXTURE-FULL', 'FIXTURE-OTHER');
     if (!state.verified || state.revoked || (!other && pair('medaxis_admin_session') !== state.full) || other && !state.others) { quoteError(res, 401, 'AUTHENTICATION_REQUIRED'); return; }
     res.setHeader('Set-Cookie', adminCookie(`medaxis_admin_session=${pair('medaxis_admin_session')}`, '/v1/admin'));
+    if (handleProductionAdmin(state.id, url, req.method ?? 'GET', input, res, state.streams)) return;
     if (path === 'auth/logout') { state.revoked = true; for (const stream of state.streams) stream.end(); res.setHeader('Set-Cookie', [adminCookie(`medaxis_admin_session=${state.full}`, '/v1/admin'), adminCookie('medaxis_admin_session=', '/v1/admin', true), adminCookie('pre_auth_session=', '/v1/admin/auth', true)]); success(res, { logged_out: true }); return; }
     if (path === 'auth/revoke-sessions') { const count = state.others ? 1 : 0; state.others = false; for (const stream of state.otherStreams) stream.end(); success(res, { revoked_count: count }); return; }
     if (path === 'auth/sessions') { success(res, [adminSession(state.id, !other), ...(state.others ? [adminSession(englishId, other)] : [])]); return; }
@@ -284,6 +288,12 @@ createServer(async (req, res) => {
     const workflow = workflows.get(state.id);
     if (workflow) {
       const wf = workflow; const rfqPath = `rfqs/${workflowIds.rfq}`; const quotePath = `quotations/${workflowIds.quote}`; const body = z.record(z.string(), z.unknown()).safeParse(input); const data = body.success ? body.data : {};
+      if (path === 'rfqs' && state.scenario.startsWith('workflow-website-request')) {
+        if (state.scenario === 'workflow-website-request-down') { success(res, { malformed: true }); return; }
+        const status = url.searchParams.get('status');
+        const rows = !status || wf.rfq.status === status ? [wf.rfq] : [];
+        success(res, rows, Number(url.searchParams.get('page') ?? 1), Number(url.searchParams.get('limit') ?? 20), rows.length); return;
+      }
       if (state.scenario.includes('config-down') && ['settings', 'fx-rates'].includes(path)) { quoteError(res, 502, 'SERVICE_UNAVAILABLE'); return; }
       if (path === 'settings') { success(res, workflowSettings); return; }
       if (path === rfqPath && req.method === 'GET') { success(res, wf.rfq); return; }

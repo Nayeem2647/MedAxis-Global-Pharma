@@ -33,6 +33,7 @@ export function PrescriptionUpload({
   onBusy(busy: boolean): void;
 }) {
   const t = useTranslations('Rfq');
+  const [kind, setKind] = useState<'PRESCRIPTION' | 'SUPPORTING'>('PRESCRIPTION');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [issue, setIssue] = useState<UploadIssue>();
   const [dragOver, setDragOver] = useState(false);
@@ -84,7 +85,7 @@ export function PrescriptionUpload({
       // Each upload consumes a challenge. RFQ submission must acquire another one.
       onConsumed();
       const receipt = await uploadPrescription(file, token, controller.signal, (percent) =>
-        commit((items) => items.map((item) => (item.id === id ? { ...item, percent } : item))),
+        commit((items) => items.map((item) => (item.id === id ? { ...item, percent } : item))), kind,
       );
       commit((items) =>
         items.map((item) => (item.id === id ? { ...item, status: 'uploaded', percent: 100, receipt } : item)),
@@ -139,6 +140,7 @@ export function PrescriptionUpload({
 
   return (
     <div className="prescription-upload">
+      <label>{t('documentType')}<select value={kind} disabled={pickerDisabled} onChange={(event) => setKind(event.target.value as 'PRESCRIPTION' | 'SUPPORTING')}><option value="PRESCRIPTION">{t('prescriptionDocument')}</option><option value="SUPPORTING">{t('supportingDocument')}</option></select></label>
       <div
         className={`rfq-dropzone${dragOver ? ' is-drag-over' : ''}${pickerDisabled ? ' is-disabled' : ''}`}
         onDragOver={(event) => {

@@ -7,12 +7,13 @@ const text = (max: number) => z.string().trim().min(1).max(max);
 const notes = text(5000)
   .transform((value) => sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} }))
   .refine((value) => !!value.trim(), 'Notes are required.');
-export const acceptSchema = z.object({ terms_accepted: z.literal(true) }).strict();
+export const acceptSchema = z.object({ terms_accepted: z.literal(true), expected_version_id: uuid.optional() }).strict();
 export const revisionRequestSchema = z.object({ notes }).strict();
 export const refreshRequestSchema = z.object({ notes: notes.optional() }).strict();
 export const declineSchema = z
   .object({
     reason: z.enum(['PRICE', 'LEAD_TIME', 'SPECIFICATION', 'OTHER']),
+    expected_version_id: uuid.optional(),
     notes: notes.refine((value) => value.length <= 2000, 'Decline notes must not exceed 2000 characters.').optional(),
   })
   .strict();
@@ -39,7 +40,7 @@ export const fulfillmentSchema = z.discriminatedUnion('status', [
         .optional(),
     })
     .strict(),
-  z.object({ ...expected, status: z.literal('DELIVERED') }).strict(),
+  z.object({ ...expected, status: z.literal('DELIVERED'), delivery_evidence: text(2000).optional() }).strict(),
 ]);
 export const pageQuery = {
   page: z.coerce.number().int().min(1).max(100000).default(1),

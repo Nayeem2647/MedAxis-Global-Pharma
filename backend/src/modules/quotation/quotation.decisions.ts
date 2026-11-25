@@ -15,6 +15,7 @@ import {
   type revisionRequestSchema,
 } from '../../shared/validators/decision.validator.js';
 import { RfqModel, ClarificationMessageModel } from '../rfq/rfq.schema.js';
+import { resolveGuest } from '../rfq/rfq.guest-access.js';
 import { NotificationLogModel } from '../notification/notification.schema.js';
 import { commercialQuotation, COMMERCIAL_PROJECTION } from './quotation.dto.js';
 import { QuotationModel, QuotationVersionModel, type IQuotationVersion } from './quotation.schema.js';
@@ -45,18 +46,26 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
   }
   async function resolve(token: string, session?: ClientSession) {
     if (!/^[a-f0-9]{64}$/.test(token)) throw AppError.notFound();
-    const hash = hashToken(token);
-    const version = await QuotationVersionModel.findOne({ magic_link_token_hash: hash })
-      .select(COMMERCIAL_PROJECTION)
+    let hash = hashToken(token);
+    let version = await QuotationVersionModel.findOne({ magic_link_token_hash: hash })
+      .select(`${COMMERCIAL_PROJECTION} +magic_link_token_hash`)
       .session(session ?? null)
       .lean();
+    let guest = false;
+    if (!version) {
+      const rfq = await resolveGuest(token, session);
+      const parent = await QuotationModel.findOne({ rfq_id: rfq._id }).sort({ created_at: -1 }).session(session ?? null).lean();
+      version = parent ? await QuotationVersionModel.findById(parent.current_version_id).select(`${COMMERCIAL_PROJECTION} +magic_link_token_hash`).session(session ?? null).lean() : null;
+      guest = true;
+      if (version?.magic_link_token_hash) hash = version.magic_link_token_hash;
+    }
     if (!version || version.status === 'DRAFT') throw AppError.notFound();
     const quote = await QuotationModel.findById(version.quotation_id)
       .session(session ?? null)
       .lean();
     if (!quote) throw AppError.notFound();
     if (quote.current_version_id !== version._id || version.status === 'SUPERSEDED') throw versionConflict();
-    return { version, quote, hash };
+    return { version, quote, hash, guest };
   }
   function usable(version: IQuotationVersion) {
     if (isExpired(version)) throw tokenExpired();
@@ -153,9 +162,12 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
     try {
       result = await mongoose.connection.transaction(
         async (session) => {
-          const { version, quote, hash } = await resolve(token, session);
+          const { version, quote, hash, guest } = await resolve(token, session);
           knownId = version._id;
-          acceptSchema.parse(input);
+          const intent = acceptSchema.parse(input);
+          if ((guest || intent.expected_version_id) && intent.expected_version_id !== version._id) throw versionConflict();
+          const rfqState = await RfqModel.findById(quote.rfq_id).session(session).lean();
+          if (rfqState?.workflow?.pending_request_id) throw AppError.conflict('Wait for the response to your change request before approving.');
           if (isAccepted(version.status))
             return { version, changed: false, quotation_id: quote._id, rfq_id: quote.rfq_id };
           usable(version);
@@ -332,7 +344,9 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
   }
   async function decline(req: Request, token: string, input: z.infer<typeof declineSchema>) {
     const result = await mongoose.connection.transaction(async (session) => {
-      const { version, quote, hash } = await resolve(token, session);
+      const { version, quote, hash, guest } = await resolve(token, session);
+      if ((guest || input.expected_version_id) && input.expected_version_id !== version._id) throw versionConflict();
+      if (guest && version.status === 'DECLINED') return view(version);
       usable(version);
       if (version.status !== 'SENT' || quote.overall_status !== 'ACTIVE')
         throw AppError.conflict('Only a current SENT quotation can be declined.');

@@ -21,7 +21,7 @@ export async function validatePrescription(file: File): Promise<void> {
 }
 
 /** One upload, never automatically retried. The browser owns the multipart boundary. */
-export function uploadPrescription(file: File, token: string, signal: AbortSignal, onProgress: (percent: number) => void): Promise<PrescriptionReceipt> {
+export function uploadPrescription(file: File, token: string, signal: AbortSignal, onProgress: (percent: number) => void, kind?: 'PRESCRIPTION' | 'SUPPORTING'): Promise<PrescriptionReceipt> {
   return new Promise((resolve, reject) => {
     signal.throwIfAborted();
     const xhr = new XMLHttpRequest();
@@ -51,6 +51,7 @@ export function uploadPrescription(file: File, token: string, signal: AbortSigna
     const form = new FormData();
     form.set('prescription', file);
     if (token) form.set('turnstile_token', token);
+    if (kind) form.set('attachment_kind', kind);
     xhr.send(form);
   });
 }

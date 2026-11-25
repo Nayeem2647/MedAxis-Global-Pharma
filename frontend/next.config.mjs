@@ -51,7 +51,7 @@ const config = {
   poweredByHeader: false,
   reactStrictMode: true,
   // Private bearer-token paths must not enter Next's development access logs.
-  logging: { incomingRequests: { ignore: [/^\/q(?:\/|$)/, /^\/(?:api\/)?admin(?:\/|$)/] } },
+  logging: { incomingRequests: { ignore: [/^\/(?:q|r)(?:\/|$)/, /^\/(?:api\/)?admin(?:\/|$)/] } },
   // Resolve SEO and missing-entity metadata before committing HTTP headers.
   htmlLimitedBots: /.*/,
   // Keep the original request URL available to middleware. NextURL normalizes
@@ -76,7 +76,7 @@ const config = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         ],
       },
-      ...['/q/:path*', '/admin/:path*', '/api/customer/:path*', '/:locale(en|zh-CN)/account/:path*', '/:locale(en|zh-CN)/:auth(login|register)', '/:locale(en|zh-CN)/request-quote'].map((source) => ({
+      ...['/q/:path*', '/r/:path*', '/admin/:path*', '/api/customer/:path*', '/:locale(en|zh-CN)/account/:path*', '/:locale(en|zh-CN)/:auth(login|register)', '/:locale(en|zh-CN)/request-quote'].map((source) => ({
         source,
         headers: [
           { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },

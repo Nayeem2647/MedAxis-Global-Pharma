@@ -8,6 +8,9 @@ import { AppError } from '../../shared/errors/AppError.js';
 import { writeAuditLog } from '../../shared/middleware/auditLogger.js';
 import { generateToken, hashToken } from '../../shared/utils/crypto.js';
 import { bsonDecimal } from '../../shared/utils/decimal.js';
+import { Exact, amount } from '../../shared/utils/decimal.js';
+import { guestUrl } from '../rfq/rfq.guest-access.js';
+import { canonicalPayload } from '../rfq/rfq.intake.service.js';
 import type { AppLogger } from '../../shared/utils/logger.js';
 import {
   bankDetailsSchema,
@@ -175,6 +178,8 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
           { field: 'items.snapshot', issue: 'Uncatalogued RFQ lines require complete commercial specifications.' },
         ]);
       lines.push({
+        ...(item.weight_per_pack_g ? { weight_per_pack_g: bsonDecimal(item.weight_per_pack_g), line_weight_g: bsonDecimal(amount(new Exact(item.weight_per_pack_g).mul(source.quantity), 8)) } : {}),
+        ...(item.selling_price ? { selling_price_override: bsonDecimal(item.selling_price) } : {}),
         _id: randomUUID(),
         rfq_item_id: source._id,
         product_id: source.product_id,
@@ -202,6 +207,12 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
   ) {
     const snapshot = await fx.snapshot(input.billing_currency, session, true);
     const lines = await buildLines(rfq, input, session);
+    const available = lines.filter((line) => line.availability_status === 'AVAILABLE');
+    if (rfq.workflow?.enabled && available.some((line) => !line.weight_per_pack_g))
+      throw AppError.validation([{ field: 'items.weight_per_pack_g', issue: 'Enter the approximate weight per pack for each available medicine.' }]);
+    const weight = available.every((line) => line.line_weight_g) ? available.reduce((sum, line) => sum.plus(line.line_weight_g!.toString()), new Exact(0)) : undefined;
+    if (input.packed_weight_g && (!weight || new Exact(input.packed_weight_g).lt(weight)))
+      throw AppError.validation([{ field: 'packed_weight_g', issue: 'Packed shipment weight must be at least the total medicine weight.' }]);
     const calculated = calculateFastQuote({
       currency: input.billing_currency,
       rate_to_bdt: snapshot.rate,
@@ -219,12 +230,15 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
       quotation_id: quote._id,
       version_number: quote.current_version,
       status: 'DRAFT',
+      workflow_enabled: rfq.workflow?.enabled,
       contact_snapshot: rfq.contact_snapshot,
       items: pricedLines(lines, calculated.commercial),
       billing_currency: input.billing_currency,
       ...commercialFields(calculated.commercial),
       shipping_terms: input.shipping_terms,
       payment_terms: input.payment_terms,
+      medicine_weight_g: weight ? bsonDecimal(amount(weight, 8)) : undefined,
+      packed_weight_g: input.packed_weight_g ? bsonDecimal(input.packed_weight_g) : undefined,
       bank_details_snapshot: input.bank_details,
     });
     await version.save({ session });
@@ -317,8 +331,9 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
           manufacturer_id: line.manufacturer_id,
           quantity: line.quantity,
           availability_status: line.availability_status,
-          procurement_cost_bdt: cost?.procurement_unit_cost_bdt.toString(),
-          markup_percent: cost?.markup_percent.toString(),
+          procurement_cost_bdt: cost ? amount(new Exact(cost.procurement_unit_cost_bdt.toString()), 8) : undefined,
+          markup_percent: cost ? amount(new Exact(cost.markup_percent.toString()), 8) : undefined,
+          selling_price: line.selling_price_override?.toString(),
         };
       }),
     });
@@ -370,7 +385,7 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
     );
     if (updated.matchedCount !== 1) throw AppError.conflict();
     const origin = env.PUBLIC_ORIGIN[0]!;
-    const url = new URL(`/q/${token}`, origin).href;
+    const url = await guestUrl(env, rfq._id, session) ?? new URL(`/q/${token}`, origin).href;
     await enqueueQuotation(env, version.toObject(), hashToken(token), url, session);
     await audit(req, quote._id, 'QUOTATION_SENT', session, {
       version_number: version.version_number,
@@ -383,6 +398,8 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
     const versionId = randomUUID();
     const result = await mongoose.connection.transaction(async (session) => {
       const rfq = await rfqFor(input.rfq_id, session);
+      if (rfq.workflow?.enabled && !rfq.workflow.reviewed_at)
+        throw AppError.conflict('Save the request review before creating a quotation.');
       if (await QuotationModel.exists({ rfq_id: rfq._id, overall_status: 'ACTIVE' }).session(session))
         throw AppError.conflict('RFQ already has an active quotation.');
       const quote = new QuotationModel({
@@ -417,6 +434,20 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
     const token = generateToken();
     const versionId = randomUUID();
     const result = await mongoose.connection.transaction(async (session) => {
+      const response = input.negotiation_response;
+      if (response) {
+        const parent = await QuotationModel.findById(id).session(session).lean();
+        const source = parent ? await RfqModel.findById(parent.rfq_id).session(session).lean() : null;
+        const previousResponse = source?.workflow?.messages?.find((message) => message.operation_id === response.operation_id);
+        if (previousResponse) {
+          if (previousResponse.fingerprint !== (response.request_fingerprint ?? hashToken(canonicalPayload(input)))) throw AppError.conflict('Operation key was used for different terms.');
+          const saved = await QuotationVersionModel.findById(previousResponse.version_id).session(session).lean();
+          if (!saved) throw AppError.conflict();
+          return { version: commercialQuotation(saved) };
+        }
+        if (!source || source.workflow?.pending_request_id !== response.request_id || !input.issue_immediately)
+          throw AppError.conflict('This change request was already answered or changed.');
+      }
       const quote = await lockQuote(id, session, input.expected_current_version_id);
       const previous = await QuotationVersionModel.findOne({
         _id: quote.current_version_id,
@@ -425,11 +456,23 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
       if (!previous || previous.status !== 'SENT')
         throw AppError.conflict('Only a current SENT quotation can be revised.');
       const rfq = await rfqFor(quote.rfq_id, session);
+      if (rfq.workflow?.enabled && !input.issue_immediately)
+        throw AppError.conflict('Preview revised terms before sending them together. The current offer stays effective until a replacement is issued.');
+      if (rfq.workflow?.pending_request_id && !response)
+        throw AppError.conflict('Respond to the pending buyer request from its RFQ workspace.');
       const oldId = quote.current_version_id;
       quote.current_version += 1;
       quote.current_version_id = versionId;
       await quote.save({ session });
       const built = await createVersion(req, quote.toObject(), rfq, input, session);
+      if (response) {
+        await RfqModel.updateOne({ _id: rfq._id, 'workflow.pending_request_id': response.request_id }, { $set: {
+          'workflow.offer_state': response.kind,
+          'workflow.messages': [...(rfq.workflow?.messages ?? []), { ...response, id: randomUUID(), author: 'ADMIN', version_id: versionId, version_number: quote.current_version, created_at: new Date().toISOString(), fingerprint: response.request_fingerprint ?? hashToken(canonicalPayload(input)) }],
+        }, $unset: { 'workflow.pending_request_id': 1 } }, { session });
+      } else if (rfq.workflow?.enabled) {
+        await RfqModel.updateOne({ _id: rfq._id }, { $set: { 'workflow.offer_state': 'REVISED' } }, { session });
+      }
       const changed = await QuotationVersionModel.updateOne(
         { _id: oldId, status: 'SENT' },
         { $set: { status: 'SUPERSEDED' } },
@@ -484,7 +527,7 @@ export function createQuotationService(env: AppEnv, fx: FxService, logger: AppLo
         { session, returnDocument: 'after' },
       );
       if (!version) throw AppError.conflict('Quotation token changed concurrently.');
-      const url = new URL(`/q/${token}`, env.PUBLIC_ORIGIN[0]!).href;
+      const url = await guestUrl(env, quote.rfq_id, session) ?? new URL(`/q/${token}`, env.PUBLIC_ORIGIN[0]!).href;
       await enqueueQuotation(env, version.toObject(), hashToken(token), url, session, true);
       await audit(req, id, 'QUOTATION_RESENT', session, { version_number: version.version_number });
       return { version: commercialQuotation(version.toObject()), magic_link_url: url };

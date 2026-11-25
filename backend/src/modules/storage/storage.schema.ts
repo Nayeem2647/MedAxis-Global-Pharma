@@ -3,6 +3,7 @@ import { Schema, model } from 'mongoose';
 import { installPersistenceGuards } from '../../shared/persistence/guards.js';
 
 export interface IPrescription {
+  attachment_kind?: 'PRESCRIPTION' | 'SUPPORTING';
   _id: string;
   rfq_id?: string;
   customer_id?: string;
@@ -24,6 +25,7 @@ export interface IPrescription {
 
 export const PrescriptionSchema = new Schema<IPrescription>(
   {
+    attachment_kind: { type: String, enum: ['PRESCRIPTION', 'SUPPORTING'] },
     _id: {
       type: String,
       required: true,

@@ -2,6 +2,8 @@ import type { CustomerQuotationDto } from '../../quotation/quotation.dto.js';
 import type { EmailMessage } from '../notification.transport.js';
 
 export type TemplateId =
+  | 'payment-request'
+  | 'negotiation-reply'
   | 'rfq-confirmation'
   | 'quotation-sent'
   | 'accepted'
@@ -41,6 +43,8 @@ export interface EmailContext {
   };
 }
 const subjects: Record<TemplateId, [string, string]> = {
+  'payment-request': ['Payment requested — bank wire instructions', '付款通知 — 银行电汇信息'],
+  'negotiation-reply': ['MedAxis replied to your offer request', 'MedAxis 已回复您的议价请求'],
   'rfq-confirmation': ['We received your inquiry', '我们已收到您的询价'],
   'quotation-sent': ['Your quotation is ready', '您的报价单已准备就绪'],
   accepted: ['Quotation accepted — bank wire instructions', '报价已接受 — 银行电汇付款信息'],
@@ -95,7 +99,7 @@ export function template(id: TemplateId) {
         `${pick('Reservation deadline', '预留截止时间')}: ${quote.reservation_expires_at?.toISOString()}`,
       );
     if (
-      (id === 'accepted' || (id === 'expiry-reminder' && context.reminderKind === 'RESERVATION_DAY3')) &&
+      (id === 'accepted' || id === 'payment-request' || (id === 'expiry-reminder' && context.reminderKind === 'RESERVATION_DAY3')) &&
       quote?.bank_details
     ) {
       const bank = quote.bank_details;
@@ -129,7 +133,7 @@ export function template(id: TemplateId) {
           '您的订单已确认送达。感谢您选择 MedAxis Global Pharma。',
         ),
       );
-    if (context.body && ['clarification-request', 'unable-to-supply', 'revision-request'].includes(id))
+    if (context.body && ['clarification-request', 'unable-to-supply', 'revision-request', 'negotiation-reply', 'quotation-sent'].includes(id))
       paragraphs.push(context.body);
     if (id === 'clarification-request')
       paragraphs.push(

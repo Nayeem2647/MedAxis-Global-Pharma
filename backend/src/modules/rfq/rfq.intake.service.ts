@@ -14,6 +14,7 @@ import { PrescriptionModel } from '../storage/storage.schema.js';
 import { RfqModel, RfqIdempotencyKeyModel, type IRfq } from './rfq.schema.js';
 import type { RfqSignals } from './rfq.events.js';
 import { enqueueRfqEmail } from './rfq.outbox.js';
+import { newGuestAccess } from './rfq.guest-access.js';
 
 export const STAGING_COOKIE = 'prescription_upload_session';
 export const DAY_MS = 86_400_000;
@@ -164,6 +165,8 @@ export function createRfqIntakeService(env: AppEnv, signals: RfqSignals) {
           if (typeof number !== 'number' || !Number.isSafeInteger(number) || number < 1)
             throw AppError.unavailable('RFQ numbering is not configured.');
           const rfq = new RfqModel({
+            ...newGuestAccess(env),
+            workflow: { enabled: true },
             rfq_number: `RFQ-${year}-${String(number).padStart(5, '0')}`,
             customer_id: customer._id,
             inquiry_type: kind,

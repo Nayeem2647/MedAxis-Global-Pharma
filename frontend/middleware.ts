@@ -5,7 +5,7 @@ import { findHistoricalRedirect } from './lib/redirects';
 import { adminPageBoundary } from './lib/admin-edge';
 
 const handleLocaleRouting = createMiddleware(routing);
-const excludedPath = /^\/(?:api|_next|_vercel|q|admin)(?:\/|$)/;
+const excludedPath = /^\/(?:api|_next|_vercel|q|r|admin)(?:\/|$)/;
 
 export function initialLocale(request: NextRequest): Locale {
   const preference = request.cookies.get('medaxis_locale')?.value;
@@ -35,5 +35,5 @@ export default async function middleware(request: NextRequest): Promise<NextResp
 }
 
 export const config = {
-  matcher: ['/((?!api(?:/|$)|_next(?:/|$)|_vercel(?:/|$)|q(?:/|$)|.*\\..*).*)'],
+  matcher: ['/((?!api(?:/|$)|_next(?:/|$)|_vercel(?:/|$)|q(?:/|$)|r(?:/|$)|.*\\..*).*)'],
 };

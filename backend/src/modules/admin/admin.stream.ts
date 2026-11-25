@@ -46,6 +46,8 @@ export function createAdminStream(logger: AppLogger) {
       rfqEvents.off('NEW_RFQ', onRfq);
       rfqEvents.off('CLARIFICATION_REPLY', onReply);
       quotationEvents.off('QUOTATION_ACCEPTED', onAccepted);
+      quotationEvents.off('QUOTATION_CHANGED', onQuoteChanged);
+      rfqEvents.off('WORKFLOW_CHANGED', onWorkflow);
       clients.delete(close);
       req.off('close', close);
       res.off('close', close);
@@ -83,6 +85,8 @@ export function createAdminStream(logger: AppLogger) {
         accepted_at: text(input, 'accepted_at'),
       });
     };
+    const onWorkflow = (input: unknown) => { void write('RFQ_CHANGED', { rfq_id: text(input, 'rfq_id'), changed_at: text(input, 'changed_at') }); };
+    const onQuoteChanged = (input: unknown) => { void write('QUOTATION_CHANGED', { quotation_id: text(input, 'quotation_id'), changed_at: new Date().toISOString() }); };
     const timer = setInterval(() => {
       if (checking || closed) return;
       checking = true;
@@ -100,6 +104,8 @@ export function createAdminStream(logger: AppLogger) {
     rfqEvents.on('NEW_RFQ', onRfq);
     rfqEvents.on('CLARIFICATION_REPLY', onReply);
     quotationEvents.on('QUOTATION_ACCEPTED', onAccepted);
+    quotationEvents.on('QUOTATION_CHANGED', onQuoteChanged);
+    rfqEvents.on('WORKFLOW_CHANGED', onWorkflow);
     clients.add(close);
     req.on('close', close);
     res.on('close', close);

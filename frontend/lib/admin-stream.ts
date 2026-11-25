@@ -2,11 +2,13 @@ import { z } from 'zod';
 import { ApiError, parseApiResponse } from './api-client';
 
 const schemas = {
+  RFQ_CHANGED: z.object({ rfq_id: z.uuidv4(), changed_at: z.iso.datetime() }),
+  QUOTATION_CHANGED: z.object({ quotation_id: z.uuidv4(), changed_at: z.iso.datetime() }),
   NEW_RFQ: z.object({ rfq_id: z.uuidv4(), rfq_number: z.string().regex(/^RFQ-[A-Za-z0-9-]+$/).max(100), created_at: z.iso.datetime() }),
   QUOTATION_ACCEPTED: z.object({ quotation_id: z.uuidv4(), version_id: z.uuidv4(), rfq_id: z.uuidv4(), accepted_at: z.iso.datetime() }),
   CLARIFICATION_REPLY: z.object({ rfq_id: z.uuidv4(), received_at: z.iso.datetime() }),
 };
-export type AdminStreamEvent = { id: string; type: 'NEW_RFQ'; data: z.infer<typeof schemas.NEW_RFQ> } | { id: string; type: 'QUOTATION_ACCEPTED'; data: z.infer<typeof schemas.QUOTATION_ACCEPTED> } | { id: string; type: 'CLARIFICATION_REPLY'; data: z.infer<typeof schemas.CLARIFICATION_REPLY> };
+export type AdminStreamEvent = { [K in keyof typeof schemas]: { id: string; type: K; data: z.infer<typeof schemas[K]> } }[keyof typeof schemas];
 export type StreamState = 'connecting' | 'connected' | 'reconnecting' | 'offline' | 'expired';
 
 /** Incremental SSE parser, including split UTF-8/chunks, comments and multiple data lines. */
@@ -35,6 +37,8 @@ export class AdminSseParser {
       if (this.event === 'NEW_RFQ') { const value = schemas.NEW_RFQ.safeParse(input); if (value.success) this.emit({ id: this.id, type: this.event, data: value.data }); }
       else if (this.event === 'QUOTATION_ACCEPTED') { const value = schemas.QUOTATION_ACCEPTED.safeParse(input); if (value.success) this.emit({ id: this.id, type: this.event, data: value.data }); }
       else if (this.event === 'CLARIFICATION_REPLY') { const value = schemas.CLARIFICATION_REPLY.safeParse(input); if (value.success) this.emit({ id: this.id, type: this.event, data: value.data }); }
+      else if (this.event === 'RFQ_CHANGED') { const value = schemas.RFQ_CHANGED.safeParse(input); if (value.success) this.emit({ id: this.id, type: this.event, data: value.data }); }
+      else if (this.event === 'QUOTATION_CHANGED') { const value = schemas.QUOTATION_CHANGED.safeParse(input); if (value.success) this.emit({ id: this.id, type: this.event, data: value.data }); }
     } catch { /* Untrusted/malformed events never become notifications or logs. */ }
     finally { this.event = ''; this.id = ''; this.data = []; }
   }

@@ -24,6 +24,8 @@ export const quoteLineSchema = z
     rfq_item_id: uuid,
     manufacturer_id: uuid,
     availability_status: z.enum(['AVAILABLE', 'UNAVAILABLE', 'SOURCING']),
+    selling_price: decimalInput.refine((value) => new Exact(value).gt(0), 'Selling price must be positive.').optional(),
+    weight_per_pack_g: decimalInput.refine((value) => new Exact(value).gt(0), 'Weight must be positive.').optional(),
     procurement_cost_bdt: decimalInput.optional(),
     markup_percent: decimalInput
       .refine((value) => new Exact(value).lte('1000000'), 'Markup exceeds 1000000%.')
@@ -35,7 +37,7 @@ export const quoteLineSchema = z
   .superRefine((line, ctx) => {
     if (
       line.availability_status === 'AVAILABLE' &&
-      (line.procurement_cost_bdt === undefined || line.markup_percent === undefined)
+      line.selling_price === undefined && (line.procurement_cost_bdt === undefined || line.markup_percent === undefined)
     )
       ctx.addIssue({
         code: 'custom',
@@ -58,6 +60,7 @@ export const pricingSchema = z
       .max(100)
       .refine((items) => new Set(items.map((line) => line.rfq_item_id)).size === items.length, 'Duplicate RFQ lines.'),
     freight_amount: decimalInput.default('0'),
+    packed_weight_g: decimalInput.refine((value) => new Exact(value).gt(0), 'Packed weight must be positive.').optional(),
     insurance_amount: decimalInput.default('0'),
     shipping_terms: z
       .object({
@@ -88,6 +91,7 @@ export const sendQuoteSchema = z
   })
   .strict();
 export const reviseQuoteSchema = pricingSchema.extend({
+  negotiation_response: z.strictObject({ request_id: uuid, operation_id: uuid, kind: z.enum(['REVISED', 'COUNTEROFFER']), body: text(5000), request_fingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional() }).optional(),
   expected_current_version_id: uuid,
   issue_immediately: z.boolean().default(false),
   validity_days: z.number().int().min(1).max(365).optional(),

@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Activity,
@@ -27,6 +27,7 @@ import { ADMIN_IDLE_MS, logoutResult, sessionsSchema, type AdminSession } from '
 import { AdminFeedback, feedbackValue, type AdminFeedbackValue } from './AdminFeedback';
 import { AdminTopbar } from './AdminTopbar';
 import { masterLabels, type MasterDirectoryKind } from '../../lib/admin-management';
+import { workflowQueues } from '../../lib/workflow-contract';
 
 const LiveContext = createContext<{ revision: number; active: boolean; expire(): void } | null>(null);
 export function AdminLink({ href, children, className, current, title }: { href: string; children: ReactNode; className?: string; current?: boolean; title?: string }) {
@@ -83,13 +84,14 @@ function MasterNavigation({ pathname, kind }: { pathname: string; kind: MasterDi
 }
 
 function QuotationNavigation({ pathname }: { pathname: string }) {
+  const query = useSearchParams();
   const inQuotations = pathname.startsWith('/admin/quotations');
   const inDirectory = inQuotations || pathname.startsWith('/admin/rfqs');
   const [expanded, setExpanded] = useState(inDirectory);
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
-  const links = [['/admin/rfqs', 'Website requests'], ['/admin/quotations/overview', 'Overview'], ['/admin/quotations', 'All quotations'], ['/admin/quotations/new', 'Create from RFQ'], ['/admin/quotations/follow-ups', 'Follow-ups']];
-  return <div className="admin-catalog-menu admin-directory-menu"><button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-quotation-links" disabled={!ready} onClick={() => setExpanded((value) => !value)}><FileText size={18} aria-hidden="true" /><span>Quotations</span><ChevronDown size={16} className="admin-catalog-chevron" aria-hidden="true" /></button><ul id="admin-quotation-links" className="admin-catalog-links" hidden={!expanded}>{links.map(([href, label]) => <li key={href}><AdminLink href={href} current={pathname === href || href === '/admin/rfqs' && pathname.startsWith('/admin/rfqs/') || href === '/admin/quotations' && inQuotations && !links.some(([route]) => route === pathname)}>{label}</AdminLink></li>)}</ul></div>;
+  const links = [...Object.entries(workflowQueues).map(([key, label]) => [key === 'ALL' ? '/admin/quotations' : `/admin/quotations?queue=${key}`, label]), ['/admin/quotations/documents', 'Issued documents'], ['/admin/rfqs', 'Website requests']];
+  return <div className="admin-catalog-menu admin-directory-menu"><button type="button" className="admin-catalog-toggle" aria-expanded={expanded} aria-controls="admin-quotation-links" disabled={!ready} onClick={() => setExpanded((value) => !value)}><FileText size={18} aria-hidden="true" /><span>Quotations</span><ChevronDown size={16} className="admin-catalog-chevron" aria-hidden="true" /></button><ul id="admin-quotation-links" className="admin-catalog-links" hidden={!expanded}>{links.map(([href, label]) => <li key={href}><AdminLink href={href} current={href === '/admin/quotations' ? pathname === href && !query.get('queue') || pathname.startsWith('/admin/rfqs/') : href.includes('?queue=') ? pathname === '/admin/quotations' && query.get('queue') === href.split('=')[1] : pathname === href}>{label}</AdminLink></li>)}</ul></div>;
 }
 
 export function AdminShell({ session, children }: { session: AdminSession; children: ReactNode }) {
@@ -116,7 +118,7 @@ export function AdminShell({ session, children }: { session: AdminSession; child
   }
   const state = useAdminStream({ enabled: active, onUnauthorized: expire, onReconnect: () => setRevision((value) => value + 1), onEvent: (event) => {
     if (!activeRef.current) return;
-    setNotice(event.type === 'NEW_RFQ' ? `New enquiry: ${event.data.rfq_number}` : event.type === 'QUOTATION_ACCEPTED' ? 'A quotation was accepted.' : 'A clarification reply was received.'); setRevision((value) => value + 1);
+    setNotice(event.type === 'NEW_RFQ' ? `New enquiry: ${event.data.rfq_number}` : event.type === 'QUOTATION_ACCEPTED' ? 'A quotation was accepted.' : event.type === 'CLARIFICATION_REPLY' ? 'A clarification reply was received.' : 'Quotation workflow updated.'); setRevision((value) => value + 1);
     if (soundOn.current && audio.current?.state === 'running') { const oscillator = audio.current.createOscillator(); const gain = audio.current.createGain(); oscillator.connect(gain); gain.connect(audio.current.destination); gain.gain.value = .035; oscillator.frequency.value = 660; oscillator.start(); oscillator.stop(audio.current.currentTime + .12); }
   } });
   useEffect(() => {
@@ -135,7 +137,7 @@ export function AdminShell({ session, children }: { session: AdminSession; child
     return () => { clearInterval(timer); for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart']) window.removeEventListener(type, activity); window.removeEventListener('pageshow', restore); document.removeEventListener('visibilitychange', tick); void audio.current?.close(); };
     // Human activity controls the client idle deadline; stream messages never reset it.
   }, []);
-  return <LiveContext.Provider value={{ revision, active, expire }}><div className="admin-console"><AdminTopbar session={session} active={active} revision={revision} streamState={state} sound={sound} onSoundChange={(value) => void changeSound(value)} onLogout={() => void logout()}/>
+  return <LiveContext.Provider value={{ revision, active, expire }}><div className={`admin-console${pathname.startsWith('/admin/quotations') || pathname.startsWith('/admin/rfqs/') ? ' quotation-console' : ''}`}><AdminTopbar session={session} active={active} revision={revision} streamState={state} sound={sound} onSoundChange={(value) => void changeSound(value)} onLogout={() => void logout()}/>
     <aside className="admin-sidebar">
       <nav aria-label="Admin navigation">
         <p className="admin-nav-group-label">Overview</p>

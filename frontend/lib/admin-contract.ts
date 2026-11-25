@@ -99,6 +99,8 @@ export function adminProxyRule(path: string, method: string): AdminProxyRule | n
   if (path === 'auth/sessions' && method === 'GET' || /^auth\/(?:logout|revoke-sessions|2fa\/enroll)$/.test(path) && method === 'POST') return json();
   if (path === 'auth/profile' && ['GET', 'PATCH'].includes(method) || path === 'auth/change-password' && method === 'POST') return json();
   if (path === 'rfqs' && method === 'GET') return json(['page', 'limit', 'status', 'buyer_type', 'q', 'date_from', 'date_to']);
+  if (path === 'rfq-workflow' && method === 'GET') return json(['page', 'limit', 'q', 'country', 'status', 'queue', 'scope']);
+  if (new RegExp(`^rfq-workflow/${uuid}$`).test(path) && method === 'GET' || new RegExp(`^rfq-workflow/${uuid}/(?:review|respond|payment-request|guest-link)$`).test(path) && method === 'POST') return json();
   if (new RegExp(`^rfqs/${uuid}$`).test(path) && method === 'GET' || new RegExp(`^rfqs/${uuid}/(?:status|items/${uuid})$`).test(path) && method === 'PATCH' || new RegExp(`^rfqs/${uuid}/(?:request-clarification|unable-to-supply|notes)$`).test(path) && method === 'POST') return json();
   if (path === 'fx-rates' && ['GET', 'PATCH'].includes(method) || path === 'settings' && ['GET', 'PATCH'].includes(method)) return json();
   if (path === 'stream' && method === 'GET') return { kind: 'sse', query: [] };

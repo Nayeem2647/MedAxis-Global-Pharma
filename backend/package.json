@@ -34,7 +34,9 @@
     "migrate:ratings": "tsx src/scripts/migrate-product-ratings.ts",
     "migrate:customers": "tsx src/scripts/migrate-customer-accounts.ts",
     "migrate:storage": "tsx src/scripts/migrate-storage.ts",
-    "seed": "tsx src/scripts/seed.ts"
+    "seed": "tsx src/scripts/seed.ts",
+    "migrate:workflow": "tsx src/scripts/migrate-rfq-workflow.ts",
+    "test:workflow": "vitest run --config vitest.integration.config.ts tests/rfq-workflow.integration.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -100,7 +100,11 @@ test('revoking another session blocks its API/HTML/RSC and keeps the current ses
 });
 
 test('live events deduplicate, refetch after reconnect and reauthenticate on expiry', async ({ page, request }) => {
-  const email = await configure(request); await login(page, email); await expect(page.getByText('Live: connected', { exact: true })).toBeVisible(); await expect(page.getByRole('checkbox', { name: 'Sound alerts' })).not.toBeChecked(); const first = (await state(request, email)).data; expect(first.active).toBe(1);
+  const email = await configure(request); await login(page, email); await expect(page.getByText('Live: connected', { exact: true })).toBeVisible();
+  await page.locator('.admin-account > summary').click();
+  await expect(page.getByRole('checkbox', { name: 'Sound alerts' })).not.toBeChecked();
+  await page.locator('.admin-account > summary').click();
+  const first = (await state(request, email)).data; expect(first.active).toBe(1);
   await state(request, email, 'event'); await expect(page.getByText('New enquiry: RFQ-LIVE-001', { exact: true })).toHaveCount(1); await expect.poll(async () => (await state(request, email)).data.calls.filter((call) => call.path === 'rfqs').length).toBeGreaterThan(first.calls.filter((call) => call.path === 'rfqs').length);
   await state(request, email, 'disconnect'); await expect.poll(async () => (await state(request, email)).data.connects, { timeout: 12_000 }).toBeGreaterThan(1); await expect.poll(async () => (await state(request, email)).data.active).toBe(1);
   await state(request, email, 'expire'); await expect(page).toHaveURL(/\/admin\/login$/, { timeout: 12_000 });

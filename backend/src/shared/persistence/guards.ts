@@ -17,6 +17,9 @@ const financialFields = [
   'locked_fx_rates',
   'issued_at',
   'valid_until',
+  'workflow_enabled',
+  'medicine_weight_g',
+  'packed_weight_g',
 ];
 const touches = (paths: string[], field: string): boolean =>
   paths.some((p) => p === field || p.startsWith(`${field}.`));

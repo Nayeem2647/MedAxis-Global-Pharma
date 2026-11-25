@@ -90,7 +90,7 @@ export function createRfqRouter(env: AppEnv, logger: AppLogger, options: RfqOpti
 
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: MAX_FILE_BYTES, files: 1, fields: 1, parts: 2 },
+    limits: { fileSize: MAX_FILE_BYTES, files: 1, fields: 2, parts: 3 },
   });
   const uploadError: ErrorRequestHandler = (error, _req, _res, next) => {
     next(
@@ -107,7 +107,7 @@ export function createRfqRouter(env: AppEnv, logger: AppLogger, options: RfqOpti
     uploadError,
     bot,
     async (req: Request, res: Response) => {
-      z.object({ turnstile_token: z.string().max(2048).optional() })
+      z.object({ turnstile_token: z.string().max(2048).optional(), attachment_kind: z.enum(['PRESCRIPTION', 'SUPPORTING']).optional() })
         .strict()
         .parse(req.body ?? {});
       if (!req.file) throw AppError.badRequest('Prescription file is required.', 'INVALID_PRESCRIPTION_FILE');
@@ -122,6 +122,7 @@ export function createRfqRouter(env: AppEnv, logger: AppLogger, options: RfqOpti
       const object = await storage.uploadPrescription(req.file.buffer);
       const now = new Date();
       const doc = new PrescriptionModel({
+        attachment_kind: req.body.attachment_kind ?? 'PRESCRIPTION',
         upload_token_hash: hashToken(token),
         object_key: object.object_key,
         encryption: object.encryption,

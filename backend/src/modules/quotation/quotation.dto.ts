@@ -2,7 +2,7 @@ import type { IQuotationVersion } from './quotation.schema.js';
 import { bankDetailsSchema } from '../../shared/validators/quotation.validator.js';
 
 export const COMMERCIAL_PROJECTION =
-  'quotation_id version_number status contact_snapshot items billing_currency subtotal_amount freight_cost insurance_cost total_amount shipping_terms payment_terms bank_details_snapshot issued_at valid_until accepted_at reservation_expires_at reservation_status payment shipment delivered_at created_at updated_at';
+  'quotation_id version_number status contact_snapshot items billing_currency subtotal_amount freight_cost insurance_cost total_amount shipping_terms payment_terms bank_details_snapshot issued_at valid_until accepted_at reservation_expires_at reservation_status payment shipment delivered_at created_at updated_at medicine_weight_g packed_weight_g payment_requested_at workflow_enabled';
 
 /** Shared with the later buyer routes: construct every field and nested line explicitly. */
 export function commercialQuotation(version: IQuotationVersion) {
@@ -37,12 +37,17 @@ export function commercialQuotation(version: IQuotationVersion) {
       customer_facing_note: line.customer_facing_note,
       unit_quoted_price: line.unit_quoted_price?.toString(),
       total_line_price: line.total_line_price?.toString(),
+      weight_per_pack_g: line.weight_per_pack_g?.toString(),
+      line_weight_g: line.line_weight_g?.toString(),
     })),
     billing_currency: version.billing_currency,
     subtotal_amount: version.subtotal_amount.toString(),
     freight_cost: version.freight_cost.toString(),
     insurance_cost: version.insurance_cost.toString(),
     total_amount: version.total_amount.toString(),
+    medicine_weight_g: version.medicine_weight_g?.toString(),
+    packed_weight_g: version.packed_weight_g?.toString(),
+    payment_requested_at: version.payment_requested_at,
     shipping_terms: {
       method: version.shipping_terms.method,
       incoterm: version.shipping_terms.incoterm,

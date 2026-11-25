@@ -68,6 +68,7 @@ export const rfqIntakeSchema = z
   })
   .strict()
   .superRefine((input, ctx) => {
+    if (!input.contact.email) ctx.addIssue({ code: 'custom', path: ['contact', 'email'], message: 'A valid email is required for your private request link.' });
     if (
       (input.locale === 'zh-CN' || input.contact.preferred_locale === 'zh-CN' || input.destination_country === 'CN') &&
       !input.contact.email

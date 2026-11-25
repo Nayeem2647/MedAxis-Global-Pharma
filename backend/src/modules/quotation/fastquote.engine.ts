@@ -9,6 +9,7 @@ export interface FastQuoteLine {
   availability_status: 'AVAILABLE' | 'UNAVAILABLE' | 'SOURCING';
   procurement_cost_bdt?: string;
   markup_percent?: string;
+  selling_price?: string;
 }
 export interface CommercialCalculation {
   items: Array<{ rfq_item_id: string; unit_quoted_price?: string; total_line_price?: string }>;
@@ -81,21 +82,23 @@ export function calculateFastQuote(input: {
       commercial.items.push({ rfq_item_id: line.rfq_item_id });
       continue;
     }
-    if (!cost || !markup)
+    if ((!cost || !markup) && line.selling_price === undefined)
       throw AppError.validation([{ field: 'items', issue: 'Available lines require cost and markup.' }]);
-    const markedUnit = cost.mul(new Exact(1).plus(markup.div(100)));
+    const sourceCost = cost ?? new Exact(0);
+    const sourceMarkup = markup ?? new Exact(0);
+    const markedUnit = line.selling_price === undefined ? sourceCost.mul(new Exact(1).plus(sourceMarkup.div(100))) : nonnegative(line.selling_price, 'selling_price').mul(rate);
     const unit = amount(markedUnit.div(rate));
     const total = new Exact(unit).mul(String(line.quantity));
     commercial.items.push({ rfq_item_id: line.rfq_item_id, unit_quoted_price: unit, total_line_price: amount(total) });
     subtotal = subtotal.plus(total);
-    procurement = procurement.plus(cost.mul(String(line.quantity)));
+    procurement = procurement.plus(sourceCost.mul(String(line.quantity)));
     markedUp = markedUp.plus(markedUnit.mul(String(line.quantity)));
     internal.items.push({
       rfq_item_id: line.rfq_item_id,
       manufacturer_id: line.manufacturer_id,
-      procurement_unit_cost_bdt: amount(cost, 8),
+      procurement_unit_cost_bdt: amount(sourceCost, 8),
       quantity: line.quantity,
-      markup_percent: amount(markup, 8),
+      markup_percent: amount(sourceMarkup, 8),
     });
   }
   if (!internal.items.length)

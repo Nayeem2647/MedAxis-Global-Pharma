@@ -5,6 +5,8 @@ export const validEnv = Object.freeze({
   PUBLIC_ORIGIN: 'http://localhost:3000',
   API_ORIGIN: 'http://localhost:4000',
   ADMIN_SESSION_SECRET: 'x'.repeat(48),
+  QUOTATION_TOKEN_ENCRYPTION_KEY: 'cd'.repeat(32),
+  QUOTATION_TOKEN_KEY_ID: 'test-workflow-delivery',
 });
 
 export const s3EnvSettings = Object.freeze({

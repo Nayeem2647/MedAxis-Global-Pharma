@@ -12,6 +12,7 @@ import {
 } from "../../../../../lib/admin-quotations";
 import { AdminLink } from "../../../../../components/admin/AdminShell";
 import { QuotationMetrics } from "../../../../../components/admin/QuotationMetrics";
+import { QuotationRequests } from "../../../../../components/admin/QuotationRequests";
 
 export default async function QuotationOverview() {
   const [summary, draftsRes, expiringRes] = await Promise.all([
@@ -48,6 +49,7 @@ export default async function QuotationOverview() {
         </div>
       </div>
 
+      <QuotationRequests />
       <QuotationMetrics value={summary.ok ? summary.result.data : null} />
 
       <div className="quotation-overview-grid">

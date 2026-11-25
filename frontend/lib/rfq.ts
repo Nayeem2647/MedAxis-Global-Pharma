@@ -15,7 +15,7 @@ export const rfqLineSchema = z.discriminatedUnion('is_uncatalogued', [
 export const rfqBusinessSchema = z.strictObject({
   contact: z.strictObject({
     full_name: z.string().trim().min(1).max(200), customer_type: z.enum(['B2B_WHOLESALE', 'B2C_PATIENT']),
-    company_name: optionalText(200), email: z.email().max(200).transform((value) => value.toLowerCase()).optional(),
+    company_name: optionalText(200), email: z.email().max(200).transform((value) => value.toLowerCase()),
     whatsapp_number: optionalText(50), wechat_id: optionalText(100), preferred_locale: z.enum(['en', 'zh-CN']),
   }),
   destination_country: z.string().trim().toUpperCase().refine((value) => countryCodes.has(value)),
