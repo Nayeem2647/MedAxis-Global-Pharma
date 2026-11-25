@@ -37,7 +37,7 @@ export default async function Home({ params }: Props) {
       <Categories locale={locale} categories={data.categories}/>
       <section className="catalog-section" id="catalog"><div className="section site-container"><div className="centered-heading"><h2>{t('catalogTitle')}</h2><p className="section-intro">{t('catalogDescription')}</p></div>
         {data.products.length > 0 ? <>
-          <div className="product-grid">{data.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}</div>
+          <div className="product-grid">{data.products.slice(0, 8).map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}</div>
           <div className="catalog-view-all"><Link className="catalog-view-all-btn" href={`/${locale}/products`}>{t('viewAllProducts')}<ArrowRight size={17} aria-hidden="true"/></Link></div>
         </>
           : <div className="catalog-empty"><Pill size={30}/><p>{t(data.catalogUnavailable ? 'catalogUnavailable' : 'catalogEmpty')}</p><QuoteButton className="button secondary">{t('request')}</QuoteButton></div>}
