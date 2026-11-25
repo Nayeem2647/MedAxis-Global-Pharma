@@ -13,30 +13,32 @@
 .catalog-page .product-grid:not(.is-list) .product-media .product-image img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; padding: 0; object-fit: contain; transform: none; }
 .product-card .product-media .cold-badge { left: 10px; right: auto; max-width: calc(100% - 72px); }
 
-/* Product name leads; manufacturer, ingredient and specifications support it. */
+/* Product name leads with inline generic name; manufacturer and specs stay compact. */
 .product-card .product-body,
-.catalog-page .product-grid:not(.is-list) .product-card .product-body { padding: 18px; text-align: center; gap: 0; }
+.catalog-page .product-grid:not(.is-list) .product-card .product-body { padding: 11px 14px 12px; text-align: center; gap: 0; }
 .product-card .product-body .product-manufacturer,
-.catalog-page .product-grid:not(.is-list) .product-card .product-manufacturer { margin: 0 0 7px; font-size: .8125rem; line-height: 1.5; font-weight: 500; letter-spacing: 0; text-transform: none; white-space: normal; overflow: visible; }
+.catalog-page .product-grid:not(.is-list) .product-card .product-manufacturer { margin: 0 0 3px; font-size: .75rem; line-height: 1.3; font-weight: 500; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .product-card .product-body h3,
-.catalog-page .product-grid:not(.is-list) .product-card .product-body h3 { margin: 0 0 6px; font-size: 1.125rem; line-height: 1.4; font-weight: 700; white-space: normal; overflow: visible; }
-.product-card .product-body h3 a { color: #203946; }
-.product-card .product-body .product-generic,
-.catalog-page .product-grid:not(.is-list) .product-card .product-generic { margin: 0 0 13px; font-size: .9375rem; line-height: 1.5; font-weight: 500; color: #087a90; white-space: normal; overflow: visible; }
+.catalog-page .product-grid:not(.is-list) .product-card .product-body h3 { margin: 0 0 6px; font-size: .95rem; line-height: 1.35; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.product-card .product-body h3 a { display: block; color: #203946; text-decoration: none; }
+.product-card .product-body h3 a:hover { color: #087a90; text-decoration: none; }
+.product-card .product-title-line { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-card .product-generic-inline { font-size: .88em; font-weight: 500; color: #087a90; }
 .product-card .product-body .product-spec,
-.catalog-page .product-grid:not(.is-list) .product-card .product-spec { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 0 0 9px; font-size: .8125rem; line-height: 1.5; white-space: normal; overflow: visible; }
-.product-card .product-spec > span { padding: 4px 8px; border: 1px solid #e5edf1; border-radius: 5px; background: #f7fafb; color: #526777; }
-.product-card .customer-rating { align-self: center; margin: 0 0 10px; min-height: 44px; }
+.catalog-page .product-grid:not(.is-list) .product-card .product-spec { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin: 0 0 4px; font-size: .75rem; line-height: 1.25; white-space: normal; overflow: visible; }
+.product-card .product-spec > span { padding: 2px 7px; border: 1px solid #e5edf1; border-radius: 5px; background: #f7fafb; color: #526777; }
+.product-card .customer-rating { align-self: center; margin: 0 0 6px; padding: 2px 6px; min-height: 26px; }
 .product-card .product-card-copy { margin-bottom: auto; }
 
 /* One clear quotation action and a compact button for the RFQ list. */
 .product-card .product-actions,
 .catalog-page .product-grid:not(.is-list) .product-card .product-actions,
-.catalog-page .product-grid.is-list .product-card .product-actions { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: stretch; gap: 8px; margin-top: 0; padding-top: 14px; border-top: 1px solid #e7edf1; }
-.product-card .product-actions .product-quote-button { min-width: 0; min-height: 44px; padding: 10px 12px; gap: 8px; border: 1px solid #086d80; border-radius: 7px; background: #087a90; color: #fff; font-size: .875rem; font-weight: 600; line-height: 1.4; }
+.catalog-page .product-grid.is-list .product-card .product-actions { display: grid; grid-template-columns: minmax(0, 1fr) 38px; align-items: stretch; gap: 8px; margin-top: 0; padding-top: 9px; border-top: 1px solid #e7edf1; }
+.product-card .product-actions .product-quote-button { min-width: 0; min-height: 36px; padding: 7px 10px; gap: 6px; border: 1px solid #086d80; border-radius: 7px; background: #087a90; color: #fff; font-size: .8125rem; font-weight: 600; line-height: 1.3; }
 .product-card .product-actions .product-quote-button:hover { background: #076779; }
 .product-card .product-actions .add-product,
-.catalog-page .product-grid:not(.is-list) .product-card .add-product { width: 44px; height: auto; min-height: 44px; padding: 0; border: 1px solid #c8dce4; border-radius: 7px; background: #f2f8fa; color: #087a90; }
+.catalog-page .product-grid:not(.is-list) .product-card .add-product,
+.catalog-page .product-grid.is-list .product-card .add-product { width: 38px; height: auto; min-height: 36px; padding: 0; border: 1px solid #c8dce4; border-radius: 7px; background: #f2f8fa; color: #087a90; }
 .product-card .product-actions .add-product:hover:not(:disabled) { background: #e4f2f6; border-color: #087a90; }
 
 /* List cards keep the three-column layout and give the picture nearly half the card. */
@@ -44,7 +46,8 @@
 .catalog-page .product-grid.is-list .product-media .product-image { height: 100%; min-height: 270px; aspect-ratio: auto; padding: 0; border-bottom: 0; border-right: 1px solid #edf2f5; }
 .catalog-page .product-grid.is-list .product-media .product-image img { height: 100%; }
 .catalog-page .product-grid.is-list .product-card .product-body { padding: 14px; text-align: left; }
-.catalog-page .product-grid.is-list .product-card .product-body h3 { font-size: 1rem; }
+.catalog-page .product-grid.is-list .product-card .product-body h3 { font-size: 1rem; white-space: normal; overflow: visible; }
+.catalog-page .product-grid.is-list .product-title-line { white-space: normal; overflow: visible; text-overflow: clip; }
 .catalog-page .product-grid.is-list .product-card .product-spec { justify-content: flex-start; gap: 5px; }
 .catalog-page .product-grid.is-list .product-card .product-spec > span { padding: 3px 6px; }
 .catalog-page .product-grid.is-list .customer-rating { align-self: flex-start; }

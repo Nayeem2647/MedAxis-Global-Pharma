@@ -29,8 +29,13 @@ export async function ProductCard({ product, locale }: { product: HomeProduct; l
     <div className="product-body">
       <div className="product-card-copy">
         <p className="product-manufacturer" title={product.manufacturer.name}>{product.manufacturer.name}</p>
-        <h3><Link className="product-card-link" href={href} title={product.brand_name}>{product.brand_name}</Link></h3>
-        <p className="product-generic" title={product.generic.name}>{product.generic.name}</p>
+        <h3>
+          <Link className="product-card-link" href={href} title={`${product.brand_name} (${product.generic.name})`}>
+            <span className="product-title-line">
+              {product.brand_name} <span className="product-generic-inline">({product.generic.name})</span>
+            </span>
+          </Link>
+        </h3>
         <p className="product-spec">
           {[[c('strength'), product.strength], [c('dosageForm'), product.dosage_form], [c('packSize'), product.pack_size]].map(([label, value]) => <span key={label} title={label} aria-label={`${label}: ${value}`}>{value}</span>)}
         </p>
