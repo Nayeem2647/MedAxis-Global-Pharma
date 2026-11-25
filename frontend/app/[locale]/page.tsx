@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
-import { ArrowRight, Box, ClipboardList, FileCheck2, Pill, Snowflake, Truck } from 'lucide-react';
+import { ArrowRight, Box, ClipboardList, FileCheck2, Pill } from 'lucide-react';
 import { isLocale } from '../../i18n/routing';
 import { buildLocalizedMetadata } from '../../lib/seo';
 import { getHomeData } from '../../lib/public-catalog';
@@ -49,9 +49,6 @@ export default async function Home({ params }: Props) {
         </div></section>
       )}
       <CustomerReviews locale={locale}/>
-      <section className="services-section" id="cold-chain"><div className="site-container services-grid"><div><p className="eyebrow">{t('servicesKicker')}</p><h2>{t('servicesTitle')}</h2><p className="section-intro">{t('servicesDescription')}</p><QuoteButton className="button light">{t('request')}<ArrowRight size={18}/></QuoteButton></div><div className="service-list">
-        <article><Snowflake/><div><h3>{t('temperatureTitle')}</h3><p>{t('temperatureBody')}</p></div></article><article><FileCheck2/><div><h3>{t('documentationTitle')}</h3><p>{t('documentationBody')}</p></div></article><article><Truck/><div><h3>{t('coordinationTitle')}</h3><p>{t('coordinationBody')}</p></div></article>
-      </div></div></section>
       <section className="section site-container process-section"><p className="eyebrow">MEDAXIS GLOBAL PHARMA</p><h2>{t('processTitle')}</h2><ol className="process-grid"><li><span>01</span><ClipboardList/><h3>{t('stepOneTitle')}</h3><p>{t('stepOneBody')}</p></li><li><span>02</span><FileCheck2/><h3>{t('stepTwoTitle')}</h3><p>{t('stepTwoBody')}</p></li><li><span>03</span><Box/><h3>{t('stepThreeTitle')}</h3><p>{t('stepThreeBody')}</p></li></ol></section>
       <section className="site-container final-cta"><div><h2>{t('ctaTitle')}</h2><p>{t('ctaBody')}</p></div><QuoteButton>{t('request')}<ArrowRight size={18}/></QuoteButton></section>
       <ManufacturerMarquee locale={locale} manufacturers={data.marqueeManufacturers}/>

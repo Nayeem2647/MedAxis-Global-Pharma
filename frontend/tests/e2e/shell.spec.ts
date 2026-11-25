@@ -264,7 +264,7 @@ test('bilingual homepage, anchors and touch controls work from 320px through des
     await page.getByRole('button', { name: locale === 'en' ? 'Toggle menu' : '展开或收起菜单', exact: true }).click();
     const navigation = page.getByRole('navigation', { name: locale === 'en' ? 'Mobile navigation' : '移动导航', exact: true });
     await expect(navigation).toBeVisible();
-    for (const anchor of ['catalog', 'popular', 'reviews', 'cold-chain', 'trusted-manufacturers']) {
+    for (const anchor of ['catalog', 'popular', 'reviews', 'trusted-manufacturers']) {
       await expect(page.locator(`#${anchor}`)).toHaveCount(1);
     }
     await navigation.getByRole('link', { name: locale === 'en' ? 'Products' : '产品', exact: true }).click();
