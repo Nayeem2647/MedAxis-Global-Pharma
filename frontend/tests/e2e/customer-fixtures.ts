@@ -7,6 +7,7 @@ interface Fixture {
   id: string; password: string; verify: string; reset: string;
   profile: { id: string; email: string; email_verified: boolean; full_name: string; customer_type: string; company_name: string; country: string; city: string; whatsapp_number: string; wechat_id: string; preferred_locale: string };
   drafts: Record<string, unknown>[]; revisions: Record<string, unknown>[]; history: Record<string, unknown>[]; rfqs: Record<string, unknown>[];
+  negotiation?: { id: string; body: string; created_at: string };
 }
 const accounts = new Map<string, Fixture>(); const sessions = new Map<string, Fixture>();
 const stamp = () => new Date().toISOString();
@@ -22,7 +23,7 @@ function quote(state: Fixture) {
   const version = adminVersionFixture('SENT');
   const keys = ['id', 'quotation_id', 'version_number', 'status', 'items', 'billing_currency', 'subtotal_amount', 'freight_cost', 'insurance_cost', 'total_amount', 'shipping_terms', 'payment_terms', 'bank_details', 'valid_until', 'issued_at', 'reservation_status', 'created_at', 'updated_at'] as const;
   const fields = Object.fromEntries(keys.map((key) => [key, version[key]])) as Pick<typeof version, typeof keys[number]>;
-  return { ...fields, contact: { full_name: state.profile.full_name, email: state.profile.email, customer_type: state.profile.customer_type, preferred_locale: state.profile.preferred_locale, ...(state.profile.company_name ? { company_name: state.profile.company_name } : {}) }, quotation_number: 'QT-CUSTOMER-001', is_current: true, availability: { available: 1, unavailable: 1, sourcing: 0 } };
+  return { ...fields, contact: { full_name: state.profile.full_name, email: state.profile.email, customer_type: state.profile.customer_type, preferred_locale: state.profile.preferred_locale, ...(state.profile.company_name ? { company_name: state.profile.company_name } : {}) }, quotation_number: 'QT-CUSTOMER-001', rfq_id: state.rfqs[0]?.id, is_current: true, availability: { available: 1, unavailable: 1, sourcing: 0 } };
 }
 export async function customerFixture(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (url.pathname === '/__test__/customer') {
@@ -84,7 +85,26 @@ export async function customerFixture(req: IncomingMessage, res: ServerResponse,
   }
   if (!state.profile.email_verified) { error(res, 403); return true; }
   if (path === 'rfqs') { send(res, state.rfqs, true); return true; }
-  if (path.startsWith('rfqs/')) { const rfq = state.rfqs.find((item) => item.id === path.split('/')[1]); if (rfq) send(res, rfq); else error(res, 404); return true; }
+  if (path.startsWith('rfqs/')) {
+    const [, id, section, action] = path.split('/');
+    const rfq = state.rfqs.find((item) => item.id === id);
+    if (!rfq) { error(res, 404); return true; }
+    if (section !== 'workflow') { send(res, rfq); return true; }
+    const offer = rfq.status === 'QUOTED' ? quote(state) : null;
+    if (action === 'negotiate' && offer && input.expected_version_id === offer.id) {
+      state.negotiation = { id: randomUUID(), body: String(input.body), created_at: stamp() };
+      send(res, { message_id: state.negotiation.id, replayed: false });
+    } else if (!action && req.method === 'GET') {
+      send(res, {
+        rfq: { id, rfq_number: rfq.rfq_number, buyer_name: state.profile.full_name, country: rfq.destination_country, received_at: rfq.created_at, items: rfq.items },
+        workflow_status: offer ? (state.negotiation ? 'CHANGE_REQUESTED' : 'SENT') : 'SUBMITTED',
+        quote: offer,
+        history: offer ? [offer] : [],
+        messages: offer && state.negotiation ? [{ ...state.negotiation, kind: 'REQUEST', author: 'BUYER', version_number: offer.version_number }] : [],
+      });
+    } else error(res, 404);
+    return true;
+  }
   if (path === 'quotations') { const item = quote(state); send(res, [{ id: item.id, quotation_id: item.quotation_id, quotation_number: item.quotation_number, version_number: item.version_number, status: item.status, billing_currency: item.billing_currency, total_amount: item.total_amount, issued_at: item.issued_at, valid_until: item.valid_until, is_current: true }], true); return true; }
   if (path.startsWith('quotations/')) {
     if (path.endsWith('/pdf')) { res.setHeader('Content-Type', 'application/pdf'); res.end('%PDF-1.7\nCustomer quotation fixture'); }

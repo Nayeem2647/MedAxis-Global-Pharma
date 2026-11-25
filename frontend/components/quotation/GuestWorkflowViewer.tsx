@@ -9,7 +9,8 @@ import {
 import Image from "next/image";
 import { z } from "zod";
 import { ApiError, apiRequest, type JsonValue } from "../../lib/api-client";
-import { readGuestWorkflow, type GuestWorkflow } from "../../lib/rfq-workflow";
+import { buyerWorkflow, readGuestWorkflow, type BuyerWorkflow } from "../../lib/rfq-workflow";
+import { customerRequest } from "../../lib/customer-api";
 import { workflowLabels } from "../../lib/workflow-contract";
 import { quotationDate } from "../../lib/admin-quotations";
 import { WorkflowDialog } from "../admin/WorkflowDialog";
@@ -23,7 +24,13 @@ import {
 } from "./WorkflowPrimitives";
 
 export function GuestWorkflowViewer({ token }: { token: string }) {
-  const [data, setData] = useState<GuestWorkflow | null>(null);
+  return <BuyerWorkflowViewer token={token} />;
+}
+
+export function BuyerWorkflowViewer({ token, rfqId, onDecision }: {
+  onDecision?: () => void;
+} & ({ token: string; rfqId?: never } | { rfqId: string; token?: never })) {
+  const [data, setData] = useState<BuyerWorkflow | null>(null);
   const [problem, setProblem] = useState<ApiError>();
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,7 +51,11 @@ export function GuestWorkflowViewer({ token }: { token: string }) {
     const request = new AbortController();
     controller.current = request;
     try {
-      const next = await readGuestWorkflow(token, request.signal);
+      const next = token !== undefined
+        ? await readGuestWorkflow(token, request.signal)
+        : (await customerRequest(`rfqs/${rfqId}/workflow`, buyerWorkflow, {
+            signal: AbortSignal.any([request.signal, AbortSignal.timeout(15000)]),
+          })).data;
       if (!request.signal.aborted) {
         setData(next);
         setProblem(undefined);
@@ -64,7 +75,7 @@ export function GuestWorkflowViewer({ token }: { token: string }) {
         setAction(undefined);
       }
     }
-  }, [token]);
+  }, [token, rfqId]);
   useEffect(() => {
     void read();
     const refresh = () => {
@@ -90,11 +101,12 @@ export function GuestWorkflowViewer({ token }: { token: string }) {
     setProblem(undefined);
     frozen.current = { kind, body };
     try {
-      await apiRequest(
-        `/v1/public/rfq-workflow/${token}/${kind}`,
-        z.unknown(),
-        { method: "POST", json: body, timeoutMs: 20000 },
-      );
+      if (rfqId) {
+        await customerRequest(`rfqs/${rfqId}/workflow/${kind}`, z.unknown(), { method: "POST", body });
+      } else {
+        await apiRequest(`/v1/public/rfq-workflow/${token}/${kind}`, z.unknown(), { method: "POST", json: body, timeoutMs: 20000 });
+      }
+      onDecision?.();
       setNotice(
         kind === "accept"
           ? "Your approval was recorded against this quotation version."
@@ -177,9 +189,11 @@ export function GuestWorkflowViewer({ token }: { token: string }) {
     setProblem(undefined);
     setAction({ kind, offer, operationId: crypto.randomUUID() });
   };
+  const Content = rfqId ? "section" : "main";
+  const Title = rfqId ? "h2" : "h1";
   return (
-    <div className="wf-guest-shell workflow-page">
-      <header className="wf-guest-header">
+    <div className={rfqId ? "wf-account-workflow workflow-page" : "wf-guest-shell workflow-page"}>
+      {!rfqId && <header className="wf-guest-header">
         <Image
           src="/images/medaxis-logo.png"
           alt="MedAxis Global Pharma"
@@ -188,19 +202,21 @@ export function GuestWorkflowViewer({ token }: { token: string }) {
           priority
         />
         <span>Private request & quotation</span>
-      </header>
-      <main>
+      </header>}
+      <Content>
         {!data ? (
           <section className="wf-card wf-panel">
-            <h1>
+            <Title>
               {problem
-                ? "Private request unavailable"
+                ? rfqId ? "Request unavailable" : "Private request unavailable"
                 : "Loading your request…"}
-            </h1>
+            </Title>
             <p>
               {problem
                 ? [401, 403, 404].includes(problem.status)
-                  ? "This link is invalid, expired or revoked. Contact MedAxis using your original RFQ email address to request renewed access."
+                  ? rfqId
+                    ? "This request is unavailable to your account. Sign in with the verified account for the RFQ email address."
+                    : "This link is invalid, expired or revoked. Contact MedAxis using your original RFQ email address to request renewed access."
                   : "Your request could not be loaded. Please try again."
                 : "Checking your latest request status."}
             </p>
@@ -217,7 +233,7 @@ export function GuestWorkflowViewer({ token }: { token: string }) {
             <div className="wf-page-heading">
               <div>
                 <p className="wf-eyebrow">YOUR PRIVATE REQUEST</p>
-                <h1>{data.rfq.rfq_number}</h1>
+                <Title>{data.rfq.rfq_number}</Title>
                 <p>
                   {data.rfq.buyer_name} · {data.rfq.country}
                 </p>
@@ -251,8 +267,7 @@ export function GuestWorkflowViewer({ token }: { token: string }) {
                     <>
                       <p>
                         Our team is reviewing your medicines and will email you
-                        when your quotation is ready. Return to this same
-                        private link to view the offer.
+                        when your quotation is ready. Check this page for the offer.
                       </p>
                       <ul>
                         {data.rfq.items.map((line, index) => (
@@ -420,10 +435,10 @@ export function GuestWorkflowViewer({ token }: { token: string }) {
             </div>
           </>
         )}
-      </main>
-      <footer>
+      </Content>
+      {!rfqId && <footer>
         MedAxis Global Pharma · Keep this private link confidential.
-      </footer>
+      </footer>}
       {action && (
         <WorkflowDialog
           title={

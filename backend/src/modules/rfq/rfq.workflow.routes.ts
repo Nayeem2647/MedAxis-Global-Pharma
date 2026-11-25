@@ -1,17 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AppEnv } from '../../config/env.js';
-import type { AppLogger } from '../../shared/utils/logger.js';
-import type { FxService } from '../fx/fx.service.js';
 import { adminAuth } from '../../shared/middleware/adminAuth.js';
 import { adminBoundary } from '../../shared/middleware/adminBoundary.js';
 import { quotationProbeLimiter } from '../../shared/middleware/rateLimiter.js';
 import { sendSuccess } from '../../shared/utils/response.js';
 import { pagination } from '../catalog/catalog.routes.js';
-import { createDecisionService, type DecisionHooks } from '../quotation/quotation.decisions.js';
+import type { createDecisionService } from '../quotation/quotation.decisions.js';
 import { acceptSchema, declineSchema } from '../../shared/validators/decision.validator.js';
 import {
-  createRfqWorkflow,
+  type createRfqWorkflow,
   guestLinkBody,
   ledgerQuery,
   negotiateBody,
@@ -20,10 +18,12 @@ import {
   reviewBody,
 } from './rfq.workflow.js';
 
-export function createRfqWorkflowRouter(env: AppEnv, fx: FxService, logger: AppLogger, hooks: DecisionHooks = {}) {
+export function createRfqWorkflowRouter(
+  env: AppEnv,
+  workflow: ReturnType<typeof createRfqWorkflow>,
+  decisions: ReturnType<typeof createDecisionService>,
+) {
   const router = Router();
-  const workflow = createRfqWorkflow(env, fx, logger, hooks);
-  const decisions = createDecisionService(env, logger, hooks);
   const guard = [adminBoundary(env), adminAuth(env)];
   const admin = '/admin/rfq-workflow';
   const publicPath = '/public/rfq-workflow/:token';
@@ -63,7 +63,7 @@ export function createRfqWorkflowRouter(env: AppEnv, fx: FxService, logger: AppL
     sendSuccess(res, await workflow.guestLink(req, z.uuidv4().parse(req.params.id), guestLinkBody.parse(req.body)));
   });
   router.get(publicPath, async (req, res) => {
-    sendSuccess(res, await workflow.guest(String(req.params.token)));
+    sendSuccess(res, await workflow.buyerView(String(req.params.token)));
   });
   router.post(`${publicPath}/negotiate`, adminBoundary(env), async (req, res) => {
     sendSuccess(res, await workflow.negotiate(req, String(req.params.token), negotiateBody.parse(req.body)));

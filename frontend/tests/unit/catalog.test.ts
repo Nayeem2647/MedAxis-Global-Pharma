@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, ApiRedirect, apiRequest } from '../../lib/api-client';
 import { catalogEntityPath, normalizeCatalogSlug, validateCatalogRedirect } from '../../lib/catalog-path';
 import { catalogQuerySchema, catalogQueryString, catalogPageHref, readCatalogQuery } from '../../lib/catalog-query';
-import { homeProductSchema, catalogListSchema } from '../../lib/public-catalog';
+import { getHomeData, homeProductSchema, catalogListSchema } from '../../lib/public-catalog';
 import { buildLocalizedMetadata } from '../../lib/seo';
 import { productStructuredData, serializeStructuredData } from '../../lib/catalog-seo';
 import { localizedCatalogSearch } from '../../lib/locale-navigation';
@@ -17,6 +17,19 @@ beforeEach(() => {
 });
 
 describe('allowlisted catalog boundaries', () => {
+  it('leaves the homepage category list empty when no categories are enabled', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      const data = url.pathname.endsWith('/categories') ? { categories: [] }
+        : url.pathname.endsWith('/products') ? { products: [product] } : [];
+      return Response.json({ success: true, data, meta: catalogMeta });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const home = await getHomeData('en');
+    expect(home.products[0]?.categories).toHaveLength(1);
+    expect(home.categories).toEqual([]);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/categories?locale=en&home=true'))).toBe(true);
+  });
   it('accepts local upload image URLs on the configured development API', () => {
     vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:4000');
     const image = 'http://localhost:4000/v1/public/media/products/local/image.png';

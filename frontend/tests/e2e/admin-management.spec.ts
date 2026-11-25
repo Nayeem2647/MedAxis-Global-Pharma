@@ -621,11 +621,17 @@ test('category add and list support pictures while preserving translations and s
   await expect(page.getByLabel('Sort order', { exact: true })).toHaveValue('7');
   await page.setViewportSize({ width: 1280, height: 720 });
   await links.getByRole('link', { name: 'List', exact: true }).click();
-  const statusSwitch = page.getByRole('switch', { name: 'Set New Category active status' });
+  await expect(page.getByRole('columnheader', { name: 'Home Category Status', exact: true })).toBeVisible();
+  const statusSwitch = page.getByRole('switch', { name: 'Show New Category on homepage' });
+  await expect(statusSwitch).toHaveAttribute('aria-checked', 'true');
   await statusSwitch.click();
   await expect(statusSwitch).toHaveAttribute('aria-checked', 'false');
-  expect((await state(request, email)).writes[1]).toMatchObject({ path: 'catalog/categories', body: { sort_order: 7, is_active: false } });
-  expect((await state(request, email)).writes[1].body).not.toHaveProperty('logo_data_url');
+  expect((await state(request, email)).writes[1]).toEqual({
+    path: expect.stringMatching(/^catalog\/categories\/[a-f0-9-]+\/home-visibility$/),
+    body: { show_on_home: false },
+  });
+  await page.reload();
+  await expect(statusSwitch).toHaveAttribute('aria-checked', 'false');
   await page.getByRole('link', { name: 'Edit New Category', exact: true }).click();
   await expect(preview).toHaveAttribute('src', expectedPicture!);
   await page.getByLabel('Sort order', { exact: true }).fill('8');
@@ -636,12 +642,22 @@ test('category add and list support pictures while preserving translations and s
   await page.getByRole('button', { name: 'Remove picture', exact: true }).click();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByText('Saved. Server state refreshed.', { exact: true })).toBeVisible();
-  expect((await state(request, email)).writes[3]).toMatchObject({ path: 'catalog/categories', body: { logo_data_url: null, sort_order: 8, is_active: false } });
+  expect((await state(request, email)).writes[3]).toMatchObject({ path: 'catalog/categories', body: { logo_data_url: null, sort_order: 8, is_active: true } });
   await page.reload();
   await expect(page.getByLabel('Category name (EN)', { exact: true })).toHaveValue('New Category');
   await expect(preview).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: 'Category name (ZH)' })).toHaveValue('测试分类');
   await expect(page.getByLabel('Sort order', { exact: true })).toHaveValue('8');
+  await links.getByRole('link', { name: 'List', exact: true }).click();
+  const priority = page.getByRole('button', { name: 'Show New Category first on homepage' });
+  await expect(priority).toBeDisabled();
+  await statusSwitch.click();
+  await expect(priority).toBeEnabled();
+  await priority.click();
+  await expect(priority).toHaveAttribute('aria-pressed', 'true');
+  expect((await state(request, email)).writes.at(-1)?.body).toEqual({ home_featured: true });
+  await page.reload();
+  await expect(priority).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('generic add and list share the manufacturer layout and preserve generic fields', async ({ page, request }, testInfo) => {

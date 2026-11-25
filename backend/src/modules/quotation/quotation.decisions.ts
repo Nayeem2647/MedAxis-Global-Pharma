@@ -15,7 +15,7 @@ import {
   type revisionRequestSchema,
 } from '../../shared/validators/decision.validator.js';
 import { RfqModel, ClarificationMessageModel } from '../rfq/rfq.schema.js';
-import { resolveGuest } from '../rfq/rfq.guest-access.js';
+import { resolveBuyerRfq, type BuyerRfqAccess } from '../rfq/rfq.guest-access.js';
 import { NotificationLogModel } from '../notification/notification.schema.js';
 import { commercialQuotation, COMMERCIAL_PROJECTION } from './quotation.dto.js';
 import { QuotationModel, QuotationVersionModel, type IQuotationVersion } from './quotation.schema.js';
@@ -44,20 +44,24 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
   function notify() {
     later(() => hooks.dispatchNotifications?.());
   }
-  async function resolve(token: string, session?: ClientSession) {
-    if (!/^[a-f0-9]{64}$/.test(token)) throw AppError.notFound();
-    let hash = hashToken(token);
-    let version = await QuotationVersionModel.findOne({ magic_link_token_hash: hash })
+  async function resolve(access: BuyerRfqAccess, session?: ClientSession) {
+    const tokenAccess = typeof access === 'string';
+    if (tokenAccess && !/^[a-f0-9]{64}$/.test(access)) throw AppError.notFound();
+    let hash = tokenAccess ? hashToken(access) : undefined;
+    let version = tokenAccess ? await QuotationVersionModel.findOne({ magic_link_token_hash: hash })
       .select(`${COMMERCIAL_PROJECTION} +magic_link_token_hash`)
       .session(session ?? null)
-      .lean();
-    let guest = false;
+      .lean() : null;
+    const versionRequired = !version;
     if (!version) {
-      const rfq = await resolveGuest(token, session);
-      const parent = await QuotationModel.findOne({ rfq_id: rfq._id }).sort({ created_at: -1 }).session(session ?? null).lean();
+      const rfq = await resolveBuyerRfq(access, session);
+      const parent = await QuotationModel.findOne({ rfq_id: rfq._id, customer_id: rfq.customer_id }).sort({ created_at: -1, _id: -1 }).session(session ?? null).lean();
       version = parent ? await QuotationVersionModel.findById(parent.current_version_id).select(`${COMMERCIAL_PROJECTION} +magic_link_token_hash`).session(session ?? null).lean() : null;
-      guest = true;
-      if (version?.magic_link_token_hash) hash = version.magic_link_token_hash;
+      if (version && version.quotation_id !== parent?._id) throw AppError.notFound();
+      if (tokenAccess && version) {
+        if (!version.magic_link_token_hash) throw AppError.notFound();
+        hash = version.magic_link_token_hash;
+      }
     }
     if (!version || version.status === 'DRAFT') throw AppError.notFound();
     const quote = await QuotationModel.findById(version.quotation_id)
@@ -65,7 +69,7 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
       .lean();
     if (!quote) throw AppError.notFound();
     if (quote.current_version_id !== version._id || version.status === 'SUPERSEDED') throw versionConflict();
-    return { version, quote, hash, guest };
+    return { version, quote, tokenFilter: hash ? { magic_link_token_hash: hash } : {}, versionRequired };
   }
   function usable(version: IQuotationVersion) {
     if (isExpired(version)) throw tokenExpired();
@@ -156,16 +160,17 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
       }
     }
   }
-  async function accept(req: Request, token: string, input: unknown) {
+  async function accept(req: Request, access: BuyerRfqAccess, input: unknown) {
+    const failureKey = hashToken(typeof access === 'string' ? access : `account:${access.customerId}:${access.rfqId}`);
     let knownId: string | undefined;
     let result: { version: IQuotationVersion; changed: boolean; quotation_id: string; rfq_id: string };
     try {
       result = await mongoose.connection.transaction(
         async (session) => {
-          const { version, quote, hash, guest } = await resolve(token, session);
+          const { version, quote, tokenFilter, versionRequired } = await resolve(access, session);
           knownId = version._id;
           const intent = acceptSchema.parse(input);
-          if ((guest || intent.expected_version_id) && intent.expected_version_id !== version._id) throw versionConflict();
+          if ((versionRequired || intent.expected_version_id) && intent.expected_version_id !== version._id) throw versionConflict();
           const rfqState = await RfqModel.findById(quote.rfq_id).session(session).lean();
           if (rfqState?.workflow?.pending_request_id) throw AppError.conflict('Wait for the response to your change request before approving.');
           if (isAccepted(version.status))
@@ -178,7 +183,7 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
             {
               _id: version._id,
               quotation_id: quote._id,
-              magic_link_token_hash: hash,
+              ...tokenFilter,
               status: 'SENT',
               valid_until: { $gt: now },
             },
@@ -201,7 +206,7 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
             .select(COMMERCIAL_PROJECTION)
             .lean();
           if (!changed) {
-            const state = await QuotationVersionModel.findOne({ _id: version._id, magic_link_token_hash: hash })
+            const state = await QuotationVersionModel.findOne({ _id: version._id, ...tokenFilter })
               .select(COMMERCIAL_PROJECTION)
               .session(session)
               .lean();
@@ -254,14 +259,14 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
       );
     } catch (error) {
       if (error instanceof AppError || error instanceof ZodError) throw error;
-      await acceptanceFailure(req, hashToken(token), knownId);
+      await acceptanceFailure(req, failureKey, knownId);
       throw new AppError({
         status: 500,
         code: 'INTERNAL_SERVER_ERROR',
         message: "We couldn't confirm your acceptance. Please try again.",
       });
     }
-    failures.delete(hashToken(token));
+    failures.delete(failureKey);
     if (result.changed) {
       later(() =>
         quotationEvents.emit('QUOTATION_ACCEPTED', {
@@ -342,17 +347,17 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
     notify();
     return result;
   }
-  async function decline(req: Request, token: string, input: z.infer<typeof declineSchema>) {
+  async function decline(req: Request, access: BuyerRfqAccess, input: z.infer<typeof declineSchema>) {
     const result = await mongoose.connection.transaction(async (session) => {
-      const { version, quote, hash, guest } = await resolve(token, session);
-      if ((guest || input.expected_version_id) && input.expected_version_id !== version._id) throw versionConflict();
-      if (guest && version.status === 'DECLINED') return view(version);
+      const { version, quote, tokenFilter, versionRequired } = await resolve(access, session);
+      if ((versionRequired || input.expected_version_id) && input.expected_version_id !== version._id) throw versionConflict();
+      if (versionRequired && version.status === 'DECLINED') return { version, changed: false };
       usable(version);
       if (version.status !== 'SENT' || quote.overall_status !== 'ACTIVE')
         throw AppError.conflict('Only a current SENT quotation can be declined.');
       const now = new Date();
       const updated = await QuotationVersionModel.findOneAndUpdate(
-        { _id: version._id, status: 'SENT', magic_link_token_hash: hash, valid_until: { $gt: now } },
+        { _id: version._id, status: 'SENT', ...tokenFilter, valid_until: { $gt: now } },
         {
           $set: {
             status: 'DECLINED',
@@ -381,10 +386,13 @@ export function createDecisionService(env: AppEnv, logger: AppLogger, hooks: Dec
       await scheduleMedicalPurge(quote.rfq_id, now, session);
       await buyerAudit(req, version, quote.customer_id, 'QUOTATION_DECLINED', session, 'SENT', 'DECLINED');
       await queueAdminEmail(env, session, version._id, 'quotation-declined', `declined:${version._id}`);
-      return view(updated);
+      return { version: updated, changed: true };
     });
-    notify();
-    return result;
+    if (result.changed) {
+      later(() => quotationEvents.emit('QUOTATION_CHANGED', { quotation_id: result.version.quotation_id }));
+      notify();
+    }
+    return view(result.version);
   }
   return { resolve, usable, get, accept, requestRevision, requestRefresh, decline };
 }

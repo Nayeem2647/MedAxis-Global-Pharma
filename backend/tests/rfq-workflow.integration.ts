@@ -14,6 +14,7 @@ import { createLogger } from '../src/shared/utils/logger.js';
 import { generateToken, hashToken, hashPassword } from '../src/shared/utils/crypto.js';
 import { bsonDecimal } from '../src/shared/utils/decimal.js';
 import { AdminModel, AdminSessionModel } from '../src/modules/auth/auth.schema.js';
+import { CustomerAccountModel } from '../src/modules/customer/account.schema.js';
 import { ManufacturerModel } from '../src/modules/catalog/catalog.schema.js';
 import { PlatformSettingModel } from '../src/modules/settings/settings.schema.js';
 import { ExchangeRateModel } from '../src/modules/fx/fx.schema.js';
@@ -78,8 +79,34 @@ const quotePost = (id: string, action: string, body: object) =>
 const getGuest = (token: string) => request(app).get(`/v1/public/rfq-workflow/${token}`);
 const guestPost = (token: string, action: string, body: object) =>
   request(app).post(`/v1/public/rfq-workflow/${token}/${action}`).send(body);
+const accountRfq = (id: string) => `/v1/public/customer/rfqs/${id}/workflow`;
 const fulfill = (id: string, body: object) =>
   request(app).patch(`/v1/admin/quotations/${id}/fulfillment`).set('Cookie', cookie).send(body);
+
+async function signInBuyer(email = 'buyer@example.test') {
+  const token = generateToken();
+  await CustomerAccountModel.create({
+    email,
+    password_hash: password,
+    full_name: 'Sample Workflow Buyer',
+    customer_type: 'B2C_PATIENT',
+    country: 'BD',
+    preferred_locale: 'en',
+    verification: { token_hash: hashToken(token), expires_at: new Date(Date.now() + 1800000) },
+  });
+  const login = await request(app).post('/v1/public/customer/auth/login').send({
+    email,
+    password: 'Sample workflow test password',
+  });
+  expect(login.status, JSON.stringify(login.body)).toBe(200);
+  const session = String(login.headers['set-cookie']?.[0]).split(';')[0]!;
+  return {
+    get: (id: string) => request(app).get(accountRfq(id)).set('Cookie', session),
+    post: (id: string, action: string, body: object) =>
+      request(app).post(`${accountRfq(id)}/${action}`).set('Cookie', session).send(body),
+    verify: () => request(app).post('/v1/public/customer/auth/verify-email').send({ token }),
+  };
+}
 
 beforeAll(async () => {
   const uri = process.env.MONGODB_TEST_URI || process.env.MONGODB_URI;
@@ -306,6 +333,15 @@ describe('production RFQ workflow on an isolated database and test email transpo
   });
   it('follows intake → saved review → weighted quotation → counteroffer → approval → payment → dispatch → completed history', async () => {
     const offer = await prepare('quick-quote', false);
+    const buyer = await signInBuyer();
+    expect((await request(app).get(accountRfq(offer.id))).status).toBe(401);
+    expect((await buyer.get(offer.id)).status).toBe(403);
+    expect((await buyer.post(offer.id, 'accept', { expected_version_id: offer.versionId, terms_accepted: true })).status).toBe(403);
+    expect((await buyer.verify()).status).toBe(200);
+    const otherBuyer = await signInBuyer('other-buyer@example.test');
+    expect((await otherBuyer.verify()).status).toBe(200);
+    expect((await otherBuyer.get(offer.id)).status).toBe(404);
+    expect((await otherBuyer.post(offer.id, 'accept', { expected_version_id: offer.versionId, terms_accepted: true })).status).toBe(404);
     const adminDetail = await request(app).get(`/v1/admin/rfq-workflow/${offer.id}`).set('Cookie', cookie);
     expect(adminDetail.status, JSON.stringify(adminDetail.body)).toBe(200);
     expect(adminDetail.body.data.email_delivery.length).toBeGreaterThan(0);
@@ -313,6 +349,11 @@ describe('production RFQ workflow on an isolated database and test email transpo
     let guest = await getGuest(offer.token);
     expect(guest.status).toBe(200);
     expect(guest.headers['cache-control']).toContain('no-store');
+    const dashboard = await buyer.get(offer.id);
+    expect(dashboard.status, JSON.stringify(dashboard.body)).toBe(200);
+    expect(dashboard.headers['cache-control']).toContain('no-store');
+    const { expires_at: _expiresAt, ...guestData } = guest.body.data;
+    expect(dashboard.body.data).toEqual(guestData);
     expect(guest.body.data.quote).toMatchObject({
       medicine_weight_g: '200.00000000',
       packed_weight_g: '250',
@@ -329,7 +370,7 @@ describe('production RFQ workflow on an isolated database and test email transpo
       proposed_delivery_charge: '10',
     };
     const [one, repeated] = await Promise.all([
-      guestPost(offer.token, 'negotiate', negotiation),
+      buyer.post(offer.id, 'negotiate', negotiation),
       guestPost(offer.token, 'negotiate', negotiation),
     ]);
     expect(one.status, JSON.stringify(one.body)).toBe(200);
@@ -358,14 +399,15 @@ describe('production RFQ workflow on an isolated database and test email transpo
     expect(guest.body.data.quote.total_amount).toBe('265.00');
     expect(guest.body.data.history).toHaveLength(2);
     expect(guest.body.data.messages).toHaveLength(2);
+    expect((await buyer.get(offer.id)).body.data.messages).toEqual(guest.body.data.messages);
     expect(
-      (await guestPost(offer.token, 'accept', { expected_version_id: offer.versionId, terms_accepted: true })).status,
+      (await buyer.post(offer.id, 'accept', { expected_version_id: offer.versionId, terms_accepted: true })).status,
     ).toBe(409);
     const current = guest.body.data.quote.id as string;
     const revisedCosts = await QuotationInternalCostModel.findOne({ quotation_version_id: current }).lean();
     expect(revisedCosts?.items[0]?.procurement_unit_cost_bdt.toString()).toBe('1000.00000000');
     const approvals = await Promise.all([
-      guestPost(offer.token, 'accept', { expected_version_id: current, terms_accepted: true }),
+      buyer.post(offer.id, 'accept', { expected_version_id: current, terms_accepted: true }),
       guestPost(offer.token, 'accept', { expected_version_id: current, terms_accepted: true }),
     ]);
     approvals.forEach((result) => expect(result.status, JSON.stringify(result.body)).toBe(200));
@@ -379,6 +421,8 @@ describe('production RFQ workflow on an isolated database and test email transpo
     expect((await fulfill(offer.quoteId, payment)).status).toBe(409);
     expect((await adminPost(offer.id, 'payment-request', { expected_version_id: current })).status).toBe(200);
     expect((await adminPost(offer.id, 'payment-request', { expected_version_id: current })).status).toBe(200);
+    const bankInstructions = (await buyer.get(offer.id)).body.data.quote.bank_details;
+    expect(bankInstructions).toMatchObject({ account_number: bank.account_number, swift_code: bank.swift_code });
     expect(await NotificationLogModel.countDocuments({ dedupe_key: `payment-request:${current}` })).toBe(1);
     expect((await fulfill(offer.quoteId, { ...payment, amount: '1' })).status).toBe(422);
     expect((await fulfill(offer.quoteId, { ...payment, currency: 'EUR' })).status).toBe(422);
@@ -396,6 +440,7 @@ describe('production RFQ workflow on an isolated database and test email transpo
       ).status,
     ).toBe(200);
     expect((await getGuest(offer.token)).body.data.quote.shipment.awb_tracking_number).toBe('SAMPLE-AWB-001');
+    expect((await buyer.get(offer.id)).body.data.quote.shipment.awb_tracking_number).toBe('SAMPLE-AWB-001');
     expect((await fulfill(offer.quoteId, { expected_version_id: current, status: 'DELIVERED' })).status).toBe(422);
     expect(
       (
@@ -414,12 +459,15 @@ describe('production RFQ workflow on an isolated database and test email transpo
     expect(history.body.data.rows).toHaveLength(1);
     expect(history.body.data.rows[0].workflow_status).toBe('COMPLETED');
     expect((await getGuest(offer.token)).body.data.workflow_status).toBe('COMPLETED');
+    expect((await buyer.get(offer.id)).body.data.workflow_status).toBe('COMPLETED');
     await mail.dispatch();
     expect(emails.some((message) => message.includes('SAMPLE-AWB-001'))).toBe(true);
     expect(emails.some((message) => message.includes('Payment requested'))).toBe(true);
   });
   it('allows cart intake with a private supporting document, keeps the existing offer after a written reply, and records customer decline in history', async () => {
     const offer = await prepare('cart', true);
+    const buyer = await signInBuyer();
+    expect((await buyer.verify()).status).toBe(200);
     const proposal = await guestPost(offer.token, 'negotiate', {
       expected_version_id: offer.versionId,
       operation_id: randomUUID(),
@@ -444,7 +492,7 @@ describe('production RFQ workflow on an isolated database and test email transpo
     expect(await QuotationVersionModel.countDocuments({ quotation_id: offer.quoteId })).toBe(1);
     expect(guest.body.data.messages).toHaveLength(2);
     expect(
-      (await guestPost(offer.token, 'decline', { expected_version_id: offer.versionId, reason: 'PRICE' })).status,
+      (await buyer.post(offer.id, 'decline', { expected_version_id: offer.versionId, reason: 'PRICE' })).status,
     ).toBe(200);
     expect(
       (await guestPost(offer.token, 'decline', { expected_version_id: offer.versionId, reason: 'PRICE' })).status,
@@ -454,6 +502,7 @@ describe('production RFQ workflow on an isolated database and test email transpo
       .query({ scope: 'HISTORY', q: offer.number })
       .set('Cookie', cookie);
     expect(history.body.data.rows[0].workflow_status).toBe('DECLINED');
+    expect((await getGuest(offer.token)).body.data.workflow_status).toBe('DECLINED');
   });
   it('shows request status before issuance and supports expired, revoked and reissued guest access without granting access by RFQ number', async () => {
     const source = await submit('cart', false);
@@ -477,5 +526,8 @@ describe('production RFQ workflow on an isolated database and test email transpo
     );
     expect((await adminPost(source.id, 'guest-link', { action: 'REVOKE' })).status).toBe(200);
     expect((await getGuest(token)).status).toBe(403);
+    const buyer = await signInBuyer();
+    expect((await buyer.verify()).status).toBe(200);
+    expect((await buyer.get(source.id)).body.data.workflow_status).toBe('SUBMITTED');
   });
 });

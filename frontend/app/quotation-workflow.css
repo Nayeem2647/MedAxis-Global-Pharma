@@ -104,6 +104,9 @@
 .wf-guest-header img { max-width:100%; height:auto; }
 .wf-guest-grid { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(250px,1fr); gap:1.1rem; }
 .wf-guest-shell footer { color:var(--wf-muted); font-size:.875rem; padding:1.5rem 0; }
+.wf-account-workflow { min-width:0; margin-bottom:1rem; }
+.wf-account-workflow .wf-guest-grid { grid-template-columns:minmax(0,1.6fr) minmax(215px,1fr); }
+@media (max-width: 1100px) { .wf-account-workflow .wf-guest-grid { grid-template-columns:minmax(0,1fr); } }
 .wf-decline { color:#8b2930!important; }
 .quotation-console .admin-sidebar { background:#102941; border-color:#1e4367; }
 .quotation-console .admin-sidebar nav>a,.quotation-console .admin-catalog-toggle { color:#d7e5f2; }

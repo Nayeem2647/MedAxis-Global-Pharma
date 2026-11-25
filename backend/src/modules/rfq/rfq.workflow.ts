@@ -11,7 +11,7 @@ import { escapeRegex } from '../../shared/utils/content.js';
 import { writeAuditLog } from '../../shared/middleware/auditLogger.js';
 import { decimalInput, reviseQuoteSchema } from '../../shared/validators/quotation.validator.js';
 import { RfqModel, type IRfq } from './rfq.schema.js';
-import { newGuestAccess, resolveGuest } from './rfq.guest-access.js';
+import { newGuestAccess, resolveBuyerRfq, type BuyerRfqAccess } from './rfq.guest-access.js';
 import { canonicalPayload } from './rfq.intake.service.js';
 import { enqueueRfqEmail } from './rfq.outbox.js';
 import { rfqEvents } from './rfq.events.js';
@@ -157,13 +157,13 @@ export function createRfqWorkflow(env: AppEnv, fx: FxService, logger: AppLogger,
       session,
     );
   }
-  async function current(id: string, session?: ClientSession) {
-    const quote = await QuotationModel.findOne({ rfq_id: id })
+  async function current(id: string, session?: ClientSession, customerId?: string) {
+    const quote = await QuotationModel.findOne({ rfq_id: id, ...(customerId ? { customer_id: customerId } : {}) })
       .sort({ created_at: -1, _id: -1 })
       .session(session ?? null)
       .lean();
     const version = quote
-      ? await QuotationVersionModel.findById(quote.current_version_id)
+      ? await QuotationVersionModel.findOne({ _id: quote.current_version_id, quotation_id: quote._id })
           .session(session ?? null)
           .lean()
       : null;
@@ -395,10 +395,10 @@ export function createRfqWorkflow(env: AppEnv, fx: FxService, logger: AppLogger,
     notify(id);
     return result;
   }
-  async function guest(token: string) {
-    const rfq = await resolveGuest(token);
-    const { version } = await current(rfq._id);
-    const parents = await QuotationModel.find({ rfq_id: rfq._id }).select('_id').lean();
+  async function buyerView(access: BuyerRfqAccess) {
+    const rfq = await resolveBuyerRfq(access);
+    const { version } = await current(rfq._id, undefined, rfq.customer_id);
+    const parents = await QuotationModel.find({ rfq_id: rfq._id, customer_id: rfq.customer_id }).select('_id').lean();
     const history = await QuotationVersionModel.find({
       quotation_id: { $in: parents.map((parent) => parent._id) },
       status: { $ne: 'DRAFT' },
@@ -444,19 +444,19 @@ export function createRfqWorkflow(env: AppEnv, fx: FxService, logger: AppLogger,
           proposed_delivery_charge,
         }),
       ),
-      expires_at: rfq.guest_expires_at,
+      ...(typeof access === 'string' ? { expires_at: rfq.guest_expires_at } : {}),
     };
   }
-  async function negotiate(req: Request, token: string, input: z.infer<typeof negotiateBody>) {
+  async function negotiate(req: Request, access: BuyerRfqAccess, input: z.infer<typeof negotiateBody>) {
     const result = await mongoose.connection.transaction(async (session) => {
-      const rfq = await resolveGuest(token, session);
+      const rfq = await resolveBuyerRfq(access, session);
       const fingerprint = hashToken(canonicalPayload(input));
       const replay = rfq.workflow?.messages?.find((message) => message.operation_id === input.operation_id);
       if (replay) {
         if (replay.fingerprint !== fingerprint) throw AppError.conflict('Operation key reused.');
-        return { message_id: replay.id };
+        return { message_id: replay.id, rfqId: rfq._id, replayed: true };
       }
-      const { quote, version } = await current(rfq._id, session);
+      const { quote, version } = await current(rfq._id, session, rfq.customer_id);
       if (!quote || !version || version._id !== input.expected_version_id) throw versionConflict();
       if (
         quote.overall_status !== 'ACTIVE' ||
@@ -478,7 +478,7 @@ export function createRfqWorkflow(env: AppEnv, fx: FxService, logger: AppLogger,
         { _id: rfq._id },
         {
           $set: {
-            'workflow.enabled': true,
+            'workflow.enabled': rfq.workflow?.enabled ?? false,
             'workflow.pending_request_id': id,
             'workflow.offer_state': 'CHANGE_REQUESTED',
           },
@@ -499,10 +499,10 @@ export function createRfqWorkflow(env: AppEnv, fx: FxService, logger: AppLogger,
       );
       await queueAdminEmail(env, session, version._id, 'revision-request', `negotiation:${id}:admin`);
       await audit(req, rfq._id, 'RFQ_BETTER_OFFER_REQUESTED', session);
-      return { message_id: id };
+      return { message_id: id, rfqId: rfq._id, replayed: false };
     });
-    notify((await resolveGuest(token))._id);
-    return result;
+    if (!result.replayed) notify(result.rfqId);
+    return { message_id: result.message_id, replayed: result.replayed };
   }
   async function respond(req: Request, id: string, input: z.infer<typeof responseBody>) {
     const rfq = await RfqModel.findById(id).lean();
@@ -733,5 +733,5 @@ export function createRfqWorkflow(env: AppEnv, fx: FxService, logger: AppLogger,
     notify(id);
     return { updated: true };
   }
-  return { ledger, detail, review, guest, negotiate, respond, requestPayment, guestLink };
+  return { ledger, detail, review, buyerView, negotiate, respond, requestPayment, guestLink };
 }

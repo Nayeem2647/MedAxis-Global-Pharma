@@ -96,7 +96,7 @@ export async function AdminMasterList({ query, kind }: { query: Record<string, s
 
         <ManagementTable
           label={`${kind} records`}
-          columns={manufacturer ? ['SL', 'Manufacturer Logo', 'Name', 'Total Product', 'Total RFQ', 'Status', 'Action'] : kind === 'categories' ? ['SL', 'Picture', 'Name', 'Sort order', 'Status', 'Action'] : ['SL', 'Name', 'Therapeutic indications', 'Status', 'Action']}
+          columns={manufacturer ? ['SL', 'Manufacturer Logo', 'Name', 'Total Product', 'Total RFQ', 'Status', 'Action'] : kind === 'categories' ? ['SL', 'Picture', 'Name', 'Sort order', 'Home Category Status', 'Action'] : ['SL', 'Name', 'Therapeutic indications', 'Status', 'Action']}
         >
           {rows.map((row, index) => {
             const logo = publicAssetUrl(row.logo_url ?? row.logo_data_url);

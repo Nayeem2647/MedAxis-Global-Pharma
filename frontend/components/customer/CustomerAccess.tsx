@@ -27,10 +27,10 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const [captchaToken, setCaptchaToken] = useState('');
   const [challengeVersion, setChallengeVersion] = useState(0);
-  const [challengeFallback, setChallengeFallback] = useState(false);
+  const [challengeUnavailable, setChallengeUnavailable] = useState(false);
   const [mathPair, setMathPair] = useState<[number, number]>([3, 4]);
   const [mathAnswer, setMathAnswer] = useState('');
-  const useTurnstile = Boolean(siteKey) && !challengeFallback;
+  const useTurnstile = Boolean(siteKey);
   const capturedMode = useRef<string | null>(null);
   useEffect(() => { setReady(true); setMathPair(randomPair()); }, []);
   useEffect(() => {
@@ -42,6 +42,12 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
     else setProblem(t('invalidLink'));
     window.history.replaceState({}, '', window.location.pathname);
   }, [mode, t]);
+  function retryChallenge() {
+    setCaptchaToken('');
+    setChallengeUnavailable(false);
+    setChallengeVersion((version) => version + 1);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     const data = new FormData(event.currentTarget); const read = (name: string) => String(data.get(name) ?? '').trim();
@@ -80,7 +86,7 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
       }
     } catch (error) {
       const status = error instanceof ApiError ? error.status : 503;
-      if (mode === 'register' && useTurnstile) { setCaptchaToken(''); setChallengeVersion((v) => v + 1); }
+      if (mode === 'register' && useTurnstile) retryChallenge();
       setProblem(t(status === 401 ? 'invalidCredentials' : status === 403 ? 'captchaFailed' : status === 409 ? 'accountExists' : status === 429 ? 'tooManyAttempts' : (mode === 'reset' || mode === 'verify') && status === 400 ? 'invalidLink' : status === 422 ? 'checkFields' : 'unavailable'));
     } finally { setBusy(false); }
   }
@@ -96,6 +102,7 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
             {buyerType === 'B2B_WHOLESALE' && <label>{t('company')}<input name="company_name" autoComplete="organization" required maxLength={200}/></label>}
           </>}
           {(mode === 'register' || mode === 'login' || mode === 'forgot') && <label>{t('email')}<input name="email" type="email" autoComplete="email" required maxLength={200}/></label>}
+          {mode === 'register' && <p className="customer-field-help">{t('rfqEmailHelp')}</p>}
           {(mode === 'register' || mode === 'login' || mode === 'reset') && <>
             <label>{t(mode === 'reset' ? 'newPassword' : 'password')}<span className="customer-password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'login' ? 1 : 4} maxLength={1024}/><button type="button" aria-label={t(showPassword ? 'hidePassword' : 'showPassword')} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button></span></label>
             {mode !== 'login' && <><p className="customer-field-help">{t('passwordHelp')}</p><label>{t('confirmPassword')}<input name="confirm_password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={4} maxLength={1024}/></label></>}
@@ -106,14 +113,21 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
                 <ShieldCheck size={16} aria-hidden="true" />
                 <span>{t('captchaTitle')}</span>
               </div>
-              {useTurnstile ? (
+              {siteKey ? challengeUnavailable ? (
+                <div>
+                  <p role="status">{t('captchaUnavailable')}</p>
+                  <button type="button" className="button secondary" onClick={() => { setProblem(''); retryChallenge(); }}>
+                    {t('captchaRetry')}
+                  </button>
+                </div>
+              ) : (
                 <Turnstile
                   key={challengeVersion}
-                  siteKey={siteKey!}
+                  siteKey={siteKey}
                   options={{ size: 'flexible', language: locale === 'zh-CN' ? 'zh-CN' : 'en', theme: 'light', responseField: false }}
                   onSuccess={setCaptchaToken}
                   onExpire={() => setCaptchaToken('')}
-                  onError={() => { setCaptchaToken(''); setChallengeFallback(true); }}
+                  onError={() => { setCaptchaToken(''); setChallengeUnavailable(true); }}
                 />
               ) : (
                 <div className="customer-math-captcha">
@@ -146,7 +160,7 @@ export function CustomerAccess({ mode }: { mode: CustomerAccessMode }) {
           {mode === 'verify' && <p>{t('verifyIntro')}</p>}
           {problem && <p className="customer-feedback is-error" role="alert">{problem}</p>}
           {notice && <p className="customer-feedback" role="status">{notice}</p>}
-          <button type="submit" className="button primary" disabled={busy || (mode === 'verify' || mode === 'reset') && !token}>{busy ? t('working') : t(mode === 'login' ? 'signIn' : mode === 'register' ? 'createAccount' : mode === 'verify' ? 'verifyEmail' : mode === 'reset' ? 'savePassword' : 'sendReset')}</button>
+          <button type="submit" className="button primary" disabled={busy || (mode === 'verify' || mode === 'reset') && !token || mode === 'register' && challengeUnavailable}>{busy ? t('working') : t(mode === 'login' ? 'signIn' : mode === 'register' ? 'createAccount' : mode === 'verify' ? 'verifyEmail' : mode === 'reset' ? 'savePassword' : 'sendReset')}</button>
         </fieldset>
       </form>}
       <div className="customer-access-links">{mode === 'login' ? <><Link href={`/${locale}/account/forgot`}>{t('forgotPassword')}</Link><span>{t('noAccount')} <Link href={`/${locale}/register`}>{t('createAccount')}</Link></span></> : <Link href={`/${locale}/login`}>{t('backToLogin')}</Link>}</div>

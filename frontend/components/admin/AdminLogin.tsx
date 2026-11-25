@@ -14,8 +14,10 @@ export function AdminLogin() {
   const [notice, setNotice] = useState('');
   const [expires, setExpires] = useState<string>(); const [problem, setProblem] = useState<AdminFeedbackValue>(); const [busy, setBusy] = useState(false);
   const lock = useRef(false); const blockedUntil = useRef(0);
+  const [localSignIn, setLocalSignIn] = useState(false);
 
   useEffect(() => {
+    setLocalSignIn(['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname));
     const token = new URLSearchParams(window.location.search).get('reset')?.trim();
     if (token) {
       setResetToken(token);
@@ -48,7 +50,7 @@ export function AdminLogin() {
         }
       } else if (stage === 'forgot') {
         await apiRequest('/v1/admin/auth/forgot-password', forgotPasswordResult, { method: 'POST', json: { email: email.trim() }, timeoutMs: 15_000 });
-        setNotice('If an active admin account matches that email, a password reset link has been sent.');
+        setNotice('If the address matches the active admin account, look for “MedAxis Admin Password Reset” in that inbox or spam folder. The link expires after 15 minutes.');
       } else if (stage === 'reset') {
         await apiRequest('/v1/admin/auth/reset-password', resetPasswordResult, { method: 'POST', json: { token: resetToken, new_password: newPassword, confirm_password: confirmPassword }, timeoutMs: 15_000 });
         setNewPassword(''); setConfirmPassword(''); setResetToken('');
@@ -74,13 +76,14 @@ export function AdminLogin() {
   const subtitle = stage === 'password'
     ? (require2fa ? 'Use your admin account and enrolled authenticator.' : 'Use your admin email and password to sign in.')
     : stage === 'forgot'
-      ? 'Enter your admin email address to receive a 15-minute password reset link.'
+      ? 'Enter the email registered to the admin account. Customer accounts use the reset form on the customer sign-in page.'
       : stage === 'reset'
         ? 'Choose a new password with at least 12 characters. All active sessions will be signed out.'
         : 'Enter a code from your enrolled authenticator, or use an unused backup code.';
 
   return <main className="admin-login"><div className="admin-login-brand"><span className="brand-mark"><Plus size={28}/></span><span>MedAxis Global Pharma</span></div><section className="admin-panel"><p className="admin-kicker"><LockKeyhole size={15}/> Private administration</p><h1>{heading}</h1>
     <p className="muted">{subtitle}</p>
+    {stage === 'forgot' && localSignIn && <p className="small muted">Open the reset link on the computer running this local site. A localhost link on your phone opens the phone itself.</p>}
     <form className="stack-form" onSubmit={submit}><fieldset disabled={busy}>
       {stage === 'password' ? <><label>Email<input type="email" value={email} autoComplete="username" maxLength={200} required onChange={(event) => setEmail(event.currentTarget.value)}/></label><label>Password<input type="password" value={password} autoComplete="current-password" maxLength={1024} required onChange={(event) => setPassword(event.currentTarget.value)}/></label></>
         : stage === 'forgot' ? <label>Email<input type="email" value={email} autoComplete="username" maxLength={200} required onChange={(event) => setEmail(event.currentTarget.value)}/></label>
@@ -90,7 +93,9 @@ export function AdminLogin() {
       <button type="submit" className="button primary">{busy ? 'Verifying…' : stage === 'password' ? (require2fa ? 'Continue to authenticator' : 'Sign in') : stage === 'forgot' ? 'Send reset link' : stage === 'reset' ? 'Reset password' : 'Verify and sign in'}</button>
     </fieldset></form>
     {notice && <p role="status" className="admin-profile-success">{notice}</p>}
-    {problem && <AdminFeedback problem={problem}/>}
+    {problem && (stage === 'reset' && problem.status === 401
+      ? <div className="admin-feedback" role="alert"><p>This reset link is invalid, expired, or already used. Request a new link.</p><button type="button" className="text-button" onClick={() => { window.history.replaceState({}, '', '/admin/login'); setResetToken(''); setNewPassword(''); setConfirmPassword(''); setProblem(undefined); setStage('forgot'); }}>Request a new reset link</button></div>
+      : <AdminFeedback problem={problem}/>)}
     {stage === 'password' && <div className="admin-login-alternatives"><button type="button" className="text-button" disabled={busy} onClick={() => { setPassword(''); setProblem(undefined); setNotice(''); setStage('forgot'); }}>Forgot password?</button></div>}
     {(stage === 'forgot' || stage === 'reset') && <div className="admin-login-alternatives"><button type="button" className="text-button" disabled={busy} onClick={() => { setProblem(undefined); setNotice(''); setStage('password'); }}>Back to sign in</button></div>}
     {(stage === 'totp' || stage === 'backup') && <div className="admin-login-alternatives"><button type="button" className="text-button" disabled={busy} onClick={() => { setCode(''); setProblem(undefined); setStage(stage === 'totp' ? 'backup' : 'totp'); }}>{stage === 'totp' ? 'Use a backup code' : 'Use the authenticator'}</button><button type="button" className="text-button" disabled={busy} onClick={() => { setCode(''); setProblem(undefined); setStage('password'); }}>Start again</button></div>}

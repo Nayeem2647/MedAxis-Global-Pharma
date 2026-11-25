@@ -56,6 +56,9 @@ for (const locale of ['en', 'zh-CN']) {
     await expect(page.getByRole('status').filter({ hasText: 'RFQ-CUSTOMER-002' })).toBeVisible();
     await nav.getByRole('button', { name: t.rfqs, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'RFQ-CUSTOMER-002' })).toBeVisible();
+    await page.getByRole('heading', { name: 'RFQ-CUSTOMER-002' }).locator('xpath=../..').getByRole('button', { name: t.viewDetails }).click();
+    await expect(page.getByRole('region', { name: 'Order progress' }).getByRole('listitem')).toHaveCount(7);
+    await expect(page.getByRole('heading', { name: 'Request received' })).toBeVisible();
     await nav.getByRole('button', { name: t.quotations, exact: true }).click();
     await page.getByRole('button', { name: t.viewQuotation, exact: true }).click();
     await expect(page.locator('.customer-quote-totals')).toContainText('USD 34.69135780');
@@ -64,6 +67,14 @@ for (const locale of ['en', 'zh-CN']) {
     await page.getByLabel(t.revisionNotes).fill('Please review this sourcing request.');
     await page.getByRole('button', { name: t.sendRevision, exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: t.revisionSent })).toBeVisible();
+    await page.getByRole('button', { name: t.openRfqWorkflow, exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'RFQ-CUSTOMER-001' })).toBeVisible();
+    await page.getByRole('button', { name: 'Request a better offer', exact: true }).click();
+    const reply = page.getByRole('dialog', { name: 'Request a better offer' });
+    await reply.getByLabel('Your message').fill('Could you reduce the delivery charge?');
+    await reply.getByRole('button', { name: 'Send request', exact: true }).click();
+    await expect(page.getByText('Could you reduce the delivery charge?', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Approve quotation', exact: true })).toHaveCount(0);
     await nav.getByRole('button', { name: t.revisions, exact: true }).click();
     await expect(page.getByText('Please review this sourcing request.', { exact: true })).toBeVisible();
     await nav.getByRole('button', { name: t.history, exact: true }).click();

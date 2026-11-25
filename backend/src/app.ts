@@ -6,6 +6,7 @@ import { checkDatabase as defaultCheckDatabase, type CheckDatabaseFn } from './c
 import type { AppEnv } from './config/env.js';
 import { createHealthRouter } from './modules/health/health.routes.js';
 import { createRfqWorkflowRouter } from './modules/rfq/rfq.workflow.routes.js';
+import { createRfqWorkflow } from './modules/rfq/rfq.workflow.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import type { AuthHooks } from './modules/auth/auth.security.js';
 import { createPublicCatalogRouter, createAdminCatalogRouter } from './modules/catalog/catalog.routes.js';
@@ -25,7 +26,7 @@ import { createFxRouter } from './modules/fx/fx.routes.js';
 import { createQuotationRouter } from './modules/quotation/quotation.routes.js';
 import type { QuotationHooks } from './modules/quotation/quotation.service.js';
 import { createPublicQuotationRouter } from './modules/quotation/quotation.public.routes.js';
-import type { DecisionHooks } from './modules/quotation/quotation.decisions.js';
+import { createDecisionService, type DecisionHooks } from './modules/quotation/quotation.decisions.js';
 import { createPdfRuntime, type PdfDelivery } from './modules/pdf/pdf.worker.js';
 import { createAdminStream, type AdminStream } from './modules/admin/admin.stream.js';
 import { createAdminOperationsRouter } from './modules/admin/admin.operations.js';
@@ -107,7 +108,10 @@ export function createApp({
   const revalidate = createRevalidator(env, logger, revalidateFetch);
   const cms = createCmsRouters(env, revalidate);
   v1.use('/public', createPublicCatalogRouter(env));
-  v1.use('/public/customer', createCustomerRouter(env, logger, pdf, storage, customerAuth));
+  const workflowHooks = { dispatchNotifications: rfq?.hooks?.dispatchNotifications, ...decisionHooks };
+  const workflow = createRfqWorkflow(env, fx, logger, workflowHooks);
+  const decisions = createDecisionService(env, logger, workflowHooks);
+  v1.use('/public/customer', createCustomerRouter(env, logger, pdf, storage, { workflow, decisions }, customerAuth));
   if (env.STORAGE_DRIVER === 'local' && !env.isProduction) {
     v1.use('/public/media', createLocalMediaRouter(env));
   }
@@ -116,7 +120,7 @@ export function createApp({
   v1.use('/admin/cms', cms.adminRouter);
   v1.use('/admin/settings', createSettingsRouter(env, revalidate));
   v1.use(createRfqRouter(env, logger, { storage, ...rfq }));
-  v1.use(createRfqWorkflowRouter(env, fx, logger, { dispatchNotifications: rfq?.hooks?.dispatchNotifications, ...decisionHooks }));
+  v1.use(createRfqWorkflowRouter(env, workflow, decisions));
   v1.use('/admin/fx-rates', createFxRouter(env, fx));
   v1.use(
     '/admin/quotations',

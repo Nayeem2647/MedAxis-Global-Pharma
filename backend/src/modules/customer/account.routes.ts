@@ -10,6 +10,9 @@ import { turnstile } from '../../shared/middleware/turnstile.js';
 import { hashPassword, verifyPassword } from '../../shared/utils/crypto.js';
 import { sendSuccess, sendPaginated } from '../../shared/utils/response.js';
 import { createRfqIntakeService } from '../rfq/rfq.intake.service.js';
+import { negotiateBody, type createRfqWorkflow } from '../rfq/rfq.workflow.js';
+import type { createDecisionService } from '../quotation/quotation.decisions.js';
+import { acceptSchema, declineSchema } from '../../shared/validators/decision.validator.js';
 import { createRfqSignals } from '../rfq/rfq.events.js';
 import { createRfqDispatcher } from '../rfq/rfq.dispatch.js';
 import { rfqIntakeSchema } from '../../shared/validators/rfq.validator.js';
@@ -119,6 +122,10 @@ export function createCustomerRouter(
   logger: AppLogger,
   pdf: PdfDelivery,
   storage: StorageService,
+  { workflow, decisions }: {
+    workflow: ReturnType<typeof createRfqWorkflow>;
+    decisions: ReturnType<typeof createDecisionService>;
+  },
   hooks: CustomerAuthHooks = {},
 ) {
   const router = Router();
@@ -406,6 +413,19 @@ export function createCustomerRouter(
     if (!rfq) throw AppError.notFound();
     sendSuccess(res, publicRfq(rfq));
   });
+  const ownedRequest = (id: unknown, res: Response) => ({ rfqId: uuid.parse(id), customerId: verifiedCustomer(res) });
+  router.get('/rfqs/:id/workflow', async (req, res) => {
+    sendSuccess(res, await workflow.buyerView(ownedRequest(req.params.id, res)));
+  });
+  router.post('/rfqs/:id/workflow/negotiate', writeLimit, async (req, res) => {
+    sendSuccess(res, await workflow.negotiate(req, ownedRequest(req.params.id, res), negotiateBody.parse(req.body)));
+  });
+  router.post('/rfqs/:id/workflow/accept', writeLimit, async (req, res) => {
+    sendSuccess(res, await decisions.accept(req, ownedRequest(req.params.id, res), acceptSchema.parse(req.body)));
+  });
+  router.post('/rfqs/:id/workflow/decline', writeLimit, async (req, res) => {
+    sendSuccess(res, await decisions.decline(req, ownedRequest(req.params.id, res), declineSchema.parse(req.body)));
+  });
   router.get('/quotations', async (req, res) => {
     const customerId = verifiedCustomer(res);
     const { page, limit } = accountPage.parse(req.query);
@@ -458,6 +478,8 @@ export function createCustomerRouter(
     sendSuccess(res, {
       ...commercialQuotation(version),
       quotation_number: quote.quotation_number,
+      rfq_id: quote.rfq_id,
+      workflow_enabled: version.workflow_enabled === true,
       is_current: quote.current_version_id === version._id,
       availability: {
         available: version.items.filter((item) => item.availability_status === 'AVAILABLE').length,
@@ -498,6 +520,11 @@ export function createCustomerRouter(
     const input = accountRevision.extend({ request_id: uuid }).parse(req.body);
     const { account } = customerIdentity(res);
     const { version, quote } = await ownedVersion(String(req.params.id), res);
+    if (version.workflow_enabled) {
+      const intent = negotiateBody.parse({ expected_version_id: version._id, operation_id: input.request_id, scope: 'BOTH', body: input.notes });
+      sendSuccess(res, await workflow.negotiate(req, { rfqId: quote.rfq_id, customerId: quote.customer_id }, intent));
+      return;
+    }
     const result = await mongoose.connection.transaction(async (session) => {
       const previous = await ClarificationMessageModel.findOne({ _id: input.request_id }).session(session).lean();
       if (previous) {

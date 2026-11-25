@@ -5,6 +5,18 @@ import { decrypt, generateToken, hashToken } from '../../shared/utils/crypto.js'
 import { encryptedDelivery } from '../quotation/quotation.outbox.js';
 import { RfqModel } from './rfq.schema.js';
 
+export type OwnedRfq = { rfqId: string; customerId: string };
+export type BuyerRfqAccess = string | OwnedRfq;
+
+export async function resolveBuyerRfq(access: BuyerRfqAccess, session?: ClientSession) {
+  if (typeof access === 'string') return resolveGuest(access, session);
+  const rfq = await RfqModel.findOne({ _id: access.rfqId, customer_id: access.customerId })
+    .session(session ?? null)
+    .lean();
+  if (!rfq) throw AppError.notFound();
+  return rfq;
+}
+
 export function newGuestAccess(env: AppEnv) {
   const token = generateToken();
   const url = new URL(`/r/${token}`, env.PUBLIC_ORIGIN[0]!).href;

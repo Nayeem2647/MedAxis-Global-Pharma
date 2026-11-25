@@ -13,7 +13,7 @@ import {
   QuotationProgress,
 } from '../quotation/QuotationDocument';
 
-export function CustomerQuotationDetails({ quotation, onBack, onRevision }: { quotation: z.infer<typeof accountQuotationSchema>; onBack(): void; onRevision(): void }) {
+export function CustomerQuotationDetails({ quotation, onBack, onRevision, onOpenWorkflow }: { quotation: z.infer<typeof accountQuotationSchema>; onBack(): void; onRevision(): void; onOpenWorkflow(id: string): void }) {
   const t = useTranslations('Customer');
   const tQuote = useTranslations('Quotation');
   const locale = useLocale();
@@ -21,6 +21,7 @@ export function CustomerQuotationDetails({ quotation, onBack, onRevision }: { qu
   const request = useRef({ notes: '', id: '' });
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value));
   const accepted = acceptedStatus(quotation.status);
+  const rfqId = quotation.rfq_id;
 
   async function download() {
     if (busy) return; setBusy(true); setProblem('');
@@ -137,14 +138,15 @@ export function CustomerQuotationDetails({ quotation, onBack, onRevision }: { qu
     <QuotationCommercialCards quotation={quotation} />
     <QuotationBankCard bankDetails={quotation.bank_details} />
 
-    {quotation.is_current && quotation.status === 'SENT' && new Date(quotation.valid_until) > new Date() && (
+    {rfqId && <button type="button" className="button primary" onClick={() => onOpenWorkflow(rfqId)}>{t('openRfqWorkflow')}</button>}
+    {!(rfqId && quotation.workflow_enabled) && quotation.is_current && quotation.status === 'SENT' && new Date(quotation.valid_until) > new Date() && (
       <form className="stack-form customer-revision-form" onSubmit={revise}>
         <h3>{t('requestRevision')}</h3>
         <label>{t('revisionNotes')}<textarea name="notes" required maxLength={2000} rows={4} disabled={busy}/></label>
         <button type="submit" className="button primary" disabled={busy}>{t(busy ? 'working' : 'sendRevision')}</button>
       </form>
     )}
-    <p className="customer-field-help">{t('quoteDecisionHelp')}</p>
+    {!rfqId && <p className="customer-field-help">{t('quoteDecisionHelp')}</p>}
     {problem && <p role="alert" className="customer-feedback is-error">{problem}</p>}
     {notice && <p role="status" className="customer-feedback">{notice}</p>}
   </section>;

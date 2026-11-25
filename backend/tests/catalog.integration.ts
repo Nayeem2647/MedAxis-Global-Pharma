@@ -64,6 +64,40 @@ async function createProduct(sku?: string, slug?: string) {
   expect(response.status, JSON.stringify(response.body)).toBe(201);
   return response.body.data as { _id: string; translations: { en: { slug: string } } };
 }
+
+it('changes homepage visibility independently of catalog availability', async () => {
+  const toggle = (showOnHome: boolean, authenticated = true) => {
+    const call = request(app).patch(`/v1/admin/catalog/categories/${categoryId}/home-visibility`);
+    if (authenticated) call.set('Cookie', adminCookie);
+    return call.send({ show_on_home: showOnHome });
+  };
+  const home = (locale = 'en') => request(app).get(`/v1/public/categories?locale=${locale}&home=true`);
+  await createProduct();
+  expect((await home()).body.data.categories).toMatchObject([{ id: categoryId, product_count: 1 }]);
+  expect((await toggle(false, false)).status).toBe(401);
+
+  const hidden = await toggle(false);
+  expect(hidden.status, JSON.stringify(hidden.body)).toBe(200);
+  expect(hidden.body.data).toMatchObject({ show_on_home: false, is_active: true });
+  expect((await home()).body.data.categories).toEqual([]);
+  expect((await home('zh-CN')).body.data.categories).toEqual([]);
+  const directory = await request(app).get('/v1/public/categories');
+  expect(directory.body.data.categories).toMatchObject([{ id: categoryId }]);
+  const category = await request(app).get('/v1/public/categories/oncology');
+  expect(category.body.data.products).toMatchObject([{ sku: 'DEMO-001' }]);
+
+  const list = await request(app).get('/v1/admin/catalog/categories').set('Cookie', adminCookie);
+  expect(list.body.data).toMatchObject([{ _id: categoryId, show_on_home: false }]);
+  expect(fetcher).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({
+    body: expect.stringContaining('catalog'),
+  }));
+
+  expect((await toggle(true)).status).toBe(200);
+  expect((await home()).body.data.categories).toMatchObject([{ id: categoryId }]);
+  expect((await home('zh-CN')).body.data.categories).toMatchObject([{ id: categoryId, slug: 'oncology-zh' }]);
+  await CategoryModel.updateOne({ _id: categoryId }, { $set: { is_active: false } });
+  expect((await home()).body.data.categories).toEqual([]);
+});
 const csvHeaders =
   'sku,manufacturer_slug,generic_slug,category_slugs,brand_name_en,slug_en,strength,dosage_form,pack_size,packaging_unit,cold_chain_required,status';
 const csvLine = (sku: string, slug: string, manufacturer = 'maker') =>
@@ -161,6 +195,38 @@ afterAll(async () => {
 });
 
 describe('public/admin catalog, CMS and settings against MongoDB', () => {
+  it('shows featured homepage categories first and keeps sort order within each group', async () => {
+    const category = (slug: string, sort_order: number) => CategoryModel.create({
+      translations: { en: { name: slug, slug } }, sort_order,
+    });
+    const [featuredLater, featuredFirst, regular, hidden] = await Promise.all([
+      category('featured-later', 8),
+      category('featured-first', 5),
+      category('regular-category', 1),
+      category('hidden-featured', 2),
+    ]);
+    const settings = (id: string, changes: { home_featured?: boolean; show_on_home?: boolean }) =>
+      request(app).patch(`/v1/admin/catalog/categories/${id}/home-visibility`).set('Cookie', adminCookie).send(changes);
+    const ids = async (query: string) => {
+      const response = await request(app).get(`/v1/public/categories?${query}`);
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      return (response.body.data.categories as { id: string }[]).map(({ id }) => id);
+    };
+
+    expect((await settings(featuredLater._id, { home_featured: true })).status).toBe(200);
+    const pinned = await settings(featuredFirst._id, { home_featured: true });
+    expect(pinned.body.data).toMatchObject({ home_featured: true, is_active: true, sort_order: 5 });
+    expect((await settings(regular._id, { home_featured: false })).status).toBe(200);
+    expect((await settings(hidden._id, { home_featured: true, show_on_home: false })).status).toBe(200);
+    const expected = [featuredFirst._id, featuredLater._id, categoryId, regular._id];
+    expect(await ids('home=true&locale=en')).toEqual(expected);
+    expect(await ids('home=true&locale=zh-CN')).toEqual(expected);
+    expect(await ids('locale=en')).toEqual([categoryId, regular._id, hidden._id, featuredFirst._id, featuredLater._id]);
+
+    expect((await settings(featuredFirst._id, { home_featured: false })).status).toBe(200);
+    expect(await ids('home=true')).toEqual([featuredLater._id, categoryId, regular._id, featuredFirst._id]);
+  });
+
   it('saves long generic indications and Chinese descriptions, including public and admin reads', async () => {
     const indication = 'Owner supplied and verified medicine information. '.repeat(25).trim();
     const body = { translations: { en: { name: 'Osimertinib', slug: 'osimertinib' }, zhCN: { name: '奥希替尼', slug: 'osimertinib-zh', description: '管理员核实的中文说明。' } }, therapeutic_indications: [indication], is_active: true };

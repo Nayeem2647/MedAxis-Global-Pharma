@@ -140,7 +140,7 @@ export const readWorkflow = async (id: string, signal?: AbortSignal) =>
       { cache: "no-store", signal },
     )
   ).data;
-export const guestWorkflow = z.object({
+export const buyerWorkflow = z.object({
   rfq: z.object({
     id: z.uuidv4(),
     rfq_number: z.string(),
@@ -159,9 +159,9 @@ export const guestWorkflow = z.object({
   quote: adminVersionSchema.nullable(),
   history: z.array(adminVersionSchema),
   messages: z.array(offerMessage),
-  expires_at: z.iso.datetime({ offset: true }),
 });
-export type GuestWorkflow = z.infer<typeof guestWorkflow>;
+export const guestWorkflow = buyerWorkflow.extend({ expires_at: z.iso.datetime({ offset: true }) });
+export type BuyerWorkflow = z.infer<typeof buyerWorkflow>;
 export const readGuestWorkflow = async (token: string, signal?: AbortSignal) =>
   (
     await apiRequest(
