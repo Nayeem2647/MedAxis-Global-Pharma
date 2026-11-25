@@ -35,8 +35,11 @@ export default async function Home({ params }: Props) {
       <Hero locale={locale} banners={data.banners}/>
       <SourcingTiles locale={locale}/>
       <Categories locale={locale} categories={data.categories}/>
-      <section className="catalog-section" id="catalog"><div className="section site-container"><div className="centered-heading"><p className="eyebrow">{t('catalogKicker')}</p><h2>{t('catalogTitle')}</h2><p className="section-intro">{t('catalogDescription')}</p></div>
-        {data.products.length > 0 ? <div className="product-grid">{data.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}</div>
+      <section className="catalog-section" id="catalog"><div className="section site-container"><div className="centered-heading"><h2>{t('catalogTitle')}</h2><p className="section-intro">{t('catalogDescription')}</p></div>
+        {data.products.length > 0 ? <>
+          <div className="product-grid">{data.products.map((product) => <ProductCard key={product.id} product={product} locale={locale}/>)}</div>
+          <div className="catalog-view-all"><Link className="catalog-view-all-btn" href={`/${locale}/products`}>{t('viewAllProducts')}<ArrowRight size={17} aria-hidden="true"/></Link></div>
+        </>
           : <div className="catalog-empty"><Pill size={30}/><p>{t(data.catalogUnavailable ? 'catalogUnavailable' : 'catalogEmpty')}</p><QuoteButton className="button secondary">{t('request')}</QuoteButton></div>}
       </div></section>
       <section className="section site-container manufacturer-section" id="manufacturers"><div className="section-heading"><div><p className="eyebrow">{t('manufacturersKicker')}</p><h2>{t('manufacturersTitle')}</h2></div><p>{t('manufacturersDescription')}</p></div>{data.manufacturers.length > 0 ? <div className="manufacturer-grid">{data.manufacturers.map((manufacturer) => <div key={manufacturer.id}><Link href={catalogEntityPath(locale, 'manufacturers', manufacturer.alternate_slugs)}>{manufacturer.name}</Link><span>{t('manufacturerLabel')}</span></div>)}</div> : <QuoteButton className="text-button">{t('request')}</QuoteButton>}<p className="small muted">{t('manufacturerNote')}</p>
