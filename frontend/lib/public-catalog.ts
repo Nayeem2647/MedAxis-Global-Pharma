@@ -105,18 +105,27 @@ export async function getHomeData(locale: Locale) {
       ? { cache: 'no-store' }
       : { next: { revalidate: 3600, tags: ['catalog'] } };
   const [catalog, cms, catList] = await Promise.allSettled([
-    apiRequest(`/v1/public/products?locale=${locale}&page=1&limit=8`, homeProductsSchema, catalogFetch),
+    apiRequest(`/v1/public/products?locale=${locale}&page=1&limit=24`, homeProductsSchema, catalogFetch),
     apiRequest(`/v1/public/cms/banners?locale=${locale}`, bannersSchema, cmsFetchCache()),
     apiRequest(`/v1/public/categories?locale=${locale}&home=true`, publicCategoriesSchema, catalogFetch),
   ]);
-  const products = catalog.status === 'fulfilled' ? catalog.value.data.products : [];
+  const allProducts = catalog.status === 'fulfilled' ? catalog.value.data.products : [];
+  const products = allProducts.slice(0, 8);
+  const popularProducts = [...allProducts]
+    .sort((a, b) =>
+      (b.customer_rating?.count ?? 0) - (a.customer_rating?.count ?? 0)
+      || (b.customer_rating?.average ?? 0) - (a.customer_rating?.average ?? 0),
+    )
+    .slice(0, 15);
   const unique = (values: CatalogMaster[]) => [...new Map(values.map((item) => [item.id, item])).values()];
   const fetchedCategories = catList.status === 'fulfilled' ? catList.value.data.categories : [];
   return {
-    products, banners: cms.status === 'fulfilled' ? cms.value.data : [],
+    products,
+    popularProducts,
+    banners: cms.status === 'fulfilled' ? cms.value.data : [],
     categories: fetchedCategories,
-    manufacturers: unique(products.map((product) => product.manufacturer)),
-    generics: unique(products.map((product) => product.generic)),
+    manufacturers: unique(allProducts.map((product) => product.manufacturer)),
+    generics: unique(allProducts.map((product) => product.generic)),
     catalogUnavailable: catalog.status === 'rejected',
   };
 }

@@ -42,6 +42,11 @@ export default async function Home({ params }: Props) {
         </>
           : <div className="catalog-empty"><Pill size={30}/><p>{t(data.catalogUnavailable ? 'catalogUnavailable' : 'catalogEmpty')}</p><QuoteButton className="button secondary">{t('request')}</QuoteButton></div>}
       </div></section>
+      {data.popularProducts.length > 0 && (
+        <section className="popular-section" id="popular"><div className="section site-container"><div className="centered-heading"><h2>{t('popularTitle')}</h2><p className="section-intro">{t('popularDescription')}</p></div>
+          <div className="product-grid popular-grid">{data.popularProducts.slice(0, 15).map((product) => <ProductCard key={`popular-${product.id}`} product={product} locale={locale}/>)}</div>
+        </div></section>
+      )}
       <section className="section site-container manufacturer-section" id="manufacturers"><div className="section-heading"><div><p className="eyebrow">{t('manufacturersKicker')}</p><h2>{t('manufacturersTitle')}</h2></div><p>{t('manufacturersDescription')}</p></div>{data.manufacturers.length > 0 ? <div className="manufacturer-grid">{data.manufacturers.map((manufacturer) => <div key={manufacturer.id}><Link href={catalogEntityPath(locale, 'manufacturers', manufacturer.alternate_slugs)}>{manufacturer.name}</Link><span>{t('manufacturerLabel')}</span></div>)}</div> : <QuoteButton className="text-button">{t('request')}</QuoteButton>}<p className="small muted">{t('manufacturerNote')}</p>
         <div className="generic-section" id="generics"><h3>{t('genericTitle')}</h3><p className="muted">{t('genericDescription')}</p>{data.generics.length > 0 ? <ul className="generic-list">{data.generics.map((generic) => <li key={generic.id}><Link href={catalogEntityPath(locale, 'generics', generic.alternate_slugs)}>{generic.name}</Link></li>)}</ul> : <QuoteButton className="text-button">{t('request')}</QuoteButton>}</div>
       </section>

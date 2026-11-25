@@ -41,6 +41,18 @@
 .catalog-page .product-grid.is-list .product-card .add-product { width: 38px; height: auto; min-height: 36px; padding: 0; border: 1px solid #c8dce4; border-radius: 7px; background: #f2f8fa; color: #087a90; }
 .product-card .product-actions .add-product:hover:not(:disabled) { background: #e4f2f6; border-color: #087a90; }
 
+/* Popular Products cards show 5 per row with a smaller picture box. */
+.popular-section .product-card .product-media .product-image { aspect-ratio: 4 / 3; }
+.popular-section .product-card .product-body { padding: 10px 11px 11px; }
+.popular-section .product-card .product-body .product-manufacturer { margin-bottom: 2px; font-size: .72rem; }
+.popular-section .product-card .product-body h3 { margin-bottom: 5px; font-size: .875rem; }
+.popular-section .product-card .product-body .product-spec { gap: 4px; margin-bottom: 3px; font-size: .7rem; }
+.popular-section .product-card .product-spec > span { padding: 2px 5px; }
+.popular-section .product-card .customer-rating { margin-bottom: 5px; min-height: 24px; font-size: .75rem; }
+.popular-section .product-card .product-actions { grid-template-columns: minmax(0, 1fr) 34px; gap: 6px; padding-top: 8px; }
+.popular-section .product-card .product-actions .product-quote-button { min-height: 34px; padding: 6px 8px; gap: 5px; font-size: .75rem; }
+.popular-section .product-card .product-actions .add-product { width: 34px; min-height: 34px; }
+
 /* List cards keep the three-column layout and give the picture nearly half the card. */
 .catalog-page .product-grid.is-list .product-card { grid-template-columns: minmax(118px, .95fr) minmax(0, 1.05fr); }
 .catalog-page .product-grid.is-list .product-media .product-image { height: 100%; min-height: 270px; aspect-ratio: auto; padding: 0; border-bottom: 0; border-right: 1px solid #edf2f5; }
