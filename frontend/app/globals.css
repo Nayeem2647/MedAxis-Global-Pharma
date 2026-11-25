@@ -1831,11 +1831,29 @@ a.announcement-pill-content:hover strong {
   animation-play-state: paused;
 }
 
+.manufacturer-marquee.is-static {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.manufacturer-marquee.is-static .manufacturer-marquee-track {
+  animation: none;
+  width: 100%;
+  justify-content: center;
+}
+
+.manufacturer-marquee.is-static .manufacturer-marquee-group {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 28px 44px;
+  padding-right: 0;
+}
+
 .manufacturer-marquee-group {
   display: flex;
   align-items: center;
-  gap: 52px;
-  padding: 0 26px 0 0;
+  gap: 48px;
+  padding: 0 24px 0 0;
   margin: 0;
   list-style: none;
 }
@@ -1844,20 +1862,18 @@ a.announcement-pill-content:hover strong {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 156px;
-  height: 60px;
+  width: 190px;
+  height: 102px;
   padding: 6px 10px;
   text-decoration: none;
-  filter: grayscale(100%);
-  opacity: .72;
-  transition: filter .22s ease, opacity .22s ease, transform .22s ease;
+  opacity: .94;
+  transition: opacity .22s ease, transform .22s ease;
 }
 
 .manufacturer-logo-item:hover,
 .manufacturer-logo-item:focus-visible {
-  filter: grayscale(0%);
   opacity: 1;
-  transform: scale(1.05);
+  transform: scale(1.04);
 }
 
 .manufacturer-logo-item img {
@@ -5297,8 +5313,8 @@ dialog.drawer[open] {
   }
 
   .manufacturer-logo-item {
-    width: 126px;
-    height: 48px;
+    width: 148px;
+    height: 78px;
   }
 
   .product-image {
