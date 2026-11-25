@@ -121,6 +121,9 @@
 
 :root {
   color-scheme: light;
+  /* Standard vertical rhythm shared by every home page section. */
+  --section-space: 72px;
+  --section-heading-gap: 40px;
 }
 
 * {
@@ -1241,7 +1244,7 @@ a.announcement-pill-content:hover strong {
 }
 
 .sourcing-section {
-  padding-block: 46px;
+  padding-block: calc(var(--section-space) / 2);
 }
 
 .sourcing-grid {
@@ -1333,7 +1336,7 @@ a.announcement-pill-content:hover strong {
 }
 
 .section {
-  padding-block: 72px;
+  padding-block: var(--section-space);
 }
 
 .section-heading {
@@ -1371,7 +1374,7 @@ a.announcement-pill-content:hover strong {
 
 .centered-heading {
   max-width: 960px;
-  margin: 0 auto 37px;
+  margin: 0 auto var(--section-heading-gap);
   text-align: center;
 }
 
@@ -1389,7 +1392,7 @@ a.announcement-pill-content:hover strong {
 }
 
 .category-section {
-  padding-top: 25px;
+  padding-top: calc(var(--section-space) / 2);
   background: var(--color-surface);
 }
 
@@ -1625,7 +1628,7 @@ a.announcement-pill-content:hover strong {
 .catalog-view-all {
   display: flex;
   justify-content: center;
-  margin-top: 34px;
+  margin-top: var(--section-heading-gap);
 }
 
 .catalog-view-all-btn {
@@ -1804,11 +1807,7 @@ a.announcement-pill-content:hover strong {
 .manufacturer-marquee-section {
   background: var(--color-surface);
   border-top: 1px solid #e6eff3;
-  padding-block: 62px 70px;
-}
-
-.manufacturer-marquee-section .centered-heading {
-  margin-bottom: 34px;
+  padding-block: var(--section-space);
 }
 
 .manufacturer-marquee {
@@ -2223,7 +2222,7 @@ a.announcement-pill-content:hover strong {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 20px;
   padding: 0;
-  margin: 34px 0 36px;
+  margin: 0 0 var(--section-heading-gap);
   list-style: none;
 }
 
@@ -4996,6 +4995,11 @@ dialog.drawer[open] {
 }
 
 @media (max-width: 1000px) {
+  :root {
+    --section-space: 60px;
+    --section-heading-gap: 34px;
+  }
+
   .sourcing-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5210,10 +5214,6 @@ dialog.drawer[open] {
     opacity: .2;
   }
 
-  .sourcing-section {
-    padding-block: 30px;
-  }
-
   .sourcing-grid {
     gap: 12px;
   }
@@ -5246,16 +5246,9 @@ dialog.drawer[open] {
     gap: 5px;
   }
 
-  .section {
-    padding-block: 48px;
-  }
-
-  .category-section {
-    padding-top: 16px;
-  }
-
-  .centered-heading {
-    margin-bottom: 28px;
+  :root {
+    --section-space: 48px;
+    --section-heading-gap: 28px;
   }
 
   .centered-heading h2 {
@@ -5299,10 +5292,6 @@ dialog.drawer[open] {
 
   .review-author {
     flex-wrap: wrap;
-  }
-
-  .manufacturer-marquee-section {
-    padding-block: 44px 50px;
   }
 
   .manufacturer-marquee-group {
@@ -5364,7 +5353,6 @@ dialog.drawer[open] {
   .process-grid {
     grid-template-columns: 1fr;
     gap: 16px;
-    margin-block: 26px 28px;
   }
 
   .final-cta {
