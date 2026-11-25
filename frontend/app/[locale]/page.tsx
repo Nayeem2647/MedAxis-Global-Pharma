@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
-import { ArrowRight, Box, ClipboardList, FileCheck2, Pill } from 'lucide-react';
+import { ArrowRight, Pill } from 'lucide-react';
 import { isLocale } from '../../i18n/routing';
 import { buildLocalizedMetadata } from '../../lib/seo';
 import { getHomeData } from '../../lib/public-catalog';
@@ -11,6 +11,7 @@ import { SourcingTiles } from '../../components/home/SourcingTiles';
 import { Categories } from '../../components/home/Categories';
 import { CustomerReviews } from '../../components/home/CustomerReviews';
 import { ManufacturerMarquee } from '../../components/home/ManufacturerMarquee';
+import { QuotationWorkflow } from '../../components/home/QuotationWorkflow';
 import { ProductCard } from '../../components/home/ProductCard';
 import { QuoteButton } from '../../components/layout/PublicShell';
 
@@ -49,8 +50,7 @@ export default async function Home({ params }: Props) {
         </div></section>
       )}
       <CustomerReviews locale={locale}/>
-      <section className="section site-container process-section"><p className="eyebrow">MEDAXIS GLOBAL PHARMA</p><h2>{t('processTitle')}</h2><ol className="process-grid"><li><span>01</span><ClipboardList/><h3>{t('stepOneTitle')}</h3><p>{t('stepOneBody')}</p></li><li><span>02</span><FileCheck2/><h3>{t('stepTwoTitle')}</h3><p>{t('stepTwoBody')}</p></li><li><span>03</span><Box/><h3>{t('stepThreeTitle')}</h3><p>{t('stepThreeBody')}</p></li></ol></section>
-      <section className="site-container final-cta"><div><h2>{t('ctaTitle')}</h2><p>{t('ctaBody')}</p></div><QuoteButton>{t('request')}<ArrowRight size={18}/></QuoteButton></section>
+      <QuotationWorkflow locale={locale}/>
       <ManufacturerMarquee locale={locale} manufacturers={data.marqueeManufacturers}/>
     </main>
   );
