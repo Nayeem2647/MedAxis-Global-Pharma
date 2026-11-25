@@ -241,8 +241,8 @@ test('bilingual homepage, anchors and touch controls work from 320px through des
     await expect(page.locator('.product-card')).toHaveCount(2);
     await expect(page.locator('.sourcing-tile')).toHaveCount(4);
     await expect(page.locator('.category-card h3')).toHaveText(locale === 'en' ? 'Oncology' : '肿瘤科');
-    await expect(page.locator('.manufacturer-grid > div')).toHaveCount(1);
-    await expect(page.locator('.manufacturer-grid')).toContainText(locale === 'en' ? 'Beacon Pharmaceuticals PLC' : 'Beacon 制药');
+    await expect(page.locator('#trusted-manufacturers')).toBeVisible();
+    await expect(page.locator('#trusted-manufacturers .manufacturer-logo-item').first()).toHaveAttribute('title', locale === 'en' ? 'Beacon Pharmaceuticals PLC' : 'Beacon 制药');
     await expect(page.getByRole('searchbox', { name: locale === 'en' ? 'Search medicines' : '搜索药品' })).toHaveCount(1);
     for (const action of await page.locator('.header-quote, .add-product').all()) expect(await contrastRatio(action)).toBeGreaterThanOrEqual(4.5);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -264,7 +264,7 @@ test('bilingual homepage, anchors and touch controls work from 320px through des
     await page.getByRole('button', { name: locale === 'en' ? 'Toggle menu' : '展开或收起菜单', exact: true }).click();
     const navigation = page.getByRole('navigation', { name: locale === 'en' ? 'Mobile navigation' : '移动导航', exact: true });
     await expect(navigation).toBeVisible();
-    for (const anchor of ['catalog', 'manufacturers', 'generics', 'cold-chain']) {
+    for (const anchor of ['catalog', 'popular', 'reviews', 'cold-chain', 'trusted-manufacturers']) {
       await expect(page.locator(`#${anchor}`)).toHaveCount(1);
     }
     await navigation.getByRole('link', { name: locale === 'en' ? 'Products' : '产品', exact: true }).click();

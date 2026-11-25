@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { catalogEntityPath } from '../../lib/catalog-path';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Box, ClipboardList, FileCheck2, Pill, Snowflake, Truck } from 'lucide-react';
@@ -50,9 +49,6 @@ export default async function Home({ params }: Props) {
         </div></section>
       )}
       <CustomerReviews locale={locale}/>
-      <section className="section site-container manufacturer-section" id="manufacturers"><div className="section-heading"><div><p className="eyebrow">{t('manufacturersKicker')}</p><h2>{t('manufacturersTitle')}</h2></div><p>{t('manufacturersDescription')}</p></div>{data.manufacturers.length > 0 ? <div className="manufacturer-grid">{data.manufacturers.map((manufacturer) => <div key={manufacturer.id}><Link href={catalogEntityPath(locale, 'manufacturers', manufacturer.alternate_slugs)}>{manufacturer.name}</Link><span>{t('manufacturerLabel')}</span></div>)}</div> : <QuoteButton className="text-button">{t('request')}</QuoteButton>}<p className="small muted">{t('manufacturerNote')}</p>
-        <div className="generic-section" id="generics"><h3>{t('genericTitle')}</h3><p className="muted">{t('genericDescription')}</p>{data.generics.length > 0 ? <ul className="generic-list">{data.generics.map((generic) => <li key={generic.id}><Link href={catalogEntityPath(locale, 'generics', generic.alternate_slugs)}>{generic.name}</Link></li>)}</ul> : <QuoteButton className="text-button">{t('request')}</QuoteButton>}</div>
-      </section>
       <section className="services-section" id="cold-chain"><div className="site-container services-grid"><div><p className="eyebrow">{t('servicesKicker')}</p><h2>{t('servicesTitle')}</h2><p className="section-intro">{t('servicesDescription')}</p><QuoteButton className="button light">{t('request')}<ArrowRight size={18}/></QuoteButton></div><div className="service-list">
         <article><Snowflake/><div><h3>{t('temperatureTitle')}</h3><p>{t('temperatureBody')}</p></div></article><article><FileCheck2/><div><h3>{t('documentationTitle')}</h3><p>{t('documentationBody')}</p></div></article><article><Truck/><div><h3>{t('coordinationTitle')}</h3><p>{t('coordinationBody')}</p></div></article>
       </div></div></section>
