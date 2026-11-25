@@ -222,6 +222,8 @@
     "additionalProperties": false,
     "required": ["_id", "translations", "sort_order", "is_active", "created_at", "updated_at"],
     "properties": {
+      "show_on_home": { "bsonType": "bool" },
+      "home_featured": { "bsonType": "bool" },
       "deleted_at": { "bsonType": "date" },
       "logo_data_url": { "bsonType": "string", "maxLength": 262144 },
       "logo_object_key": { "bsonType": "string", "maxLength": 500, "pattern": "^products/(?:local|s3)/categories/[a-zA-Z0-9_-]+\\.(?:png|webp)$" },
@@ -506,6 +508,12 @@
         "maxLength": 40
       },
       "cold_chain_required": {
+        "bsonType": "bool"
+      },
+      "home_newly_launched": {
+        "bsonType": "bool"
+      },
+      "home_popular": {
         "bsonType": "bool"
       },
       "storage_condition": {

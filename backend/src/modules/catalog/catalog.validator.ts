@@ -138,9 +138,20 @@ export const catalogQuery = z
       .enum(['true', 'false'])
       .transform((value) => value === 'true')
       .optional(),
+    home_section: z.enum(['newly_launched', 'popular']).optional(),
   })
   .strict();
 export const localeQuery = z.object({ locale: z.enum(['en', 'zh-CN']).default('en') }).strict();
+export const categoryHomePatch = z.strictObject({
+  show_on_home: z.boolean().optional(),
+  home_featured: z.boolean().optional(),
+}).refine((body) => Object.keys(body).length > 0, 'At least one homepage setting is required.');
+export const productHomePatch = z.strictObject({
+  home_newly_launched: z.boolean().optional(),
+  home_popular: z.boolean().optional(),
+}).refine((body) => Object.keys(body).length > 0, 'At least one home section setting is required.');
+export type CategoryHomePatch = z.infer<typeof categoryHomePatch>;
+export type ProductHomePatch = z.infer<typeof productHomePatch>;
 export type CatalogQuery = z.infer<typeof catalogQuery>;
 export type ProductInput = z.infer<typeof productCreate>;
 export type ProductPatch = z.infer<typeof productPatch>;

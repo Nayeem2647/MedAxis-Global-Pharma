@@ -39,6 +39,8 @@ export const productAdminProjection = {
   pack_size: 1,
   packaging_unit: 1,
   cold_chain_required: 1,
+  home_newly_launched: 1,
+  home_popular: 1,
   storage_condition: 1,
   image_keys: 1,
   video_key: 1,
@@ -55,6 +57,8 @@ const masterProjection = {
   therapeutic_indications: 1,
   sort_order: 1,
   is_active: 1,
+  show_on_home: 1,
+  home_featured: 1,
   created_at: 1,
   updated_at: 1,
 } as const;
@@ -107,6 +111,8 @@ export function createAdminCatalogReads(imageBase?: string, legacyImageBase?: st
       country?: string;
       certifications?: string[];
       sort_order?: number;
+      show_on_home?: boolean;
+      home_featured?: boolean;
       logo_url?: string;
       product_count?: number;
       rfq_count?: number;

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Download, Eye, FileSpreadsheet, LoaderCircle, Pill, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, Download, Eye, FileSpreadsheet, Flame, LoaderCircle, Pill, Sparkles, X } from 'lucide-react';
 import { apiRequest } from '../../lib/api-client';
 import { productRecord, readResource, type ProductRecord } from '../../lib/admin-management';
 import { useAdminOperation } from '../../hooks/useAdminOperation';
@@ -66,6 +67,74 @@ export function ProductPublication({ product }: { product: ProductRecord }) {
     <AdminOperationFeedback state={state} />
     {state.blocked && <button type="button" className="admin-product-refresh" disabled={state.busy} onClick={() => void operation.refresh(refresh)}>Refresh status</button>}
   </div>;
+}
+
+export function ProductHomeSections({ product }: { product: ProductRecord }) {
+  const [row, setRow] = useState(product);
+  const router = useRouter();
+  const { operation, state } = useAdminOperation();
+  const newlyLaunched = row.home_newly_launched === true;
+  const popular = row.home_popular === true;
+  const name = row.translations.en.brand_name;
+  const archived = row.status === 'ARCHIVED';
+  const draft = row.status === 'DRAFT';
+
+  async function refresh() {
+    const next = await readResource('products', row.id);
+    if ('sku' in next) {
+      setRow(next);
+      router.refresh();
+    }
+  }
+
+  async function toggleSection(changes: { home_newly_launched?: boolean; home_popular?: boolean }) {
+    await operation.run(
+      async () =>
+        (
+          await apiRequest(`/v1/admin/catalog/products/${row.id}/home-sections`, productRecord, {
+            method: 'PATCH',
+            json: changes,
+            timeoutMs: 15_000,
+          })
+        ).data,
+      refresh,
+      (saved) => {
+        setRow(saved);
+        router.refresh();
+      },
+    );
+  }
+
+  return (
+    <div className="admin-product-home-sections">
+      <button
+        type="button"
+        className="button secondary admin-home-toggle"
+        aria-pressed={newlyLaunched}
+        aria-label={`Show ${name} in Newly Launched`}
+        title={archived ? 'Edit archived product to update homepage sections' : draft ? 'Visible in Newly Launched once published' : newlyLaunched ? 'Remove from Newly Launched section' : 'Show in Newly Launched section'}
+        disabled={state.busy || state.blocked || archived}
+        onClick={() => void toggleSection({ home_newly_launched: !newlyLaunched })}
+      >
+        <Sparkles size={13} aria-hidden="true" />
+        Newly
+      </button>
+      <button
+        type="button"
+        className="button secondary admin-home-toggle is-popular"
+        aria-pressed={popular}
+        aria-label={`Show ${name} in Popular Products`}
+        title={archived ? 'Edit archived product to update homepage sections' : draft ? 'Visible in Popular Products once published' : popular ? 'Remove from Popular Products section' : 'Show in Popular Products section'}
+        disabled={state.busy || state.blocked || archived}
+        onClick={() => void toggleSection({ home_popular: !popular })}
+      >
+        <Flame size={13} aria-hidden="true" />
+        Popular
+      </button>
+      <AdminOperationFeedback state={state} />
+      {state.blocked && <button type="button" className="admin-product-refresh" disabled={state.busy} onClick={() => void operation.refresh(refresh)}>Refresh status</button>}
+    </div>
+  );
 }
 
 export function ProductPreview({ product, image }: { product: ProductRecord; image: string | null }) {

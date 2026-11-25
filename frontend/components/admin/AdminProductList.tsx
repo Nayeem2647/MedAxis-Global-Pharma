@@ -9,7 +9,7 @@ import { AdminUnavailable } from './AdminFeedback';
 import { AdminLink } from './AdminShell';
 import { ManagementPagination, ManagementTable } from './ManagementTable';
 import { ProductListFilters, ProductListSearchProvider, ProductSearchInput } from './ProductListFilters';
-import { ProductListExport, ProductPreview, ProductPublication, ProductStatusFilter } from './ProductListControls';
+import { ProductHomeSections, ProductListExport, ProductPreview, ProductPublication, ProductStatusFilter } from './ProductListControls';
 
 const path = '/admin/catalog/products';
 
@@ -68,7 +68,7 @@ export async function AdminProductList({ query }: { query: Record<string, string
         </div>
       </div>
 
-      <ManagementTable label="products records" columns={['SL', 'Product Name', 'Medicine Details', 'Packaging', 'Cold Chain', 'Status', 'Action']}>
+      <ManagementTable label="products records" columns={['SL', 'Product Name', 'Medicine Details', 'Packaging', 'Cold Chain', 'Status', 'Home Sections', 'Action']}>
         {rows.map((row, index) => {
           const image = productImageUrl(row.image_keys[0]);
           return <tr key={row.id}>
@@ -92,6 +92,7 @@ export async function AdminProductList({ query }: { query: Record<string, string
               ? <span className="admin-product-cold"><Snowflake size={14} aria-hidden="true" />Required</span>
               : <span className="admin-product-standard">Standard</span>}</td>
             <td><ProductPublication product={row} /></td>
+            <td><ProductHomeSections product={row} /></td>
             <td>
               <div className="admin-product-actions">
                 <ProductPreview product={row} image={image} />

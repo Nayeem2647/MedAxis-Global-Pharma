@@ -204,6 +204,8 @@ export interface ICategory {
   };
   sort_order: number;
   is_active: boolean;
+  show_on_home?: boolean;
+  home_featured?: boolean;
   deleted_at?: Date;
   created_at: Date;
   updated_at: Date;
@@ -256,6 +258,8 @@ export const CategorySchema = new Schema<ICategory>(
       required: true,
     },
     sort_order: { type: Number, required: true, validate: Number.isSafeInteger, min: 0, default: 0 },
+    show_on_home: { type: Boolean },
+    home_featured: { type: Boolean },
     deleted_at: { type: Date },
     is_active: { type: Boolean, required: true, default: true },
   },
@@ -316,6 +320,8 @@ export interface IProduct {
   pack_size: string;
   packaging_unit: string;
   cold_chain_required: boolean;
+  home_newly_launched?: boolean;
+  home_popular?: boolean;
   storage_condition?: string;
   image_keys?: Array<string>;
   video_key?: string;
@@ -429,6 +435,8 @@ export const ProductSchema = new Schema<IProduct>(
     pack_size: { type: String, required: true, trim: true, maxlength: 100 },
     packaging_unit: { type: String, required: true, trim: true, maxlength: 40 },
     cold_chain_required: { type: Boolean, required: true, default: false },
+    home_newly_launched: { type: Boolean },
+    home_popular: { type: Boolean },
     storage_condition: { type: String, required: false, trim: true, maxlength: 200 },
     video_key: { type: String, maxlength: 500, match: /^products\/(?:local|s3)\/videos\/[a-zA-Z0-9_-]+\.(?:mp4|webm)$/ },
     seo_image_key: { type: String, maxlength: 500 },

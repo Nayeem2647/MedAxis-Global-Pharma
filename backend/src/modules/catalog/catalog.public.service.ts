@@ -89,6 +89,15 @@ export function createPublicCatalogService(env: AppEnv) {
 
   async function list(query: CatalogQuery, extra: Record<string, unknown> = {}) {
     const match: Record<string, unknown> = { ...(await filters(query)), ...extra, status: 'PUBLISHED', deleted_at: { $exists: false } };
+    if (query.home_section === 'newly_launched') {
+      if (await ProductModel.exists({ status: 'PUBLISHED', deleted_at: { $exists: false }, home_newly_launched: { $type: 'bool' } })) {
+        match.home_newly_launched = true;
+      }
+    } else if (query.home_section === 'popular') {
+      if (await ProductModel.exists({ status: 'PUBLISHED', deleted_at: { $exists: false }, home_popular: { $type: 'bool' } })) {
+        match.home_popular = true;
+      }
+    }
     const prefix: PipelineStage[] = [];
     if (query.q) {
       if (env.isProduction)
@@ -140,7 +149,12 @@ export function createPublicCatalogService(env: AppEnv) {
       ...joins(),
       {
         $facet: {
-          products: [{ $sort: { sku: 1, _id: 1 } }, { $skip: (query.page - 1) * query.limit }, { $limit: query.limit }, ...ratingJoins()],
+          products: [
+            { $sort: query.home_section === 'newly_launched' ? { updated_at: -1, _id: -1 } : { sku: 1, _id: 1 } },
+            { $skip: (query.page - 1) * query.limit },
+            { $limit: query.limit },
+            ...ratingJoins(),
+          ],
           total: [{ $count: 'count' }],
           dosage: [{ $group: { _id: '$dosage_form', count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
           cold: [{ $group: { _id: '$cold_chain_required', count: { $sum: 1 } } }, { $sort: { _id: 1 } }],

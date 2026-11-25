@@ -8510,6 +8510,44 @@ details[open] .blog-card-expand-icon {
   color: #005b6d;
 }
 
+.admin-product-home-sections {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 156px;
+}
+
+.admin-product-home-sections .admin-feedback {
+  flex-basis: 100%;
+  max-width: 220px;
+  margin: 4px 0 0;
+  padding: 8px;
+  font-size: .7rem;
+}
+
+.admin-home-toggle.button {
+  min-height: 31px;
+  padding: 4px 9px;
+  gap: 5px;
+  font-size: .74rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 7px;
+}
+
+.admin-home-toggle[aria-pressed="true"] {
+  background: #dff4f8;
+  border-color: #087a90;
+  color: #065a6b;
+}
+
+.admin-home-toggle.is-popular[aria-pressed="true"] {
+  background: #fff3dc;
+  border-color: #c98114;
+  color: #8f5705;
+}
+
 .admin-product-action {
   display: inline-flex;
   align-items: center;

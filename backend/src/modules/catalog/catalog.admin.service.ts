@@ -5,6 +5,7 @@ import { fileTypeFromBuffer } from 'file-type';
 import { AppError } from '../../shared/errors/AppError.js';
 import { writeAuditLog } from '../../shared/middleware/auditLogger.js';
 import type { Revalidate } from '../../shared/utils/revalidate.js';
+import validators from '../../shared/persistence/validators.js';
 import { UrlRedirectModel } from '../cms/cms.schema.js';
 import { PlatformSettingModel } from '../settings/settings.schema.js';
 import { publicImageBaseUrl, type StorageService } from '../storage/storage.service.js';
@@ -15,6 +16,8 @@ import { catalogPath } from './catalog.public.service.js';
 import {
   productCreate,
   masterBodies,
+  type CategoryHomePatch,
+  type ProductHomePatch,
   type ProductInput,
   type ProductPatch,
   type MasterKind,
@@ -310,6 +313,66 @@ export function createAdminCatalogService(
     revalidate(req.requestId);
     return result.record;
   }
+
+  async function setCategoryHomeSettings(req: Request, id: string, changes: CategoryHomePatch) {
+    const category = await mongoose.connection.transaction(async (session) => {
+      const saved = await CategoryModel.findOneAndUpdate(
+        { _id: id, deleted_at: { $exists: false } },
+        { $set: changes },
+        { returnDocument: 'after', session },
+      ).lean();
+      if (!saved) throw AppError.notFound();
+      await writeAuditLog(req, {
+        actor_type: 'SUPER_ADMIN',
+        actor_id: req.admin!.id,
+        action: 'CATALOG_MASTER_SAVED',
+        entity_type: 'categories',
+        entity_id: id,
+        metadata: { fields: Object.keys(changes), ...changes },
+      }, session);
+      return saved;
+    });
+    revalidate(req.requestId);
+    return category;
+  }
+
+  async function setProductHomeSettings(req: Request, id: string, changes: ProductHomePatch) {
+    const runUpdate = () =>
+      mongoose.connection.transaction(async (session) => {
+        const saved = await ProductModel.findOneAndUpdate(
+          { _id: id, deleted_at: { $exists: false } },
+          { $set: changes },
+          { returnDocument: 'after', session },
+        ).lean();
+        if (!saved) throw AppError.notFound();
+        await writeAuditLog(req, {
+          actor_type: 'SUPER_ADMIN',
+          actor_id: req.admin!.id,
+          action: 'PRODUCT_SAVED',
+          entity_type: 'products',
+          entity_id: id,
+          metadata: { fields: Object.keys(changes), ...changes },
+        }, session);
+        return saved;
+      });
+    let product;
+    try {
+      product = await runUpdate();
+    } catch (error) {
+      if (!(error instanceof mongoose.mongo.MongoServerError) || error.code !== 121 || !mongoose.connection.db) throw error;
+      // Sync the live strict collection validator if deploy ran before `npm run migrate`.
+      await mongoose.connection.db.command({
+        collMod: 'products',
+        validator: { $jsonSchema: validators.products },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      });
+      product = await runUpdate();
+    }
+    revalidate(req.requestId);
+    return product;
+  }
+
   async function deleteRecord(req: Request, kind: 'products' | MasterKind, id: string, expectedUpdatedAt: string) {
     const result = await mongoose.connection.transaction(async (session) => {
       const previous = kind === 'products'
@@ -337,7 +400,7 @@ export function createAdminCatalogService(
     revalidate(req.requestId);
     return result;
   }
-  return { persistProduct, saveProduct, saveMaster, deleteRecord, uploadVideo: storage.uploadPublicVideo };
+  return { persistProduct, saveProduct, saveMaster, setCategoryHomeSettings, setProductHomeSettings, deleteRecord, uploadVideo: storage.uploadPublicVideo };
 }
 
 function pickProduct(record: IProduct): ProductInput {

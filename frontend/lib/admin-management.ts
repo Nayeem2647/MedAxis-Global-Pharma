@@ -175,6 +175,8 @@ export const productRecord = z
     ...productBody.shape,
     image_keys: productBody.shape.image_keys.default([]),
     review_metadata: reviewSchema.optional(),
+    home_newly_launched: z.boolean().optional(),
+    home_popular: z.boolean().optional(),
   })
   .transform(({ _id, ...value }) => ({ id: _id, ...value }));
 export const masterRecord = z
@@ -186,6 +188,8 @@ export const masterRecord = z
     }),
     is_active: z.boolean(),
     country: z.string().length(2).optional(),
+    show_on_home: z.boolean().optional(),
+    home_featured: z.boolean().optional(),
     logo_data_url: z.union([manufacturerLogo, z.url().refine((value) => publicAssetUrl(value) !== null)]).optional(),
     logo_url: z.url().refine((value) => publicAssetUrl(value) !== null).optional(),
     product_count: z.number().int().nonnegative().optional(),

@@ -21,6 +21,7 @@ import {
   categoryHomePatch,
   localeQuery,
   productCreate,
+  productHomePatch,
   productPatch,
   slug,
   uuid,
@@ -142,6 +143,11 @@ export function createAdminCatalogRouter(env: AppEnv, revalidate: Revalidate, st
   });
   router.patch('/products/:id', async (req, res) => {
     sendSuccess(res, await service.saveProduct(req, productPatch.parse(req.body), uuid.parse(req.params.id)));
+  });
+  router.patch('/products/:id/home-sections', async (req, res) => {
+    z.object({}).strict().parse(req.query);
+    const input = productHomePatch.parse(req.body);
+    sendSuccess(res, await service.setProductHomeSettings(req, uuid.parse(req.params.id), input));
   });
   router.patch('/categories/:id/home-visibility', async (req, res) => {
     z.object({}).strict().parse(req.query);
