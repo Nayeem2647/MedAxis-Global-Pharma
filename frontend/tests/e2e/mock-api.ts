@@ -214,6 +214,28 @@ createServer(async (req, res) => {
       return;
     }
     if(path==='auth/2fa/enroll'){state.others=false;success(res,{qr_data_url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',backup_codes:Array.from({length:8},(_,i)=>'BACKUP-ONCE-'+i)});return;}
+    const homeVisibility = req.method === 'PATCH' ? /^catalog\/categories\/([a-f0-9-]+)\/home-visibility$/.exec(path) : null;
+    if (homeVisibility) {
+      const category = mg.resources.categories!.find((row) => row._id === homeVisibility[1] && !row.deleted_at);
+      if (!category) { quoteError(res, 404, 'RESOURCE_NOT_FOUND'); return; }
+      mg.writes.push({ path, body: input });
+      if (typeof mgBody.show_on_home === 'boolean') category.show_on_home = mgBody.show_on_home;
+      if (typeof mgBody.home_featured === 'boolean') category.home_featured = mgBody.home_featured;
+      category.updated_at = new Date().toISOString();
+      success(res, category);
+      return;
+    }
+    const homeSections = req.method === 'PATCH' ? /^catalog\/products\/([a-f0-9-]+)\/home-sections$/.exec(path) : null;
+    if (homeSections) {
+      const item = mg.resources.products!.find((row) => row._id === homeSections[1] && !row.deleted_at);
+      if (!item) { quoteError(res, 404, 'RESOURCE_NOT_FOUND'); return; }
+      mg.writes.push({ path, body: input });
+      if (typeof mgBody.home_newly_launched === 'boolean') item.home_newly_launched = mgBody.home_newly_launched;
+      if (typeof mgBody.home_popular === 'boolean') item.home_popular = mgBody.home_popular;
+      item.updated_at = new Date().toISOString();
+      success(res, item);
+      return;
+    }
     const resource=/^(?:catalog|cms)\/(products|manufacturers|generics|categories|banners)(?:\/([a-f0-9-]+))?$/.exec(path);
     if(resource && !(state.scenario.startsWith('workflow')&&path==='catalog/products'&&req.method==='POST')) {
       const kind=resource[1]!; const records=mg.resources[kind]!; const id=resource[2];
@@ -416,6 +438,11 @@ createServer(async (req, res) => {
   const chinese = url.searchParams.get('locale') === 'zh-CN';
   const page = Number(url.searchParams.get('page') ?? 1);
   const limit = Number(url.searchParams.get('limit') ?? 20);
+  if (url.pathname === '/v1/public/categories') {
+    const category = products(chinese)[0]!.categories[0]!;
+    success(res, { categories: [{ ...category, product_count: products(chinese).length }] });
+    return;
+  }
   const match = /^\/v1\/public\/(products|generics|manufacturers|categories)(?:\/([^/]+))?$/.exec(url.pathname);
   const query = url.searchParams.get('q') ?? '';
   if (match && (!match[2] || match[1] !== 'products')) {

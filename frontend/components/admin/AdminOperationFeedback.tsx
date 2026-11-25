@@ -13,3 +13,20 @@ export function AdminOperationFeedback({ state }: { state: OperationState }) {
     </>}
   </>;
 }
+
+export function InlineStatusNotice({ state, onRetry }: { state: OperationState; onRetry?(): void }) {
+  if (state.notice.startsWith('Saved.')) {
+    return <p className="admin-inline-status is-success" role="status">Status updated</p>;
+  }
+  if (state.problem) {
+    return (
+      <p className="admin-inline-status is-error" role="alert">
+        Update failed
+        {state.blocked && onRetry && (
+          <> · <button type="button" className="admin-product-refresh" disabled={state.busy} onClick={onRetry}>Retry</button></>
+        )}
+      </p>
+    );
+  }
+  return null;
+}

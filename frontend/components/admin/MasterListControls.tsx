@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Building2, ChevronDown, Download, Eye, FileSpreadsheet, Layers, LoaderCircle, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Building2, ChevronDown, Download, Eye, FileSpreadsheet, Layers, LoaderCircle, Pin, X } from 'lucide-react';
 import { apiRequest } from '../../lib/api-client';
 import {
   manufacturerBody,
   genericBody,
-  categoryBody,
   masterLabels,
   type MasterDirectoryKind,
   masterRecord,
@@ -14,7 +14,7 @@ import {
   type MasterRecord,
 } from '../../lib/admin-management';
 import { useAdminOperation } from '../../hooks/useAdminOperation';
-import { AdminOperationFeedback } from './AdminOperationFeedback';
+import { InlineStatusNotice } from './AdminOperationFeedback';
 import { CatalogImage } from '../catalog/CatalogImage';
 
 export type { MasterDirectoryKind } from '../../lib/admin-management';
@@ -130,9 +130,21 @@ export function MasterListExport({ rows: records, kind }: { rows: MasterRecord[]
 
 export function MasterStatusSwitch({ record, kind }: { record: MasterRecord; kind: MasterDirectoryKind }) {
   const [row, setRow] = useState(record);
+  const router = useRouter();
   const ready = useClientReady();
   const path = `/v1/admin/catalog/${kind}`;
   const { operation, state } = useAdminOperation();
+  const category = kind === 'categories';
+  const checked = row.is_active && (!category || row.show_on_home !== false);
+  const featured = row.home_featured === true;
+  const inactiveCategory = category && !row.is_active;
+  const disabled = !ready || state.busy || state.blocked || inactiveCategory;
+  const name = row.translations.en.name;
+  const title = category
+    ? inactiveCategory
+      ? 'Activate this category in its editor to show it on the homepage'
+      : `${checked ? 'Hide from' : 'Show on'} the homepage`
+    : `${checked ? 'Deactivate' : 'Activate'} ${masterLabels[kind].toLowerCase()}`;
 
   async function refresh() {
     const next = (await apiRequest(`${path}/${row.id}`, masterRecord)).data;
@@ -142,23 +154,24 @@ export function MasterStatusSwitch({ record, kind }: { record: MasterRecord; kin
       product_count: current.product_count,
       rfq_count: current.rfq_count,
     }));
+    if (category) router.refresh();
   }
 
-  async function toggle() {
-    const payload = validatedInput(kind === 'manufacturers' ? manufacturerBody : kind === 'categories' ? categoryBody : genericBody, {
+  async function saveHomeOrCatalogStatus(homeSetting?: { show_on_home: boolean } | { home_featured: boolean }) {
+    const payload = homeSetting ?? validatedInput(kind === 'manufacturers' ? manufacturerBody : genericBody, {
       id: row.id,
       translations: row.translations,
-      is_active: !row.is_active,
+      is_active: !checked,
       ...(kind === 'manufacturers' ? {
         ...(row.country ? { country: row.country } : {}),
         ...(row.certifications ? { certifications: row.certifications } : {}),
-      } : kind === 'categories' ? { sort_order: row.sort_order ?? 0 } : { ...(row.therapeutic_indications ? { therapeutic_indications: row.therapeutic_indications } : {}) }),
+      } : { ...(row.therapeutic_indications ? { therapeutic_indications: row.therapeutic_indications } : {}) }),
     });
     await operation.run(
       async () =>
         (
-          await apiRequest(path, masterRecord, {
-            method: 'POST',
+          await apiRequest(category ? `${path}/${row.id}/home-visibility` : path, masterRecord, {
+            method: category ? 'PATCH' : 'POST',
             json: payload,
             timeoutMs: 15_000,
           })
@@ -180,25 +193,29 @@ export function MasterStatusSwitch({ record, kind }: { record: MasterRecord; kin
         type="button"
         role="switch"
         className="admin-product-switch"
-        aria-checked={row.is_active}
-        aria-label={`Set ${row.translations.en.name} active status`}
-        disabled={!ready || state.busy || state.blocked}
-        title={`${row.is_active ? 'Deactivate' : 'Activate'} ${masterLabels[kind].toLowerCase()}`}
-        onClick={() => void toggle()}
+        aria-checked={checked}
+        aria-label={category ? `Show ${name} on homepage` : `Set ${name} active status`}
+        disabled={disabled}
+        title={title}
+        onClick={() => void saveHomeOrCatalogStatus(category ? { show_on_home: !checked } : undefined)}
       >
         <span>{state.busy && <LoaderCircle size={12} aria-hidden="true" />}</span>
       </button>
-      <AdminOperationFeedback state={state} />
-      {state.blocked && (
+      {category && (
         <button
           type="button"
-          className="admin-product-refresh"
-          disabled={state.busy}
-          onClick={() => void operation.refresh(refresh)}
+          className="button secondary admin-category-priority"
+          aria-pressed={featured}
+          aria-label={`Show ${name} first on homepage`}
+          title={checked ? 'Show in the first group. Lower Sort order values appear earlier.' : 'Turn on homepage visibility to feature this category.'}
+          disabled={disabled || !checked}
+          onClick={() => void saveHomeOrCatalogStatus({ home_featured: !featured })}
         >
-          Refresh status
+          <Pin size={14} fill={featured ? 'currentColor' : 'none'} aria-hidden="true" />
+          Show first
         </button>
       )}
+      <InlineStatusNotice state={state} onRetry={() => void operation.refresh(refresh)} />
     </div>
   );
 }

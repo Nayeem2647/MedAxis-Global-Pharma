@@ -6,7 +6,7 @@ import { ChevronDown, Download, Eye, FileSpreadsheet, Flame, LoaderCircle, Pill,
 import { apiRequest } from '../../lib/api-client';
 import { productRecord, readResource, type ProductRecord } from '../../lib/admin-management';
 import { useAdminOperation } from '../../hooks/useAdminOperation';
-import { AdminOperationFeedback } from './AdminOperationFeedback';
+import { InlineStatusNotice } from './AdminOperationFeedback';
 import { CatalogImage } from '../catalog/CatalogImage';
 
 export function ProductStatusFilter({ value }: { value: string }) {
@@ -64,8 +64,7 @@ export function ProductPublication({ product }: { product: ProductRecord }) {
   return <div className="admin-product-publication">
     <button type="button" role="switch" className="admin-product-switch" aria-checked={published} aria-label={`Publish ${row.translations.en.brand_name}`} disabled={state.busy || state.blocked || row.status === 'ARCHIVED'} title={row.status === 'ARCHIVED' ? 'Edit this archived product to publish it again' : published ? 'Move to draft' : 'Publish product'} onClick={() => void toggle()}><span>{state.busy && <LoaderCircle size={12} aria-hidden="true" />}</span></button>
     <span className={`admin-product-status is-${row.status.toLowerCase()}`}>{row.status}</span>
-    <AdminOperationFeedback state={state} />
-    {state.blocked && <button type="button" className="admin-product-refresh" disabled={state.busy} onClick={() => void operation.refresh(refresh)}>Refresh status</button>}
+    <InlineStatusNotice state={state} onRetry={() => void operation.refresh(refresh)} />
   </div>;
 }
 
@@ -131,8 +130,7 @@ export function ProductHomeSections({ product }: { product: ProductRecord }) {
         <Flame size={13} aria-hidden="true" />
         Popular
       </button>
-      <AdminOperationFeedback state={state} />
-      {state.blocked && <button type="button" className="admin-product-refresh" disabled={state.busy} onClick={() => void operation.refresh(refresh)}>Refresh status</button>}
+      <InlineStatusNotice state={state} onRetry={() => void operation.refresh(refresh)} />
     </div>
   );
 }

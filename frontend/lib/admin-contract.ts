@@ -114,6 +114,8 @@ export function adminProxyRule(path: string, method: string): AdminProxyRule | n
   if (/^catalog\/(?:manufacturers|generics|categories)$/.test(path) && method === 'GET') return json(['page','limit','q','is_active']);
   if (new RegExp(`^catalog/(?:products|manufacturers|generics|categories)/${uuid}$`).test(path) && method === 'GET') return json();
   if (new RegExp(`^catalog/(?:products|manufacturers|generics|categories)/${uuid}$`).test(path) && method === 'DELETE') return json();
+  if (new RegExp(`^catalog/categories/${uuid}/home-visibility$`).test(path) && method === 'PATCH') return json();
+  if (new RegExp(`^catalog/products/${uuid}/home-sections$`).test(path) && method === 'PATCH') return json();
   if (path === 'cms/banners' && method === 'GET') return json(['page','limit','q','is_active','placement']);
   if (new RegExp(`^cms/banners/${uuid}$`).test(path) && method === 'GET') return json();
   if (new RegExp(`^cms/banners/${uuid}$`).test(path) && method === 'DELETE') return json();

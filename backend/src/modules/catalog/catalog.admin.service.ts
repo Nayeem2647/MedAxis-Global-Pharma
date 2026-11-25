@@ -10,7 +10,7 @@ import { UrlRedirectModel } from '../cms/cms.schema.js';
 import { PlatformSettingModel } from '../settings/settings.schema.js';
 import { publicImageBaseUrl, type StorageService } from '../storage/storage.service.js';
 import { CategoryModel, GenericModel, ManufacturerModel, ProductModel, type IProduct } from './catalog.schema.js';
-import { manufacturerLogoResponse } from './catalog.admin.reads.js';
+import { manufacturerLogoResponse, productAdminProjection } from './catalog.admin.reads.js';
 import { masterModel } from './catalog.dto.js';
 import { catalogPath } from './catalog.public.service.js';
 import {
@@ -343,7 +343,9 @@ export function createAdminCatalogService(
           { _id: id, deleted_at: { $exists: false } },
           { $set: changes },
           { returnDocument: 'after', session },
-        ).lean();
+        )
+          .select(productAdminProjection)
+          .lean();
         if (!saved) throw AppError.notFound();
         await writeAuditLog(req, {
           actor_type: 'SUPER_ADMIN',
@@ -359,7 +361,8 @@ export function createAdminCatalogService(
     try {
       product = await runUpdate();
     } catch (error) {
-      if (!(error instanceof mongoose.mongo.MongoServerError) || error.code !== 121 || !mongoose.connection.db) throw error;
+      const validationError = typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 121;
+      if (!validationError || !mongoose.connection.db) throw error;
       // Sync the live strict collection validator if deploy ran before `npm run migrate`.
       await mongoose.connection.db.command({
         collMod: 'products',

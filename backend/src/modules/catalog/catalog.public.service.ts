@@ -90,13 +90,9 @@ export function createPublicCatalogService(env: AppEnv) {
   async function list(query: CatalogQuery, extra: Record<string, unknown> = {}) {
     const match: Record<string, unknown> = { ...(await filters(query)), ...extra, status: 'PUBLISHED', deleted_at: { $exists: false } };
     if (query.home_section === 'newly_launched') {
-      if (await ProductModel.exists({ status: 'PUBLISHED', deleted_at: { $exists: false }, home_newly_launched: { $type: 'bool' } })) {
-        match.home_newly_launched = true;
-      }
+      match.home_newly_launched = true;
     } else if (query.home_section === 'popular') {
-      if (await ProductModel.exists({ status: 'PUBLISHED', deleted_at: { $exists: false }, home_popular: { $type: 'bool' } })) {
-        match.home_popular = true;
-      }
+      match.home_popular = true;
     }
     const prefix: PipelineStage[] = [];
     if (query.q) {

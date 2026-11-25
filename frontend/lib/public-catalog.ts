@@ -113,7 +113,7 @@ export async function getHomeData(locale: Locale) {
     apiRequest(`/v1/public/manufacturers?locale=${locale}`, publicManufacturersSchema, catalogFetch),
   ]);
   const products = newlyCatalog.status === 'fulfilled' ? newlyCatalog.value.data.products.slice(0, 8) : [];
-  const rawPopular = popularCatalog.status === 'fulfilled' ? popularCatalog.value.data.products : products;
+  const rawPopular = popularCatalog.status === 'fulfilled' ? popularCatalog.value.data.products : [];
   const popularProducts = [...rawPopular]
     .sort((a, b) =>
       (b.customer_rating?.count ?? 0) - (a.customer_rating?.count ?? 0)
