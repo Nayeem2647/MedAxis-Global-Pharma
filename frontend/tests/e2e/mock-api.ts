@@ -289,7 +289,7 @@ createServer(async (req, res) => {
       success(res,{object_key:key,url:'https://cdn.medaxisglobalpharma.com/'+key,mime_type:'video/webm',file_size_bytes:file.size});return;
     }
     if(path==='catalog/import-csv'){const file=multipart?.get('file');if(!(file instanceof File)){quoteError(res,422,'VALIDATION_FAILED');return;}const raw=await file.text();const hash=createHash('sha256').update(raw).digest('hex');const dry=url.searchParams.get('dry_run')==='true';const valid=!raw.includes('invalid-row');if(!dry&&mg.dryHash!==hash){quoteError(res,422,'VALIDATION_FAILED');return;}mg.writes.push({path,body:{dry_run:dry,hash}});if(dry&&valid)mg.dryHash=hash;if(!dry&&valid)mg.commits++;if(!dry&&state.scenario.includes('import-loss')){loseQuotationResponse(res);return;}res.statusCode=dry?200:202;success(res,{dry_run:dry,valid,total_rows:1,valid_rows:valid?1:0,committed:!dry&&valid?1:0,rows:[{row:2,sku:'CSV-FIXTURE',valid,errors:valid?[]:[{field:'manufacturer_slug',issue:'Master not found.'}]}]});return;}
-    if(path==='settings'&&!state.scenario.includes('config-down')){if(req.method==='PATCH'){mg.writes.push({path,body:input});for(const [key,value]of Object.entries(mgBody))mg.settings[key]={value,updated_at:new Date().toISOString()};}success(res,mg.settings);return;}
+    if(path==='settings'&&!state.scenario.includes('config-down')){if(req.method==='PATCH'){mg.writes.push({path,body:input});for(const [key,value]of Object.entries(mgBody))mg.settings[key]={value,updated_at:new Date().toISOString()};}success(res,{...mg.settings,supply_network_country_codes:['CN','GB','US']});return;}
     if(path==='fx-rates'&&req.method==='PATCH'){mg.writes.push({path,body:input});success(res,fixtureFx());return;}
     if(path==='customers'||path.startsWith('customers/')){const customer={_id:workflowIds.manufacturer,full_name:'Customer profile fixture',customer_type:'B2B_WHOLESALE',company_name:'Verified buyer',email:'customer@fixture.example',preferred_locale:'zh-CN',country:'CN',city:'Shanghai',created_at:timestamp,updated_at:timestamp};if(path==='customers')success(res,[customer],Number(url.searchParams.get('page')??1),20,1);else success(res,{customer,history:[{_id:workflowIds.rfq,rfq_number:'RFQ-WORKFLOW-001',inquiry_type:'CART_RFQ',status:'SUBMITTED',created_at:timestamp,quotations:[]}]},Number(url.searchParams.get('page')??1),20,1);return;}
     if(path==='audit-logs'){success(res,[{id:workflowIds.prescription,actor_type:'SUPER_ADMIN',actor_id:state.id,action:'PRODUCT_SAVED',entity_type:'products',entity_id:workflowIds.rfq,request_id:meta.request_id,metadata:{status:'DRAFT',medical_secret:'NEVER_RENDER_AUDIT_SECRET'},created_at:timestamp}],1,20,1);return;}
@@ -438,6 +438,21 @@ createServer(async (req, res) => {
   const chinese = url.searchParams.get('locale') === 'zh-CN';
   const page = Number(url.searchParams.get('page') ?? 1);
   const limit = Number(url.searchParams.get('limit') ?? 20);
+  if (url.pathname === '/v1/public/supply-network') {
+    const admin = [...admins.values()].find(({ scenario }) => scenario === 'supply-network');
+    const setting = admin ? management.get(admin.id)?.settings.supply_network as { value: { countries: string[] } } | undefined : undefined;
+    const points = [
+      { country: 'CN', latitude: 35.9, longitude: 104.2 },
+      { country: 'GB', latitude: 54.5, longitude: -3.4 },
+      { country: 'US', latitude: 38.3, longitude: -99.8 },
+    ];
+    success(res, { destinations: points.filter(({ country }) => setting?.value.countries.includes(country)) });
+    return;
+  }
+  if (url.pathname === '/v1/public/manufacturers') {
+    success(res, { manufacturers: [products(chinese)[0]!.manufacturer] });
+    return;
+  }
   if (url.pathname === '/v1/public/categories') {
     const category = products(chinese)[0]!.categories[0]!;
     success(res, { categories: [{ ...category, product_count: products(chinese).length }] });
@@ -445,8 +460,9 @@ createServer(async (req, res) => {
   }
   const match = /^\/v1\/public\/(products|generics|manufacturers|categories)(?:\/([^/]+))?$/.exec(url.pathname);
   const query = url.searchParams.get('q') ?? '';
+  const initial = url.searchParams.get('initial');
   if (match && (!match[2] || match[1] !== 'products')) {
-    const allowed = new Set(['page', 'limit', 'locale', 'q', 'manufacturer', 'generic', 'category', 'dosage_form', 'cold_chain']);
+    const allowed = new Set(['page', 'limit', 'locale', 'q', 'initial', 'manufacturer', 'generic', 'category', 'dosage_form', 'cold_chain']);
     if ([...url.searchParams.keys()].some((key) => !allowed.has(key)) || page < 1 || limit < 1 || limit > 100) {
       res.writeHead(400); res.end(JSON.stringify({ success: false, error: { status: 400, code: 'INVALID_REQUEST', message: 'Unsupported query.' }, meta })); return;
     }
@@ -463,6 +479,7 @@ createServer(async (req, res) => {
   const detailPreviewFixture = url.pathname.includes('/detail-preview-') || ['generic', 'category'].some((key) => url.searchParams.get(key)?.startsWith('detail-preview-'));
   const all = detailPreviewFixture ? detailPreviewProducts(chinese) : comparisonFixture ? [...baseProducts, ...extras] : baseProducts;
   let rows = all.filter((product) => comparisonFixture || !query || `${product.brand_name} ${product.generic.name}`.toLowerCase().includes(query.toLowerCase()));
+  if (initial) rows = rows.filter((product) => product.brand_name.toUpperCase().startsWith(initial.toUpperCase()));
   for (const key of ['manufacturer', 'generic', 'category'] as const) {
     const slug = url.searchParams.get(key);
     if (slug) rows = rows.filter((product) => key === 'category' ? product.categories.some((category) => category.slug === slug) : product[key].slug === slug);

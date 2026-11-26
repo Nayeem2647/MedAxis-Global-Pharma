@@ -480,6 +480,52 @@ describe('public/admin catalog, CMS and settings against MongoDB', () => {
     expect((await request(app).get('/v1/public/categories/hidden')).body.error.code).toBe('RESOURCE_NOT_FOUND');
   });
 
+  it('publishes only the supply network destinations selected by an administrator', async () => {
+    const read = () => request(app).get('/v1/public/supply-network');
+    const write = (countries: string[]) => request(app).patch('/v1/admin/settings').set('Cookie', adminCookie)
+      .send({ supply_network: { countries } });
+    expect((await read()).body.data).toEqual({ destinations: [] });
+    expect((await request(app).patch('/v1/admin/settings').send({ supply_network: { countries: ['US'] } })).status).toBe(401);
+    for (const invalid of [['US', 'US'], ['ZZ'], ['BD']]) expect((await write(invalid)).status).toBe(422);
+    const save = await write(['GB', 'US']);
+    expect(save.status, JSON.stringify(save.body)).toBe(200);
+    expect(save.body.data.supply_network.value.countries).toEqual(['GB', 'US']);
+    expect(save.body.data.supply_network_country_codes).toEqual(expect.arrayContaining(['GB', 'US', 'CN']));
+    expect((await read()).body.data).toEqual({ destinations: [
+      { country: 'GB', latitude: expect.any(Number), longitude: expect.any(Number) },
+      { country: 'US', latitude: expect.any(Number), longitude: expect.any(Number) },
+    ] });
+    expect(await AuditLogModel.countDocuments({ action_type: 'PLATFORM_SETTING_UPDATED' })).toBe(1);
+    expect(fetcher).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ body: expect.stringContaining('settings') }));
+    expect((await write([])).status).toBe(200);
+    expect((await read()).body.data).toEqual({ destinations: [] });
+  });
+
+  it('matches only the starting letter of the displayed medicine name before pagination', async () => {
+    const create = (sku: string, name: string, localizedName?: string, status: 'PUBLISHED' | 'ARCHIVED' = 'PUBLISHED') => {
+      const body = productBody(sku, sku.toLowerCase());
+      return ProductModel.create({ ...body, status, translations: {
+        en: { ...body.translations.en, brand_name: name },
+        ...(localizedName ? { zhCN: { ...body.translations.zhCN, brand_name: localizedName } } : {}),
+      } });
+    };
+    await Promise.all([
+      create('INITIAL-1', 'Alpha medicine', 'Beta translated medicine'),
+      create('INITIAL-2', 'a second medicine'),
+      create('INITIAL-3', 'Beta with alpha in the middle'),
+      create('INITIAL-4', 'Archived Alpha', undefined, 'ARCHIVED'),
+    ]);
+    const result = await request(app).get('/v1/public/products').query({ initial: 'a', category: 'oncology', manufacturer: 'maker', limit: 1, page: 2 });
+    expect(result.status, JSON.stringify(result.body)).toBe(200);
+    expect(result.body.meta.pagination.total_items).toBe(2);
+    expect(result.body.data.products).toMatchObject([{ brand_name: 'a second medicine' }]);
+    const localized = await request(app).get('/v1/public/products').query({ initial: 'A', locale: 'zh-CN' });
+    expect(localized.body.data.products).toMatchObject([{ brand_name: 'a second medicine', locale: 'en' }]);
+    const text = await request(app).get('/v1/public/products').query({ q: 'alpha' });
+    expect(text.body.meta.pagination.total_items).toBe(2);
+    expect((await request(app).get('/v1/public/products?initial=AA')).status).toBe(422);
+  });
+
   it('rejects inactive/missing master references with 422 before creating a product', async () => {
     await ManufacturerModel.updateOne({ _id: manufacturerId }, { $set: { is_active: false } });
     const inactive = await request(app)

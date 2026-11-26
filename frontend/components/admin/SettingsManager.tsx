@@ -4,10 +4,12 @@ import { apiRequest } from '../../lib/api-client';
 import { settingsSchema, type AdminSettings } from '../../lib/admin-workflow';
 import { adminFxSchema, type AdminFx } from '../../lib/admin-contract';
 import { settingsBody, fxBody, validatedInput } from '../../lib/admin-management';
+import type { SupplyCountry } from '../../lib/supply-network';
 import { useAdminOperation } from '../../hooks/useAdminOperation';
 import { AdminOperationFeedback } from './AdminOperationFeedback';
 import { AdminLink } from './AdminShell';
-export function SettingsManager({ initial, initialFx }: { initial: AdminSettings; initialFx: AdminFx | null }) {
+import { SupplyNetworkSettings } from './SupplyNetworkSettings';
+export function SettingsManager({ initial, initialFx, supplyCountries }: { initial: AdminSettings; initialFx: AdminFx | null; supplyCountries: SupplyCountry[] }) {
   const [settings, setSettings] = useState(initial);
   const [fx, setFx] = useState(initialFx);
   const { operation, state } = useAdminOperation();
@@ -103,6 +105,7 @@ export function SettingsManager({ initial, initialFx }: { initial: AdminSettings
         Settings stay inside the authenticated console. Published forms receive no private settings response.
         Reservation is fixed at five days, with business timezone Asia/Dhaka.
       </p>
+      <SupplyNetworkSettings initial={initial} options={supplyCountries} />
       <form className="admin-panel stack-form" onSubmit={(event) => void submit(event, 'packaging')}>
         <fieldset disabled={disabled}>
           <h2>Packaging units</h2>

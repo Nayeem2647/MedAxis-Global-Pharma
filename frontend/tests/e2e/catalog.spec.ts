@@ -34,7 +34,9 @@ test('homepage GET search, facets, pagination and clear/reset retain localized U
     await page.waitForURL((url) => url.searchParams.get('page') === '2', { timeout: 15_000 });
     await expect(page.locator('.product-card')).toContainText('English-only medicine');
     await page.locator('input[name=q]').fill(chinese ? '奥希替尼 80mg' : 'Osimert 80mg');
-    await page.locator('select[name=manufacturer]').selectOption(chinese ? 'beacon-cn' : 'beacon');
+    const manufacturer = page.locator('[data-catalog-filter="manufacturer"]');
+    await manufacturer.locator('.filter-dropdown-trigger').click();
+    await manufacturer.locator(`.filter-dropdown-options button[value="${chinese ? 'beacon-cn' : 'beacon'}"]`).click();
     await page.locator('select[name=cold_chain]').selectOption('true');
     await page.locator('.filter-actions button').click();
     await page.waitForURL((url) => url.searchParams.get('q') === (chinese ? '奥希替尼 80mg' : 'Osimert 80mg') && !url.searchParams.has('page'), { timeout: 15_000 });
@@ -42,7 +44,9 @@ test('homepage GET search, facets, pagination and clear/reset retain localized U
     await expect(page.locator('.product-card')).toContainText(chinese ? '奥希替尼 80mg' : 'Osimert 80mg');
     await page.getByRole('link', { name: chinese ? '清除筛选' : 'Clear filters', exact: true }).click();
     await page.waitForURL(`**/${locale}/products`, { timeout: 15_000 });
-    await page.locator('select[name=generic]').selectOption(chinese ? 'osimertinib-cn' : 'osimertinib');
+    const generic = page.locator('[data-catalog-filter="generic"]');
+    await generic.locator('.filter-dropdown-trigger').click();
+    await generic.locator(`.filter-dropdown-options button[value="${chinese ? 'osimertinib-cn' : 'osimertinib'}"]`).click();
     await page.locator('select[name=dosage_form]').selectOption('Tablet');
     await page.locator('select[name=cold_chain]').selectOption('false');
     await page.locator('.filter-actions button').click();
@@ -98,7 +102,9 @@ test('different translated slugs switch exactly while absent translations stay d
   const sitemap = await request.get('/sitemap.xml');
   const index=await sitemap.text();const children=[...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match)=>new URL(match[1]).pathname);const xml=(await Promise.all(children.map(async(path)=>(await request.get(path)).text()))).join('');
   expect(xml).not.toContain('/zh-CN/products/english-only-medicine');
-  for (const path of ['/products', '/services', '/services/pharmaceutical-sourcing', '/generics', '/manufacturers', '/categories']) expect(xml).toContain(`/en${path}</loc>`);
+  for (const path of ['/products', '/services', '/services/pharmaceutical-sourcing', '/categories']) expect(xml).toContain(`/en${path}</loc>`);
+  expect(xml).not.toContain('/en/manufacturers</loc>');
+  expect(xml).not.toContain('/en/generics</loc>');
   for (const match of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) { expect(new URL(match[1]).search).toBe(''); expect(match[1]).not.toMatch(/\/privacy|\/terms|\/admin\/|\/q\/|\/api\//); }
 });
 
@@ -110,7 +116,7 @@ test('locale switching maps catalog filter slugs and resets the page', async ({ 
   expect(url.searchParams.get('category')).toBe('oncology-cn');
   expect(url.searchParams.has('page')).toBe(false);
   expect(url.searchParams.get('ref')).toBe('email');
-  await expect(page.locator('select[name=manufacturer]')).toHaveValue('beacon-cn');
+  await expect(page.locator('input[name=manufacturer]')).toHaveValue('beacon-cn');
   await expect(page.locator('.product-card')).toHaveCount(1);
 });
 

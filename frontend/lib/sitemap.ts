@@ -81,8 +81,6 @@ export function renderSitemap(catalog: SitemapCatalog, kind?: CatalogKind | 'sta
     for (const path of [
       '',
       '/products',
-      '/manufacturers',
-      '/generics',
       '/categories',
       '/services',
       '/services/pharmaceutical-sourcing',

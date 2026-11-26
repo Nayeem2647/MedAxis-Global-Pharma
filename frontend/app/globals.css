@@ -3531,7 +3531,7 @@ dialog.drawer[open] {
 }
 
 .catalog-filters input,
-.catalog-filters select {
+.filter-dropdown-trigger {
   min-height: 48px;
   border: 1px solid #e2e9ef;
   border-radius: 10px;
@@ -3540,21 +3540,86 @@ dialog.drawer[open] {
   transition: border-color .15s, box-shadow .15s, background .15s;
 }
 
-.catalog-filters select {
-  cursor: pointer;
-  padding-right: 34px;
-}
-
 .catalog-filters input:hover,
-.catalog-filters select:hover {
+.filter-dropdown-trigger:hover {
   border-color: color-mix(in srgb, var(--color-action) 55%, var(--color-border));
 }
 
 .catalog-filters input:focus,
-.catalog-filters select:focus {
+.filter-dropdown-trigger:focus {
   border-color: var(--color-action);
   outline: 3px solid color-mix(in srgb, var(--color-brand) 24%, transparent);
   outline-offset: 0;
+}
+
+.filter-dropdown { position: relative; }
+
+.filter-dropdown-trigger,
+.filter-dropdown-options button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  color: var(--color-ink);
+  text-align: start;
+  cursor: pointer;
+}
+
+.filter-dropdown-trigger span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-dropdown-trigger svg, .filter-dropdown-options svg { flex: none; }
+.filter-dropdown-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.filter-dropdown-options {
+  position: absolute;
+  z-index: 15;
+  inset: calc(100% + 5px) 0 auto;
+  max-height: min(18rem, 42vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--color-ink) 14%, transparent);
+}
+
+.filter-dropdown-search {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  padding: 4px;
+  background: var(--color-surface);
+}
+
+.catalog-filters .filter-dropdown-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding-inline: 10px;
+  font-size: 1rem;
+}
+
+.filter-dropdown-empty {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.filter-dropdown-options button {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+
+.filter-dropdown-options button[hidden] { display: none; }
+
+.filter-dropdown-options button:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  background: color-mix(in srgb, var(--color-action) 9%, var(--color-surface));
 }
 
 .filter-search-box {

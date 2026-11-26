@@ -16,6 +16,7 @@ export async function Filters({ locale, path, query, lockedKind }: { locale: Loc
   };
   const fields: CatalogFilterField[] = kinds.flatMap((kind, index) => kind === lockedKind ? [] : [{
     ...config[kind],
+    searchLabel: t('filterOptionSearch', { filter: config[kind].label }),
     options: options[index].map((item) => ({
       id: item.id, name: item.name,
       value: locale === 'zh-CN' ? item.alternate_slugs.zhCN ?? item.alternate_slugs.en : item.alternate_slugs.en,
@@ -25,6 +26,6 @@ export async function Filters({ locale, path, query, lockedKind }: { locale: Loc
   }]);
   return <CatalogFilters key={path} path={path} query={query} fields={fields} locked={Boolean(lockedKind)} labels={{
     filters: t('filters'), search: t('filterSearch'), placeholder: t('searchProductsPlaceholder'),
-    submit: t('searchCatalog'), alphabet: t('alphabetFilter'), all: t('all'), loading: t('loading'),
+    submit: t('searchCatalog'), alphabet: t('alphabetFilter'), all: t('all'), loading: t('loading'), noOptionMatches: t('filterOptionEmpty'),
   }}/>;
 }

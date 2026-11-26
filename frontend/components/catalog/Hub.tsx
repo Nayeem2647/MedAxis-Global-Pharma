@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { isLocale } from '../../i18n/routing';
 import { ApiError } from '../../lib/api-client';
 import { getMaster, type MasterKind } from '../../lib/catalog-data';
-import { normalizeCatalogSlug } from '../../lib/catalog-path';
+import { browseProductsBy, normalizeCatalogSlug } from '../../lib/catalog-path';
 import { catalogQueryString, readCatalogQuery, type SearchValues } from '../../lib/catalog-query';
 import { entityMetadata } from '../../lib/catalog-seo';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -42,8 +42,9 @@ export async function Hub({ params, searchParams, kind }: HubProps & { kind: Mas
     return <main id="main-content" className="section site-container"><CatalogState locale={locale} error={error} path={path}/></main>;
   }
   const { profile, pagination } = result;
+  const browsePath = kind === 'categories' ? `/${locale}/categories` : browseProductsBy(locale, kind === 'generics' ? 'generic' : 'manufacturer');
   return <main id="main-content" className="catalog-page"><div className="section site-container">
-    <Breadcrumbs locale={locale} entries={[{ name: t(kind), href: `/${locale}/${kind}` }, { name: profile.name, href: path }]}/>
+    <Breadcrumbs locale={locale} entries={[{ name: t(kind), href: browsePath }, { name: profile.name, href: path }]}/>
     <header className="catalog-heading"><p className="eyebrow">{t(kind)}</p><h1>{profile.name}</h1>{profile.description && <p>{profile.description}</p>}</header>
     {locale === 'zh-CN' && profile.alternate_slugs.zhCN === null && <p className="translation-notice">{t('untranslated')}</p>}
     {profile.country && <p className="profile-country">{t('country')}: {profile.country}</p>}

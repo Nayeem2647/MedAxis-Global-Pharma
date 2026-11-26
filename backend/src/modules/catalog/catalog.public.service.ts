@@ -84,6 +84,14 @@ export function createPublicCatalogService(env: AppEnv) {
     }
     if (query.cold_chain !== undefined) match.cold_chain_required = query.cold_chain;
     if (query.dosage_form) match.dosage_form = query.dosage_form;
+    if (query.initial) {
+      const startsWith = new RegExp(`^${query.initial}`, 'i');
+      if (query.locale === 'en') match['translations.en.brand_name'] = startsWith;
+      else match.$and = [{ $or: [
+        { 'translations.zhCN.brand_name': startsWith },
+        { 'translations.zhCN': null, 'translations.en.brand_name': startsWith },
+      ] }];
+    }
     return match;
   }
 

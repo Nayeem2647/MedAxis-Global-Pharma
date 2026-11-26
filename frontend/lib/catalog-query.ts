@@ -6,11 +6,12 @@ export const catalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(100_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   q: z.string().trim().min(1).max(100).optional(),
+  initial: z.string().regex(/^[A-Za-z]$/).toUpperCase().optional(),
   manufacturer: slugSchema.optional(), generic: slugSchema.optional(), category: slugSchema.optional(),
   dosage_form: z.string().trim().min(1).max(100).optional(), cold_chain: z.enum(['true', 'false']).optional(),
 });
 export type CatalogQuery = z.infer<typeof catalogQuerySchema>;
-export const queryKeys = ['page', 'limit', 'q', 'manufacturer', 'generic', 'category', 'dosage_form', 'cold_chain'] as const;
+export const queryKeys = ['page', 'limit', 'q', 'initial', 'manufacturer', 'generic', 'category', 'dosage_form', 'cold_chain'] as const;
 
 export function readCatalogQuery(values: SearchValues) {
   const input: Record<string, string | string[]> = {};

@@ -3,6 +3,7 @@ import { adminRfqSchema, rfqStatuses } from './admin-contract';
 import { customerQuotationSchema, commercialDecimal } from './quotation';
 import { rfqWorkflow } from './workflow-contract';
 import { ApiError, apiRequest, parseApiResponse } from './api-client';
+import { supplyNetworkCountryCodes, supplyNetworkSettingSchema } from './supply-network';
 
 const uuid = z.uuidv4();
 const text = (max = 200) => z.string().trim().min(1).max(max);
@@ -67,6 +68,8 @@ export const quotationDetailSchema = z.object({ quotation: z.object({ _id: uuid,
 export type QuotationDetail = z.infer<typeof quotationDetailSchema>;
 export const quoteWriteResult = z.object({ quotation_id: uuid.optional(), version: adminVersionSchema, fx_preview: z.object({ rates_to_bdt: rateMap, stale: z.boolean(), captured_at: date }).optional(), magic_link_url: z.string().url().optional() });
 export const settingsSchema = z.object({
+  supply_network: z.object({ value: supplyNetworkSettingSchema, updated_at: date }).optional(),
+  supply_network_country_codes: supplyNetworkCountryCodes.optional(),
   wire_instructions: z.object({ value: z.object({ configured: z.boolean(), instructions: text(4000), beneficiary_name: text(500).optional(), bank_name: text(500).optional(), account_number: text(500).optional(), swift_code: text(500).optional(), bank_address: text(500).optional(), currency: z.enum(currencies).optional() }), updated_at: date }).optional(),
   payment_presets: z.object({ value: z.object({ quote_validity_days: z.number().int().min(1).max(365), reservation_days: z.literal(5), business_timezone: z.literal('Asia/Dhaka'), terms: z.array(z.literal('BANK_WIRE_TT')) }), updated_at: date }).optional(),
   packaging_units: z.object({ value: z.object({ units: z.array(text(40)).min(1).max(100) }), updated_at: date }).optional(),

@@ -11,9 +11,13 @@ import { SourcingTiles } from '../../components/home/SourcingTiles';
 import { Categories } from '../../components/home/Categories';
 import { CustomerReviews } from '../../components/home/CustomerReviews';
 import { ManufacturerMarquee } from '../../components/home/ManufacturerMarquee';
+import { SupplyNetwork } from '../../components/home/SupplyNetwork';
+import { getSupplyNetwork } from '../../lib/supply-network';
 import { QuotationWorkflow } from '../../components/home/QuotationWorkflow';
 import { ProductCard } from '../../components/home/ProductCard';
 import { QuoteButton } from '../../components/layout/PublicShell';
+import 'leaflet/dist/leaflet.css';
+import '../supply-network.css';
 
 export const revalidate = 300;
 
@@ -31,7 +35,7 @@ export default async function Home({ params }: Props) {
   if (!isLocale(locale)) notFound();
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'Home' });
-  const data = await getHomeData(locale);
+  const [data, destinations] = await Promise.all([getHomeData(locale), getSupplyNetwork(locale)]);
   return (
     <main id="main-content">
       <Hero locale={locale} banners={data.banners}/>
@@ -52,6 +56,7 @@ export default async function Home({ params }: Props) {
       <CustomerReviews locale={locale}/>
       <QuotationWorkflow locale={locale}/>
       <ManufacturerMarquee locale={locale} manufacturers={data.marqueeManufacturers}/>
+      <SupplyNetwork destinations={destinations}/>
     </main>
   );
 }

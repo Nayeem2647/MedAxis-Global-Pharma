@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { writeAuditLog } from '../../shared/middleware/auditLogger.js';
 import type { Revalidate } from '../../shared/utils/revalidate.js';
 import { PlatformSettingModel } from './settings.schema.js';
+import { supplyNetworkCountryCodes, supplyNetworkSetting } from './supply-network.js';
 
 const text = z.string().trim().min(1).max(500);
 const unique = (values: string[]) => new Set(values).size === values.length;
@@ -45,6 +46,7 @@ export const settingsPatch = z
       .strict()
       .optional(),
     wire_instructions: wire.optional(),
+    supply_network: supplyNetworkSetting.optional(),
     payment_presets: z
       .object({
         terms: z.array(z.literal('BANK_WIRE_TT')).min(1).max(1),
@@ -75,12 +77,15 @@ export const settingsPatch = z
 export function createSettingsService(revalidate: Revalidate) {
   async function get() {
     const rows = await PlatformSettingModel.find({
-      key: { $in: ['packaging_units', 'wire_instructions', 'payment_presets', 'shipping_presets', 'monetary_policy'] },
+      key: { $in: ['packaging_units', 'wire_instructions', 'payment_presets', 'shipping_presets', 'monetary_policy', 'supply_network'] },
     })
       .select({ _id: 0, key: 1, value: 1, updated_at: 1 })
       .sort({ key: 1 })
       .lean();
-    return Object.fromEntries(rows.map((row) => [row.key, { value: row.value, updated_at: row.updated_at }]));
+    return {
+      ...Object.fromEntries(rows.map((row) => [row.key, { value: row.value, updated_at: row.updated_at }])),
+      supply_network_country_codes: supplyNetworkCountryCodes,
+    };
   }
   async function patch(req: Request, input: z.infer<typeof settingsPatch>) {
     await mongoose.connection.transaction(async (session) => {

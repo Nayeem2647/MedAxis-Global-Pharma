@@ -130,6 +130,7 @@ export const catalogQuery = z
     limit: z.coerce.number().int().min(1).max(100).default(20),
     locale: z.enum(['en', 'zh-CN']).default('en'),
     q: text(100).optional(),
+    initial: z.string().regex(/^[A-Za-z]$/).toUpperCase().optional(),
     manufacturer: slug.optional(),
     generic: slug.optional(),
     category: slug.optional(),

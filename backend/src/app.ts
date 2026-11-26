@@ -11,7 +11,7 @@ import { createAuthRouter } from './modules/auth/auth.routes.js';
 import type { AuthHooks } from './modules/auth/auth.security.js';
 import { createPublicCatalogRouter, createAdminCatalogRouter } from './modules/catalog/catalog.routes.js';
 import { createCmsRouters } from './modules/cms/cms.routes.js';
-import { createSettingsRouter } from './modules/settings/settings.routes.js';
+import { createPublicSupplyNetworkRouter, createSettingsRouter } from './modules/settings/settings.routes.js';
 import { createRevalidator } from './shared/utils/revalidate.js';
 import { apiVersionGuard, headerContract } from './shared/middleware/apiGuards.js';
 import { clientIp } from './shared/middleware/clientIp.js';
@@ -116,6 +116,7 @@ export function createApp({
     v1.use('/public/media', createLocalMediaRouter(env));
   }
   v1.use('/public/cms', cms.publicRouter);
+  v1.use('/public/supply-network', createPublicSupplyNetworkRouter());
   v1.use('/admin/catalog', createAdminCatalogRouter(env, revalidate, storage));
   v1.use('/admin/cms', cms.adminRouter);
   v1.use('/admin/settings', createSettingsRouter(env, revalidate));

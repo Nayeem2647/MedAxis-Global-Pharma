@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition, type MouseEvent } from 'react';
 import { LoaderCircle, Search } from 'lucide-react';
 import { catalogQueryString, type CatalogQuery } from '../../lib/catalog-query';
+import { CatalogFilterDropdown } from './CatalogFilterDropdown';
 
 export interface CatalogFilterField {
   key: 'manufacturer' | 'category' | 'generic';
   label: string;
   allLabel: string;
+  searchLabel: string;
   options: { id: string; name: string; value: string; enSlug: string; zhSlug?: string }[];
 }
 
@@ -18,7 +20,7 @@ interface CatalogFiltersProps {
   query: CatalogQuery;
   fields: CatalogFilterField[];
   locked: boolean;
-  labels: { filters: string; search: string; placeholder: string; submit: string; alphabet: string; all: string; loading: string };
+  labels: { filters: string; search: string; placeholder: string; submit: string; alphabet: string; all: string; loading: string; noOptionMatches: string };
 }
 
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -35,6 +37,7 @@ export function CatalogFilters({ path, query, fields, locked, labels }: CatalogF
   const [ready, setReady] = useState(false);
   const [draft, setDraft] = useState(query);
   const [pending, startTransition] = useTransition();
+  const [navigation, setNavigation] = useState<{ href: string; replace: boolean } | null>(null);
   const draftRef = useRef(query);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const composing = useRef(false);
@@ -55,15 +58,27 @@ export function CatalogFilters({ path, query, fields, locked, labels }: CatalogF
 
   useEffect(() => {
     const incoming = filterHref(path, query);
-    if (incoming === lastIncoming.current) return;
-    lastIncoming.current = incoming;
-    // A completed search must not overwrite text entered during that request.
-    if (incoming === lastRequested.current) return;
-    cancelSearch();
-    lastRequested.current = null;
-    draftRef.current = query;
-    setDraft(query);
-  }, [path, query]);
+    if (incoming !== lastIncoming.current) {
+      lastIncoming.current = incoming;
+      if (incoming !== lastRequested.current) {
+        cancelSearch();
+        lastRequested.current = null;
+        setNavigation(null);
+        draftRef.current = query;
+        setDraft(query);
+        return;
+      }
+    }
+
+    // Keep the latest filter choice queued while a catalog navigation is still loading.
+    if (!navigation || (pending && !navigation.replace)) return;
+    setNavigation(null);
+    lastRequested.current = navigation.href;
+    startTransition(() => {
+      if (navigation.replace) router.replace(navigation.href, { scroll: false });
+      else router.push(navigation.href, { scroll: false });
+    });
+  }, [path, query, navigation, pending, router]);
 
   function update(next: CatalogQuery) {
     draftRef.current = next;
@@ -72,16 +87,11 @@ export function CatalogFilters({ path, query, fields, locked, labels }: CatalogF
 
   function navigate(next: CatalogQuery, replace = false) {
     cancelSearch();
-    const href = filterHref(path, { ...next, page: 1 });
-    lastRequested.current = href;
-    startTransition(() => {
-      if (replace) router.replace(href, { scroll: false });
-      else router.push(href, { scroll: false });
-    });
+    setNavigation({ href: filterHref(path, { ...next, page: 1 }), replace });
   }
 
   function search(value: string) {
-    const next = { ...draftRef.current, page: 1, q: value };
+    const next = { ...draftRef.current, page: 1, q: value, initial: undefined };
     update(next);
     cancelSearch();
     if (composing.current) return;
@@ -92,34 +102,33 @@ export function CatalogFilters({ path, query, fields, locked, labels }: CatalogF
   function chooseLetter(event: MouseEvent<HTMLAnchorElement>, value: string | undefined) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    const next = { ...draftRef.current, page: 1, q: value };
+    const next = letterQuery(draftRef.current, value);
     update(next);
     navigate(next);
   }
 
-  const activeLetter = draft.q?.trim().length === 1 ? draft.q.trim().toUpperCase() : null;
+  function chooseFilter(key: CatalogFilterField['key'], value: string) {
+    const next = { ...draftRef.current, page: 1, [key]: value || undefined };
+    update(next);
+    navigate(next);
+  }
 
-  return <form className="catalog-filters" action={path} method="get" aria-label={labels.filters} aria-busy={!ready || pending}
+  function letterQuery(current: CatalogQuery, initial?: string): CatalogQuery {
+    return { ...current, page: 1, q: undefined, initial };
+  }
+
+  const allActive = !draft.initial && !draft.q;
+  const busy = pending || navigation !== null;
+
+  return <form className="catalog-filters" action={path} method="get" aria-label={labels.filters} aria-busy={!ready || busy}
     onSubmit={(event) => { event.preventDefault(); if (!composing.current) navigate(draftRef.current); }}>
     {draft.dosage_form && <input type="hidden" name="dosage_form" value={draft.dosage_form}/>}
     {draft.cold_chain && <input type="hidden" name="cold_chain" value={draft.cold_chain}/>}
     {draft.limit !== 20 && <input type="hidden" name="limit" value={draft.limit}/>}
+    {draft.initial && <input type="hidden" name="initial" value={draft.initial}/>}
     <div className={`filter-primary${locked ? ' is-locked' : ''}`}>
-      {fields.map(({ key, label, allLabel, options }) => {
-        const active = draft[key] ?? '';
-        return <label key={key} className="filter-field">
-          <span>{label}</span>
-          <select name={key} data-catalog-filter={key} value={active} disabled={!ready} onChange={(event) => {
-            const next = { ...draftRef.current, page: 1, [key]: event.currentTarget.value || undefined };
-            update(next);
-            navigate(next);
-          }}>
-            <option value="">{allLabel}</option>
-            {active && !options.some((option) => option.value === active) && <option value={active}>{active}</option>}
-            {options.map((option) => <option key={option.id} value={option.value} data-en-slug={option.enSlug} data-zh-slug={option.zhSlug}>{option.name}</option>)}
-          </select>
-        </label>;
-      })}
+      {fields.map((field) => <CatalogFilterDropdown key={field.key} field={field} active={draft[field.key] ?? ''}
+        noMatches={labels.noOptionMatches} onChoose={(value) => chooseFilter(field.key, value)}/>)}
       <div className="filter-field filter-search">
         <label htmlFor="catalog-filter-q">{labels.search}</label>
         <div className="filter-search-box filter-actions">
@@ -128,21 +137,21 @@ export function CatalogFilters({ path, query, fields, locked, labels }: CatalogF
             onCompositionStart={() => { composing.current = true; cancelSearch(); }}
             onCompositionEnd={(event) => { composing.current = false; search(event.currentTarget.value); }}/>
           <button className="filter-search-submit" type="submit" aria-label={labels.submit} disabled={!ready}>
-            {pending ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true"/> : <Search size={18} aria-hidden="true"/>}
+            {busy ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true"/> : <Search size={18} aria-hidden="true"/>}
           </button>
         </div>
       </div>
     </div>
     <nav className="filter-alpha" aria-label={labels.alphabet}>
-      <Link href={filterHref(path, { ...draft, page: 1, q: undefined })} scroll={false} prefetch={false}
-        onClick={(event) => chooseLetter(event, undefined)} className={`alpha-pill alpha-all${!draft.q ? ' is-active' : ''}`} aria-current={!draft.q ? 'true' : undefined}>{labels.all}</Link>
+      <Link href={filterHref(path, letterQuery(draft))} scroll={false} prefetch={false}
+        onClick={(event) => chooseLetter(event, undefined)} className={`alpha-pill alpha-all${allActive ? ' is-active' : ''}`} aria-current={allActive ? 'true' : undefined}>{labels.all}</Link>
       {alphabet.map((letter) => {
-        const active = activeLetter === letter;
+        const active = draft.initial === letter;
         const value = active ? undefined : letter;
-        return <Link key={letter} href={filterHref(path, { ...draft, page: 1, q: value })} scroll={false} prefetch={false}
+        return <Link key={letter} href={filterHref(path, letterQuery(draft, value))} scroll={false} prefetch={false}
           onClick={(event) => chooseLetter(event, value)} className={`alpha-pill${active ? ' is-active' : ''}`} aria-current={active ? 'true' : undefined}>{letter}</Link>;
       })}
     </nav>
-    <span className="sr-only" role="status">{pending ? labels.loading : ''}</span>
+    <span className="sr-only" role="status">{busy ? labels.loading : ''}</span>
   </form>;
 }

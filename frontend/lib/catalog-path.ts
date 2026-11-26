@@ -3,6 +3,10 @@ import type { Locale } from '../i18n/routing';
 
 export const catalogKinds = ['products', 'generics', 'manufacturers', 'categories'] as const;
 export type CatalogKind = (typeof catalogKinds)[number];
+export function browseProductsBy(locale: Locale, filter: 'generic' | 'manufacturer'): string {
+  return `/${locale}/products?browse=${filter}`;
+}
+
 export const slugSchema = z.string().min(1).max(200).regex(/^[\p{L}\p{N}\p{M}]+(?:-[\p{L}\p{N}\p{M}]+)*$/u).refine((slug) => slug === slug.toLowerCase());
 
 export function normalizeCatalogSlug(value: string): string | null {

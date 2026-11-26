@@ -986,6 +986,102 @@ test('lost CSV commit response blocks another import rather than blindly replayi
   await expect(page.getByLabel('CSV file')).toBeDisabled();
   expect((await state(request, email)).commits).toBe(1);
 });
+test('admin map destinations persist and appear below the homepage manufacturer section', async ({ page, request }, info) => {
+  test.setTimeout(90_000);
+  await page.addInitScript(() => {
+    // Exercise different server and browser ICU versions without relying on a specific Chrome release.
+    const displayName = Intl.DisplayNames.prototype.of;
+    Intl.DisplayNames.prototype.of = function (code) {
+      return code === 'US' && this.resolvedOptions().type === 'region'
+        ? 'Alternate United States label' : displayName.call(this, code);
+    };
+  });
+  const email = await setup(page, request, 'supply-network', 30_000);
+  await page.goto('/admin/settings');
+  const form = page.getByRole('form', { name: 'Global Supply Network' });
+  const select = form.getByLabel('Destination country');
+  for (const code of ['US', 'CN', 'GB']) {
+    await select.selectOption(code);
+    await form.getByRole('button', { name: 'Add country' }).click();
+  }
+  await form.getByRole('button', { name: 'Remove China' }).click();
+  await form.getByRole('button', { name: 'Save map destinations' }).click();
+  await expect(form.getByText('Saved. Server state refreshed.')).toBeVisible();
+  expect((await state(request, email)).writes).toContainEqual({ path: 'settings', body: { supply_network: { countries: ['US', 'GB'] } } });
+  await page.reload();
+  await expect(form.getByRole('button', { name: 'Remove United States' })).toBeVisible();
+
+  const tile = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+  await page.route('https://tile.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'image/png', body: tile }));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/en#supply-network');
+  const map = page.locator('#trusted-manufacturers + #supply-network');
+  await expect(map.getByRole('heading', { name: 'Global Supply Network' })).toBeVisible();
+  await expect(map.getByRole('button', { name: 'China', exact: true })).toHaveCount(0);
+  const destinations = map.getByRole('complementary', { name: 'Destinations' });
+  await expect(destinations.getByRole('button')).toHaveCount(2);
+  const routePaths = map.locator('.leaflet-overlay-pane svg path');
+  await expect(routePaths).toHaveCount(2);
+  const arcHeights = await routePaths.evaluateAll((paths) => paths.map((element) => {
+    const path = element as SVGPathElement;
+    const length = path.getTotalLength();
+    const start = path.getPointAtLength(0);
+    const middle = path.getPointAtLength(length / 2);
+    const end = path.getPointAtLength(length);
+    const straightY = start.y + (end.y - start.y) * (middle.x - start.x) / (end.x - start.x);
+    return straightY - middle.y;
+  }));
+  expect(Math.min(...arcHeights)).toBeGreaterThan(10);
+  const countryLabel = map.locator('.supply-network-country-label').getByText('Canada', { exact: true });
+  await expect(countryLabel).toBeVisible();
+  await destinations.getByRole('button', { name: 'United States', exact: true }).click();
+  await expect(map.getByRole('status')).toHaveText('United States');
+  await expect(map.locator('.leaflet-popup-content')).toHaveText('United States');
+  await expect(countryLabel).toBeHidden();
+  await map.getByRole('button', { name: 'Zoom in' }).click();
+  await expect(map.getByRole('button', { name: 'Zoom out' })).toBeEnabled();
+  await map.getByRole('button', { name: 'Reset map' }).click();
+  await expect(map.getByRole('status')).toHaveText('Dhaka');
+
+  const viewport = map.getByRole('group', { name: 'Supply destinations map' });
+  const marker = viewport.getByRole('button', { name: 'United Kingdom', exact: true });
+  await viewport.evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await expect(viewport.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
+  const loadedTile = viewport.locator('.leaflet-tile-loaded').first();
+  const tileZoom = async () => Number((await loadedTile.getAttribute('src'))?.split('/')[3]);
+  const overviewZoom = await tileZoom();
+  const markerWidth = await marker.evaluate((element) => element.getBoundingClientRect().width);
+  await expect.poll(() => viewport.locator('.leaflet-image-layer').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(2880);
+  const matrix = () => viewport.locator('.leaflet-map-pane').evaluate((element) => {
+    const transform = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    return { x: transform.e, y: transform.f };
+  });
+  const bounds = (await viewport.boundingBox())!;
+  const mapX = bounds.x + bounds.width / 2;
+  const mapY = bounds.y + bounds.height / 2;
+  await page.mouse.move(mapX, mapY);
+  await page.mouse.wheel(0, -160);
+  await expect.poll(tileZoom).toBeGreaterThan(overviewZoom);
+  await expect(viewport.locator('.leaflet-zoom-anim')).toHaveCount(0);
+  expect(await marker.evaluate((element) => element.getBoundingClientRect().width)).toBeCloseTo(markerWidth);
+  const beforeDrag = await matrix();
+  await page.mouse.move(mapX, mapY);
+  await page.mouse.down();
+  await page.mouse.move(mapX + 50, mapY + 20, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await matrix()).x).toBeGreaterThan(beforeDrag.x);
+  await expect.poll(async () => (await matrix()).y).toBeGreaterThan(beforeDrag.y);
+  await map.getByRole('button', { name: 'Reset map' }).click();
+  await marker.click();
+  await expect(map.getByRole('status')).toHaveText('United Kingdom');
+  await expect(map.locator('.leaflet-popup-content')).toHaveText('United Kingdom');
+  await map.getByRole('button', { name: 'Reset map' }).click();
+  await map.screenshot({ path: info.outputPath('supply-network-desktop.png'), animations: 'disabled' });
+  await page.setViewportSize({ width: 320, height: 820 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(destinations.getByRole('button', { name: 'United Kingdom', exact: true })).toBeVisible();
+});
+
 test('private customers, audit, settings, quote summary and one-time MFA rotation work without public storage', async ({
   page,
   request,

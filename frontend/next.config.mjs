@@ -31,7 +31,7 @@ const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${plausibleOrigin ? ` ${plausibleOrigin}` : ''}${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${[...imageOrigins, avatarOrigin].filter(Boolean).join(' ')}`,
+  `img-src 'self' data: blob: https://tile.openstreetmap.org ${[...imageOrigins, avatarOrigin].filter(Boolean).join(' ')}`,
   `media-src 'self' blob: ${imageOrigins.join(' ')}`,
   "font-src 'self'",
   `connect-src 'self' https://challenges.cloudflare.com${apiOrigin ? ` ${apiOrigin}` : ''}${plausibleOrigin ? ` ${plausibleOrigin}` : ''}${plausibleApiOrigin ? ` ${plausibleApiOrigin}` : ''}${isDev ? ' ws://localhost:* ws://127.0.0.1:*' : ''}`,
@@ -62,6 +62,12 @@ const config = {
       const url = new URL(origin);
       return { protocol: url.protocol.slice(0, -1), hostname: url.hostname, port: url.port, pathname: '/**', search: '' };
     }),
+  },
+  async redirects() {
+    return [
+      { source: '/:locale(en|zh-CN)/manufacturers', destination: '/:locale/products?browse=manufacturer', permanent: true },
+      { source: '/:locale(en|zh-CN)/generics', destination: '/:locale/products?browse=generic', permanent: true },
+    ];
   },
   async headers() {
     return [

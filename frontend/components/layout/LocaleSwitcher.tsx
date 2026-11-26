@@ -16,8 +16,8 @@ export function LocaleSwitcher({ enPath, zhPath }: { enPath?: string; zhPath?: s
     const provided = target === 'en' ? enPath : zhPath;
     const metadata = document.querySelector<HTMLLinkElement>(`link[rel="alternate"][hreflang="${target}"]`)?.href;
     const path = counterpartPath(target, pathname, provided ?? metadata);
-    const filters: CatalogLocaleFilter[] = Array.from(document.querySelectorAll<HTMLOptionElement>('select[data-catalog-filter] option[data-en-slug]')).flatMap((option) => {
-      const field = option.parentElement?.getAttribute('data-catalog-filter');
+    const filters: CatalogLocaleFilter[] = Array.from(document.querySelectorAll<HTMLElement>('[data-catalog-filter] [data-en-slug]')).flatMap((option) => {
+      const field = option.closest('[data-catalog-filter]')?.getAttribute('data-catalog-filter');
       const en = option.dataset.enSlug;
       return en && (field === 'manufacturer' || field === 'generic' || field === 'category') ? [{ field, en, zhCN: option.dataset.zhSlug ?? null }] : [];
     });

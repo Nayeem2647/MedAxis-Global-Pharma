@@ -40,6 +40,7 @@ import type { ContactConfig } from '../../lib/public-config';
 import { useCustomerAccount } from '../customer/CustomerAccountProvider';
 import { Announcements } from '../home/Announcements';
 import type { Banner } from '../../lib/public-catalog';
+import { browseProductsBy } from '../../lib/catalog-path';
 
 interface HeaderProps {
   itemCount: number;
@@ -126,8 +127,8 @@ export function Header({ itemCount, hydrated, onCart, onContact, onQuickQuote, c
       items: [
         { label: t('allProducts'), href: `/${locale}/products`, Icon: Pill },
         { label: t('newArrivals'), href: `/${locale}/#catalog`, Icon: Sparkles },
-        { label: t('browseByGeneric'), href: `/${locale}/generics`, Icon: FlaskConical },
-        { label: t('browseByManufacturer'), href: `/${locale}/manufacturers`, Icon: Building2 },
+        { label: t('browseByGeneric'), href: browseProductsBy(locale, 'generic'), Icon: FlaskConical },
+        { label: t('browseByManufacturer'), href: browseProductsBy(locale, 'manufacturer'), Icon: Building2 },
         { label: t('compareProducts'), href: `/${locale}/categories`, Icon: Layers, compare: true },
       ],
     },

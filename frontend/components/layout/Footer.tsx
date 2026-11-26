@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { ArrowRight, Facebook, Instagram, Linkedin, Mail, MessageCircle, Phone, Twitter } from 'lucide-react';
 import type { ContactConfig } from '../../lib/public-config';
+import { browseProductsBy } from '../../lib/catalog-path';
 
 export function Footer({ contact, onContact, onQuickQuote }: { contact: ContactConfig; onContact(): void; onQuickQuote?(): void }) {
   const locale = useLocale();
@@ -66,7 +67,7 @@ export function Footer({ contact, onContact, onQuickQuote }: { contact: ContactC
           <li><Link href={`/${locale}/products`}>{t('products')}</Link></li>
           <li><Link href={`/${locale}/blog`}>{t('blog')}</Link></li>
           <li><Link href={`/${locale}/about#news`}>{t('newsEvents')}</Link></li>
-          <li><Link href={`/${locale}/manufacturers`}>{t('manufacturers')}</Link></li>
+          <li><Link href={browseProductsBy(locale, 'manufacturer')}>{t('manufacturers')}</Link></li>
         </ul>
       </nav>
 
@@ -74,7 +75,7 @@ export function Footer({ contact, onContact, onQuickQuote }: { contact: ContactC
         <h2>{t('footerHelpfulHeading')}</h2>
         <ul className="footer-link-list">
           <li><Link href={`/${locale}/services`}>{t('services')}</Link></li>
-          <li><Link href={`/${locale}/generics`}>{t('generics')}</Link></li>
+          <li><Link href={browseProductsBy(locale, 'generic')}>{t('generics')}</Link></li>
           <li><Link href={`/${locale}/categories`}>{t('compareProducts')}</Link></li>
           <li><Link href={`/${locale}/blog#guides`}>{t('buyerGuides')}</Link></li>
           <li>

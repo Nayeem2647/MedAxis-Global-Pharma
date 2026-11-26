@@ -20,7 +20,7 @@ function pagination(value: unknown) {
 export const getProducts = cache(async (locale: Locale, serialized: string) => {
   const query = catalogQuerySchema.parse(Object.fromEntries(new URLSearchParams(serialized)));
   const path = `/v1/public/products?${catalogQueryString(query)}&locale=${locale}`;
-  const filtered = query.page !== 1 || query.limit !== 20 || Boolean(query.q || query.manufacturer || query.generic || query.category || query.dosage_form || query.cold_chain);
+  const filtered = query.page !== 1 || query.limit !== 20 || Boolean(query.q || query.initial || query.manufacturer || query.generic || query.category || query.dosage_form || query.cold_chain);
   const response = await apiRequest(path, catalogListSchema, filtered ? { cache: 'no-store' } : { next: catalogCache });
   return { ...response.data, pagination: pagination(response.meta.pagination) };
 });
@@ -53,7 +53,7 @@ export async function getSimilarProducts(locale: Locale, product: HomeProduct) {
 export const getMaster = cache(async (locale: Locale, kind: MasterKind, slug: string, serialized: string) => {
   slugSchema.parse(slug);
   const query = catalogQuerySchema.parse(Object.fromEntries(new URLSearchParams(serialized)));
-  const filtered = query.page !== 1 || Boolean(query.q || query.manufacturer || query.generic || query.category || query.dosage_form || query.cold_chain);
+  const filtered = query.page !== 1 || Boolean(query.q || query.initial || query.manufacturer || query.generic || query.category || query.dosage_form || query.cold_chain);
   const response = await apiRequest(`/v1/public/${kind}/${encodeURIComponent(slug)}?${catalogQueryString(query)}&locale=${locale}`, masterDetailSchema, {
     ...(filtered ? { cache: 'no-store' } : { next: catalogCache }), catalogRedirect: { sourcePath: `/${locale}/${kind}/${encodeURIComponent(slug)}` },
   });
